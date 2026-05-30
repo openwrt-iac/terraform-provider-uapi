@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -136,10 +137,10 @@ func decodeError(status int, body []byte) error {
 
 func IsNotFound(err error) bool {
 	var apiErr *APIError
-	if e, ok := err.(*APIError); ok {
-		apiErr = e
+	if errors.As(err, &apiErr) {
+		return apiErr.Status == http.StatusNotFound
 	}
-	return apiErr != nil && apiErr.Status == http.StatusNotFound
+	return false
 }
 
 func (c *Client) GetObject(ctx context.Context, path string) (obj map[string]any, found bool, err error) {
