@@ -42,3 +42,22 @@ jobs:
           cache: true
       - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
       - run: $(go env GOPATH)/bin/golangci-lint run ./...
+
+  docs:
+    name: docs up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go generate ./...
+      - name: check docs match the schema
+        run: |
+          if [ -n "$(git status --porcelain docs)" ]; then
+            echo "docs/ is out of date. Run 'make docs' and commit the result."
+            git status --porcelain docs
+            git diff -- docs
+            exit 1
+          fi
