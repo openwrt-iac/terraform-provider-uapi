@@ -1,0 +1,15 @@
+# Built provider binary
+/terraform-provider-uapi
+
+# Terraform working files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Local dev override (may contain absolute paths)
+dev.tfrc
+
+# Editor noise
+*.swp
