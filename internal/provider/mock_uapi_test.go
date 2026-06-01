@@ -25,18 +25,6 @@ type mockUAPI struct {
 	runtime map[string]map[string]any
 }
 
-// collection path prefix -> id prefix. Item ops live at /<coll>/<id>.
-var mockCollections = map[string]string{
-	"/firewall/zones":      "z",
-	"/firewall/rules":      "r",
-	"/firewall/redirects":  "d",
-	"/network/interfaces":  "i",
-	"/wireless/interfaces": "f",
-	"/dhcp/hosts":          "h",
-}
-
-var mockSingletons = map[string]bool{"/system": true}
-
 func newMockUAPI() *mockUAPI {
 	m := &mockUAPI{
 		store:   map[string]map[string]map[string]any{},
@@ -107,6 +95,12 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 			{"mac": "aa:bb:cc:dd:ee:ff", "ip": "192.168.1.50", "hostname": "nuc", "expires_at": 1893456000, "duid": nil},
 		})
 		return
+	case path == "/dhcp/leases6" && r.Method == http.MethodGet:
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"duid": "00010203", "iaid": "abcd", "ia_type": "IA_PD", "ip": "2001:db8::", "prefix_length": 60, "expires_at": 1893456000},
+		})
+		return
 	case path == "/system/authorized_keys":
 		m.handleAuthKeys(w, r, "")
 		return
@@ -115,29 +109,30 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Singletons.
-	if mockSingletons[path] {
+	// Generic routing by path shape + method. The provider's access patterns are
+	// disjoint: it only GET/PATCHes a 2-segment path for singletons, only POSTs a
+	// 2-segment path to create in a collection, and uses 3 segments for items.
+	segs := strings.Split(strings.Trim(path, "/"), "/")
+	switch len(segs) {
+	case 1: // /system
 		m.handleSingleton(w, r, path)
-		return
-	}
-
-	// Collections: /coll, /coll/id, /coll/id/adopt
-	for coll, prefix := range mockCollections {
-		if path == coll {
-			m.handleCollection(w, r, coll, prefix)
-			return
+	case 2: // /a/b
+		if r.Method == http.MethodPost {
+			m.handleCollectionCreate(w, r, path)
+		} else {
+			m.handleSingleton(w, r, path)
 		}
-		if strings.HasPrefix(path, coll+"/") {
-			rest := strings.TrimPrefix(path, coll+"/")
-			if strings.HasSuffix(rest, "/adopt") {
-				m.handleAdopt(w, r, coll, prefix, strings.TrimSuffix(rest, "/adopt"))
-				return
-			}
-			m.handleItem(w, r, coll, rest)
-			return
+	case 3: // /a/b/c
+		m.handleItem(w, r, "/"+segs[0]+"/"+segs[1], segs[2])
+	case 4: // /a/b/c/adopt
+		if segs[3] == "adopt" && r.Method == http.MethodPost {
+			m.handleAdopt(w, r, "/"+segs[0]+"/"+segs[1], segs[2])
+		} else {
+			apiErr(w, http.StatusNotFound, "not_found")
 		}
+	default:
+		apiErr(w, http.StatusNotFound, "not_found")
 	}
-	apiErr(w, http.StatusNotFound, "not_found")
 }
 
 func (m *mockUAPI) decode(r *http.Request) map[string]any {
@@ -149,14 +144,10 @@ func (m *mockUAPI) decode(r *http.Request) map[string]any {
 	return body
 }
 
-func (m *mockUAPI) handleCollection(w http.ResponseWriter, r *http.Request, coll, prefix string) {
-	if r.Method != http.MethodPost {
-		apiErr(w, http.StatusMethodNotAllowed, "method_not_allowed")
-		return
-	}
+func (m *mockUAPI) handleCollectionCreate(w http.ResponseWriter, r *http.Request, coll string) {
 	body := m.decode(r)
 	m.counter++
-	id := fmt.Sprintf("%s_%d", prefix, m.counter)
+	id := fmt.Sprintf("x_%d", m.counter)
 	body["id"] = id
 	body["managed"] = true
 	if m.store[coll] == nil {
@@ -211,14 +202,14 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 	}
 }
 
-func (m *mockUAPI) handleAdopt(w http.ResponseWriter, r *http.Request, coll, prefix, id string) {
+func (m *mockUAPI) handleAdopt(w http.ResponseWriter, r *http.Request, coll, id string) {
 	obj := m.store[coll][id]
 	if obj == nil {
 		apiErr(w, http.StatusNotFound, "not_found")
 		return
 	}
 	m.counter++
-	newID := fmt.Sprintf("%s_%d", prefix, m.counter)
+	newID := fmt.Sprintf("x_%d", m.counter)
 	delete(m.store[coll], id)
 	obj["id"] = newID
 	obj["managed"] = true

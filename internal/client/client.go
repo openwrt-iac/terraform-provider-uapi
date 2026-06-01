@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // maxLockRetries bounds how many times a write is retried when the server
@@ -101,6 +103,10 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 			req.Header.Set("Content-Type", "application/json")
 		}
 
+		// Never log the body or token: requests carry secrets (keys, passwords).
+		tflog.Debug(ctx, "uapi request", map[string]any{
+			"method": method, "path": path, "if_match": ifMatch, "attempt": attempt,
+		})
 		resp, err := c.http.Do(req)
 		if err != nil {
 			return nil, 0, "", err
@@ -122,6 +128,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		}
 
 		etag = resp.Header.Get("ETag")
+		tflog.Debug(ctx, "uapi response", map[string]any{
+			"method": method, "path": path, "status": resp.StatusCode, "etag": etag,
+		})
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return raw, resp.StatusCode, etag, nil
 		}
