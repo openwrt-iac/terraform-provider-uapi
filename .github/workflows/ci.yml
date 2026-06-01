@@ -61,3 +61,18 @@ jobs:
             git diff -- docs
             exit 1
           fi
+
+  acceptance:
+    name: acceptance (mock)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: acceptance tests against the in-process fake uapi
+        run: TF_ACC=1 go test ./internal/provider/ -run TestAcc -count=1 -timeout 15m

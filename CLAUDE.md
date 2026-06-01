@@ -71,7 +71,7 @@ provider major.
 
 - `make test` runs unit tests: client behavior against `httptest` (423 retry, error envelope, 404, list) and the value-conversion helpers.
 - `TestProviderSchema` drives the protocol server's `GetProviderSchema`, which validates every resource and data source schema at once. Run it after any schema change; it catches `Required`+`Computed` conflicts and nested-type mistakes.
-- `make testacc` (needs `TF_ACC=1` and a live uapi instance) is for acceptance tests against a real router.
+- `make testacc` runs the `terraform-plugin-testing` acceptance suite (`TestAcc*`): it serves the provider in-process and drives a real terraform binary against an **in-process fake uapi** (`mock_uapi_test.go`), so it needs no router and runs in CI (the `acceptance` job). The fake is JSON-native and covers the curated CRUD/adopt/ETag/singleton/specials surface; extend it when a new pattern needs coverage. The suite tests *patterns* (flat CRUD + import, nested match, write-only secret, singleton, import-adopt, list + runtime data sources, the 1.2 resources), not all 35 resources one by one.
 - Quick end-to-end without acceptance tests: `make install`, point `TF_CLI_CONFIG_FILE` at `examples/dev.tfrc`, then `terraform validate` / `plan` in `examples/`.
 
 ## Docs

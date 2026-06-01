@@ -19,9 +19,11 @@ install: build
 test:
 	go test ./...
 
-# Acceptance tests need a live uapi instance; set UAPI_ENDPOINT/UAPI_TOKEN and TF_ACC=1.
+# Acceptance tests run the provider end to end (real terraform binary) against an
+# in-process fake uapi server, so they need no router. Requires a terraform/tofu
+# binary on PATH.
 testacc:
-	TF_ACC=1 go test ./... -v -timeout 120m
+	TF_ACC=1 go test ./internal/provider/ -run TestAcc -count=1 -v -timeout 30m
 
 fmt:
 	gofmt -w .
