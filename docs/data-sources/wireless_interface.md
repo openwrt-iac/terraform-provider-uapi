@@ -3,18 +3,18 @@
 page_title: "uapi_wireless_interface Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a wireless interface (SSID) by id. The encryption key is never returned.
+  Look up a wireless interface.
 ---
 
 # uapi_wireless_interface (Data Source)
 
-Look up a wireless interface (SSID) by id. The encryption key is never returned.
+Look up a wireless interface.
 
 ## Example Usage
 
 ```terraform
-data "uapi_wireless_interface" "home" {
-  id = "f_01HX0000000000000000000000"
+data "uapi_wireless_interface" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,19 +27,19 @@ data "uapi_wireless_interface" "home" {
 
 ### Read-Only
 
-- `device` (String) Wireless radio id this interface belongs to.
-- `disabled` (Boolean) Whether this SSID is disabled.
-- `encryption` (String) Encryption suite (none, psk2, sae, wpa3, ...).
+- `device` (String) Underlying device.
+- `disabled` (Boolean) Whether the entry is disabled.
+- `encryption` (String) uci option encryption.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `has_key` (Boolean) Whether a key is configured on the router.
-- `hidden` (Boolean) Whether the SSID is hidden.
-- `isolate` (Boolean) Whether clients on this SSID are isolated.
-- `key` (String, Sensitive) Always null; the API never returns the key.
+- `has_key` (Boolean) Whether a key is configured (the value is never returned).
+- `hidden` (Boolean) uci option hidden.
+- `isolate` (Boolean) uci option isolate.
+- `key` (String, Sensitive) Always null; never returned by the API.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `mode` (String) Operating mode: ap, sta, adhoc, wds, monitor, or mesh.
-- `network` (String) Network interface this SSID is bridged to.
+- `mode` (String) uci option mode.
+- `network` (String) uci option network.
 - `runtime` (Attributes) Live iwinfo-derived runtime state (read-only). (see [below for nested schema](#nestedatt--runtime))
-- `ssid` (String) Network name (SSID).
+- `ssid` (String) uci option ssid.
 
 <a id="nestedatt--runtime"></a>
 ### Nested Schema for `runtime`

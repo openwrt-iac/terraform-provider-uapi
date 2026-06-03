@@ -1,1 +1,1 @@
-data "uapi_prometheus_node_exporter_lua_config" "this" {}
+data "uapi_prometheus_node_exporter_lua_config" "example" {}

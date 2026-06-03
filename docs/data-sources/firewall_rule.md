@@ -3,18 +3,18 @@
 page_title: "uapi_firewall_rule Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall rule by id.
+  Look up a firewall rule.
 ---
 
 # uapi_firewall_rule (Data Source)
 
-Look up a firewall rule by id.
+Look up a firewall rule.
 
 ## Example Usage
 
 ```terraform
-data "uapi_firewall_rule" "ssh" {
-  id = "r_01HX0000000000000000000000"
+data "uapi_firewall_rule" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,12 +27,12 @@ data "uapi_firewall_rule" "ssh" {
 
 ### Read-Only
 
-- `enabled` (Boolean) Whether the rule is active.
+- `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `match` (Attributes) Match conditions for the rule. (see [below for nested schema](#nestedatt--match))
-- `name` (String) Rule name.
-- `target` (String) Rule action: ACCEPT, REJECT, DROP, NOTRACK, or MARK.
+- `match` (Attributes) Match conditions. (see [below for nested schema](#nestedatt--match))
+- `name` (String) Optional section name.
+- `target` (String) Target / action.
 
 <a id="nestedatt--match"></a>
 ### Nested Schema for `match`
@@ -43,7 +43,7 @@ Read-Only:
 - `dest_port` (List of String) Destination ports.
 - `dest_zone` (String) Destination firewall zone name.
 - `family` (String) Address family: any, ipv4, or ipv6.
-- `proto` (List of String) Protocols: tcp, udp, icmp, icmpv6, esp, ah, any, all.
+- `proto` (List of String) Protocols.
 - `src_ip` (List of String) Source IP addresses or CIDRs.
 - `src_port` (List of String) Source ports.
 - `src_zone` (String) Source firewall zone name.

@@ -1,3 +1,3 @@
-data "uapi_uhttpd_cert" "router" {
-  id = "c_01HX0000000000000000000000"
+data "uapi_uhttpd_cert" "example" {
+  id = "<id>"
 }

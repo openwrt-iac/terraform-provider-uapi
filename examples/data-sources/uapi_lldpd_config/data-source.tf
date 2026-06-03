@@ -1,1 +1,1 @@
-data "uapi_lldpd_config" "this" {}
+data "uapi_lldpd_config" "example" {}

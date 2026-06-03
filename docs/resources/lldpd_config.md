@@ -3,23 +3,17 @@
 page_title: "uapi_lldpd_config Resource - uapi"
 subcategory: ""
 description: |-
-  Global lldpd daemon settings (uci lldpd.lldpd). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A lldpd config.
 ---
 
 # uapi_lldpd_config (Resource)
 
-Global lldpd daemon settings (uci lldpd.lldpd). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A lldpd config.
 
 ## Example Usage
 
 ```terraform
-# uapi_lldpd_config is a singleton: it cannot be created or destroyed. Applying
-# writes the settings; destroying only drops it from state.
-resource "uapi_lldpd_config" "this" {
-  enable_lldpmed    = true
-  lldp_description   = true
-  lldp_capabilities = true
-  interface         = ["lan"]
+resource "uapi_lldpd_config" "example" {
 }
 ```
 
@@ -28,16 +22,16 @@ resource "uapi_lldpd_config" "this" {
 
 ### Optional
 
-- `enable_cdp` (Boolean) Advertise via Cisco Discovery Protocol. Defaults to false.
-- `enable_edp` (Boolean) Advertise via Extreme Discovery Protocol. Defaults to false.
-- `enable_fdp` (Boolean) Advertise via Foundry Discovery Protocol. Defaults to false.
-- `enable_lldpmed` (Boolean) Advertise via LLDP-MED. Defaults to false.
-- `enable_sonmp` (Boolean) Advertise via Nortel SONMP. Defaults to false.
-- `interface` (List of String) Network interfaces lldpd listens on. Empty means all interfaces.
-- `lldp_capabilities` (Boolean) Advertise system capabilities. Defaults to true.
-- `lldp_class` (String) LLDP-MED device class (1-4).
-- `lldp_description` (Boolean) Advertise the system description. Defaults to true.
-- `lldp_mgmt_ip` (String) Management IP address to advertise.
+- `enable_cdp` (Boolean) uci option enable_cdp.
+- `enable_edp` (Boolean) uci option enable_edp.
+- `enable_fdp` (Boolean) uci option enable_fdp.
+- `enable_lldpmed` (Boolean) uci option enable_lldpmed.
+- `enable_sonmp` (Boolean) uci option enable_sonmp.
+- `interface` (List of String) Network interface this entry applies to.
+- `lldp_capabilities` (Boolean) uci option lldp_capabilities.
+- `lldp_class` (Number) uci option lldp_class.
+- `lldp_description` (Boolean) uci option lldp_description.
+- `lldp_mgmt_ip` (String) uci option lldp_mgmt_ip.
 
 ### Read-Only
 

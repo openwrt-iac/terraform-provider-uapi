@@ -1,1 +1,1 @@
-data "uapi_firewall_defaults" "this" {}
+data "uapi_firewall_defaults" "example" {}

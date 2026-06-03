@@ -3,18 +3,18 @@
 page_title: "uapi_dhcp_server Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a DHCP server pool by id.
+  Look up a dhcp server.
 ---
 
 # uapi_dhcp_server (Data Source)
 
-Look up a DHCP server pool by id.
+Look up a dhcp server.
 
 ## Example Usage
 
 ```terraform
-data "uapi_dhcp_server" "lan" {
-  id = "d_01HX0000000000000000000000"
+data "uapi_dhcp_server" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,17 +27,17 @@ data "uapi_dhcp_server" "lan" {
 
 ### Read-Only
 
-- `dhcp_option` (List of String) Raw dnsmasq DHCP options for this pool.
-- `dhcpv6` (String) DHCPv6 mode: disabled, server, relay, or hybrid.
-- `domain` (String) DNS domain announced to clients on this interface.
-- `dynamicdhcp` (Boolean) Whether dynamic leases are handed out.
+- `dhcp_option` (List of String) uci option dhcp_option.
+- `dhcpv6` (String) uci option dhcpv6.
+- `domain` (String) uci option domain.
+- `dynamicdhcp` (Boolean) uci option dynamicdhcp.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `force` (Boolean) Whether DHCP is served even if another server is detected.
-- `ignore` (Boolean) Whether DHCP is disabled on this interface.
-- `interface` (String) Network interface this pool serves.
-- `leasetime` (String) Lease time, e.g. 12h, 30m, 1d, or plain seconds.
-- `limit` (String) Pool size within the /24.
+- `force` (Boolean) uci option force.
+- `ignore` (Boolean) uci option ignore.
+- `interface` (String) Network interface this entry applies to.
+- `leasetime` (String) uci option leasetime.
+- `limit` (Number) uci option limit.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `ra` (String) Router advertisement mode: disabled, server, relay, or hybrid.
-- `ra_default` (String) Default router lifetime behavior for router advertisements.
-- `start` (String) Pool start offset within the /24.
+- `ra` (String) uci option ra.
+- `ra_default` (Number) uci option ra_default.
+- `start` (Number) uci option start.

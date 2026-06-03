@@ -1,1 +1,1 @@
-data "uapi_snmpd_system" "this" {}
+data "uapi_snmpd_system" "example" {}

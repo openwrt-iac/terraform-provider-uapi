@@ -3,18 +3,18 @@
 page_title: "uapi_dhcp_host Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a static DHCP lease by id.
+  Look up a dhcp host.
 ---
 
 # uapi_dhcp_host (Data Source)
 
-Look up a static DHCP lease by id.
+Look up a dhcp host.
 
 ## Example Usage
 
 ```terraform
-data "uapi_dhcp_host" "printer" {
-  id = "h_01HX0000000000000000000000"
+data "uapi_dhcp_host" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,16 +27,16 @@ data "uapi_dhcp_host" "printer" {
 
 ### Read-Only
 
-- `broadcast` (Boolean) Whether broadcast replies are forced for the host.
-- `dns` (Boolean) Whether a DNS entry is added for the host.
-- `duid` (String) Client DUID for a DHCPv6 reservation.
-- `etag` (String) Opaque concurrency token for the host.
-- `hostid` (String) Static IPv6 host id hint (suffix).
-- `instance` (String) dhcp/dnsmasq instance the reservation is pinned to.
-- `ip` (String) Assigned IPv4 or IPv6 address.
-- `leasetime` (String) Lease duration like '12h', '30m', '1d', or seconds.
-- `mac` (String) Primary client MAC address for an IPv4 reservation.
-- `mac_aliases` (List of String) Additional MAC addresses sharing the same reservation.
+- `broadcast` (Boolean) uci option broadcast.
+- `dns` (Boolean) uci option dns.
+- `duid` (String) uci option duid.
+- `etag` (String) Opaque ETag of the resource's current state.
+- `hostid` (String) uci option hostid.
+- `instance` (String) uci option instance.
+- `ip` (String) uci option ip.
+- `leasetime` (String) uci option leasetime.
+- `mac` (String) uci option mac.
+- `mac_aliases` (List of String) uci option mac_aliases.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `name` (String) Hostname for the static lease.
-- `tag` (String) dnsmasq tag applied to the host.
+- `name` (String) Optional section name.
+- `tag` (String) uci option tag.

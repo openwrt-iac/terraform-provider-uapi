@@ -3,24 +3,20 @@
 page_title: "uapi_network_wireguard_peer Resource - uapi"
 subcategory: ""
 description: |-
-  A WireGuard peer attached to a WireGuard network interface (uci network.wireguard_).
+  A network WireGuard peer.
 ---
 
 # uapi_network_wireguard_peer (Resource)
 
-A WireGuard peer attached to a WireGuard network interface (uci network.wireguard_<interface>).
+A network WireGuard peer.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_network_wireguard_peer" "laptop" {
-  interface            = "wg0"
-  description          = "Field laptop"
-  public_key           = "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg="
-  allowed_ips          = ["10.0.0.2/32"]
-  endpoint_host        = "vpn.example.com"
-  endpoint_port        = "51820"
-  persistent_keepalive = "25"
+resource "uapi_network_wireguard_peer" "example" {
+  allowed_ips = ["example"]
+  interface = "example"
+  public_key = "example"
 }
 ```
 
@@ -29,24 +25,24 @@ resource "uapi_network_wireguard_peer" "laptop" {
 
 ### Required
 
-- `allowed_ips` (List of String) Non-empty list of IPv4 CIDRs routed to this peer.
-- `interface` (String) Parent WireGuard interface name. Must reference an existing interface with proto=wireguard.
-- `public_key` (String) Peer public key (44-char base64).
+- `allowed_ips` (List of String) uci option allowed_ips.
+- `interface` (String) Network interface this entry applies to.
+- `public_key` (String) uci option public_key.
 
 ### Optional
 
-- `description` (String) Human-readable peer description.
-- `disabled` (Boolean) Disable this peer. Defaults to false.
-- `endpoint_host` (String) Peer endpoint hostname or IP address.
-- `endpoint_port` (String) Peer endpoint UDP port (1-65535).
-- `persistent_keepalive` (String) Keepalive interval in seconds (0-65535).
-- `preshared_key` (String, Sensitive) Optional preshared key (44-char base64). Write-only: the API never returns it, so it is not refreshed from the router; rely on has_preshared_key.
-- `route_allowed_ips` (Boolean) Automatically create routes for allowed_ips. Defaults to false.
+- `description` (String) uci option description.
+- `disabled` (Boolean) Whether the entry is disabled.
+- `endpoint_host` (String) uci option endpoint_host.
+- `endpoint_port` (Number) uci option endpoint_port.
+- `persistent_keepalive` (Number) uci option persistent_keepalive.
+- `preshared_key` (String, Sensitive) WireGuard preshared key. Write-only: never returned by the API.
+- `route_allowed_ips` (Boolean) uci option route_allowed_ips.
 
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state, used for If-Match optimistic concurrency.
-- `has_preshared_key` (Boolean) Whether a preshared key is configured on the router (the value is never returned).
+- `has_preshared_key` (Boolean) Whether a preshared key is configured.
 - `id` (String) Stable resource id assigned by uapi (a prefixed ULID).
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 
@@ -57,10 +53,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed WireGuard peer is imported by its stable id.
-terraform import uapi_network_wireguard_peer.laptop g_01HX0000000000000000000000
+# Import a managed network WireGuard peer by its stable id.
+terraform import uapi_network_wireguard_peer.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_wireguard_peer.laptop cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_wireguard_peer.example cfg0a1b2c
 ```

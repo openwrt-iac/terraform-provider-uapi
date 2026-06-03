@@ -3,21 +3,18 @@
 page_title: "uapi_dhcp_server Resource - uapi"
 subcategory: ""
 description: |-
-  A per-interface DHCP pool (uci dhcp.dhcp).
+  A dhcp server.
 ---
 
 # uapi_dhcp_server (Resource)
 
-A per-interface DHCP pool (uci dhcp.dhcp).
+A dhcp server.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_dhcp_server" "lan" {
-  interface = "lan"
-  start     = "100"
-  limit     = "150"
-  leasetime = "12h"
+resource "uapi_dhcp_server" "example" {
+  interface = "example"
 }
 ```
 
@@ -26,21 +23,21 @@ resource "uapi_dhcp_server" "lan" {
 
 ### Required
 
-- `interface` (String) Network interface this pool serves.
+- `interface` (String) Network interface this entry applies to.
 
 ### Optional
 
-- `dhcp_option` (List of String) Raw dnsmasq DHCP options for this pool.
-- `dhcpv6` (String) DHCPv6 mode: disabled, server, relay, or hybrid.
-- `domain` (String) DNS domain announced to clients on this interface.
-- `dynamicdhcp` (Boolean) Hand out dynamic leases. Defaults to true.
-- `force` (Boolean) Serve DHCP even if another server is detected. Defaults to false.
-- `ignore` (Boolean) Ignore this interface (disable DHCP). Defaults to false.
-- `leasetime` (String) Lease time, e.g. 12h, 30m, 1d, or plain seconds.
-- `limit` (String) Pool size within the /24 (0-254).
-- `ra` (String) Router advertisement mode: disabled, server, relay, or hybrid.
-- `ra_default` (String) Default router lifetime behavior for router advertisements.
-- `start` (String) Pool start offset within the /24 (0-254).
+- `dhcp_option` (List of String) uci option dhcp_option.
+- `dhcpv6` (String) uci option dhcpv6.
+- `domain` (String) uci option domain.
+- `dynamicdhcp` (Boolean) uci option dynamicdhcp.
+- `force` (Boolean) uci option force.
+- `ignore` (Boolean) uci option ignore.
+- `leasetime` (String) uci option leasetime.
+- `limit` (Number) uci option limit.
+- `ra` (String) uci option ra.
+- `ra_default` (Number) uci option ra_default.
+- `start` (Number) uci option start.
 
 ### Read-Only
 
@@ -55,10 +52,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed dhcp server is imported by its stable id.
-terraform import uapi_dhcp_server.lan d_01HX0000000000000000000000
+# Import a managed dhcp server by its stable id.
+terraform import uapi_dhcp_server.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_dhcp_server.lan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_dhcp_server.example cfg0a1b2c
 ```

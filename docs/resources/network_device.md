@@ -3,20 +3,19 @@
 page_title: "uapi_network_device Resource - uapi"
 subcategory: ""
 description: |-
-  A network device such as a bridge or VLAN (uci network.device).
+  A network device.
 ---
 
 # uapi_network_device (Resource)
 
-A network device such as a bridge or VLAN (uci network.device).
+A network device.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_network_device" "br_lan" {
-  name  = "br-lan"
-  type  = "bridge"
-  ports = ["eth0", "eth1"]
+resource "uapi_network_device" "example" {
+  name = "example"
+  type = "example"
 }
 ```
 
@@ -25,17 +24,17 @@ resource "uapi_network_device" "br_lan" {
 
 ### Required
 
-- `name` (String) Device name (e.g. br-lan).
-- `type` (String) Device type: bridge, 8021q, 8021ad, macvlan, veth, tun, or tap.
+- `name` (String) Optional section name.
+- `type` (String) uci option type.
 
 ### Optional
 
-- `ifname` (String) Base interface name for VLAN/macvlan devices.
-- `ipv6` (Boolean) Enable IPv6 on the device. Defaults to true.
-- `macaddr` (String) Override MAC address.
-- `mtu` (String) Device MTU.
-- `ports` (List of String) Member interfaces (required when type is bridge).
-- `vid` (String) VLAN id (required when type is 8021q).
+- `ifname` (String) uci option ifname.
+- `ipv6` (Boolean) uci option ipv6.
+- `macaddr` (String) uci option macaddr.
+- `mtu` (Number) uci option mtu.
+- `ports` (List of String) uci option ports.
+- `vid` (Number) uci option vid.
 
 ### Read-Only
 
@@ -50,10 +49,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed device is imported by its stable id.
-terraform import uapi_network_device.br_lan e_01HX0000000000000000000000
+# Import a managed network device by its stable id.
+terraform import uapi_network_device.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_device.br_lan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_device.example cfg0a1b2c
 ```

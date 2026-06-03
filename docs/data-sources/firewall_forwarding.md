@@ -3,18 +3,18 @@
 page_title: "uapi_firewall_forwarding Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall forwarding by id.
+  Look up a firewall forwarding.
 ---
 
 # uapi_firewall_forwarding (Data Source)
 
-Look up a firewall forwarding by id.
+Look up a firewall forwarding.
 
 ## Example Usage
 
 ```terraform
-data "uapi_firewall_forwarding" "lan_to_wan" {
-  id = "f_01HX0000000000000000000000"
+data "uapi_firewall_forwarding" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,9 +27,9 @@ data "uapi_firewall_forwarding" "lan_to_wan" {
 
 ### Read-Only
 
-- `dest` (String) Destination zone name.
-- `enabled` (Boolean) Whether the forwarding is active.
+- `dest` (String) uci option dest.
+- `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `family` (String) Address family: any, ipv4, or ipv6.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `src` (String) Source zone name.
+- `src` (String) uci option src.

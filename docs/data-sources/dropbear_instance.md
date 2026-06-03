@@ -3,18 +3,18 @@
 page_title: "uapi_dropbear_instance Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a dropbear instance by id.
+  Look up a dropbear instance.
 ---
 
 # uapi_dropbear_instance (Data Source)
 
-Look up a dropbear instance by id.
+Look up a dropbear instance.
 
 ## Example Usage
 
 ```terraform
-data "uapi_dropbear_instance" "lan" {
-  id = "d_01HX0000000000000000000000"
+data "uapi_dropbear_instance" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,13 +27,13 @@ data "uapi_dropbear_instance" "lan" {
 
 ### Read-Only
 
-- `banner_file` (String) Path to a file displayed before authentication.
-- `enable` (Boolean) Whether this dropbear instance is enabled.
+- `banner_file` (String) uci option banner_file.
+- `enable` (Boolean) uci option enable.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `gateway_ports` (Boolean) Whether remote hosts may connect to forwarded ports.
-- `interface` (String) Network interface to bind to.
+- `gateway_ports` (Boolean) uci option gateway_ports.
+- `interface` (String) Network interface this entry applies to.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `password_auth` (Boolean) Whether password authentication is allowed.
-- `port` (String) TCP port to listen on.
-- `root_login` (Boolean) Whether root logins are allowed.
-- `root_password_auth` (Boolean) Whether root password authentication is allowed.
+- `password_auth` (Boolean) uci option password_auth.
+- `port` (Number) uci option port.
+- `root_login` (Boolean) uci option root_login.
+- `root_password_auth` (Boolean) uci option root_password_auth.

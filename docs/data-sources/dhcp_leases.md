@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_leases Data Source - uapi"
 subcategory: ""
 description: |-
-  The current active DHCP leases (IPv4) reported by the router at runtime.
+  Active IPv4 DHCP leases reported by the router at runtime.
 ---
 
 # uapi_dhcp_leases (Data Source)
 
-The current active DHCP leases (IPv4) reported by the router at runtime.
+Active IPv4 DHCP leases reported by the router at runtime.
 
 ## Example Usage
 

@@ -3,21 +3,18 @@
 page_title: "uapi_network_route Resource - uapi"
 subcategory: ""
 description: |-
-  A static network route (uci network.route).
+  A network route.
 ---
 
 # uapi_network_route (Resource)
 
-A static network route (uci network.route).
+A network route.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_network_route" "to_dmz" {
-  interface = "lan"
-  target    = "10.10.0.0/24"
-  gateway   = "192.168.1.254"
-  metric    = "10"
+resource "uapi_network_route" "example" {
+  target = "example"
 }
 ```
 
@@ -26,18 +23,18 @@ resource "uapi_network_route" "to_dmz" {
 
 ### Required
 
-- `target` (String) Destination IPv4 address or CIDR.
+- `target` (String) Target / action.
 
 ### Optional
 
-- `gateway` (String) Next-hop gateway IPv4 address.
-- `interface` (String) Logical network interface the route is bound to. Must reference an existing interface for unicast routes.
-- `metric` (String) Route metric (priority); non-negative integer.
-- `mtu` (String) Path MTU for the route; non-negative integer.
-- `netmask` (String) Destination netmask, when target is given as a bare address.
-- `source` (String) Preferred source IPv4 address or CIDR.
-- `table` (String) Routing table to install the route into.
-- `type` (String) Route type: unicast, blackhole, unreachable, prohibit, throw, anycast, multicast, local, or broadcast. Defaults to unicast.
+- `gateway` (String) uci option gateway.
+- `interface` (String) Network interface this entry applies to.
+- `metric` (Number) uci option metric.
+- `mtu` (Number) uci option mtu.
+- `netmask` (String) uci option netmask.
+- `source` (String) uci option source.
+- `table` (Number) uci option table.
+- `type` (String) uci option type.
 
 ### Read-Only
 
@@ -52,10 +49,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed route is imported by its stable id.
-terraform import uapi_network_route.to_dmz r_01HX0000000000000000000000
+# Import a managed network route by its stable id.
+terraform import uapi_network_route.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_route.to_dmz cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_route.example cfg0a1b2c
 ```

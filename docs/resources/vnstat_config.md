@@ -3,22 +3,17 @@
 page_title: "uapi_vnstat_config Resource - uapi"
 subcategory: ""
 description: |-
-  Global vnstat daemon settings (uci vnstat.vnstat). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A vnstat config.
 ---
 
 # uapi_vnstat_config (Resource)
 
-Global vnstat daemon settings (uci vnstat.vnstat). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A vnstat config.
 
 ## Example Usage
 
 ```terraform
-# uapi_vnstat_config is a singleton: it cannot be created or destroyed. Applying
-# writes the settings; destroying only drops it from state.
-resource "uapi_vnstat_config" "this" {
-  database_dir         = "/var/lib/vnstat"
-  interface_5min_hours = "48"
-  month_rotate         = "1"
+resource "uapi_vnstat_config" "example" {
 }
 ```
 
@@ -27,9 +22,9 @@ resource "uapi_vnstat_config" "this" {
 
 ### Optional
 
-- `database_dir` (String) Directory where vnstat stores its databases.
-- `interface_5min_hours` (String) Hours of 5-minute resolution data to keep per interface.
-- `month_rotate` (String) Day of the month on which monthly statistics are reset.
+- `database_dir` (String) uci option database_dir.
+- `interface_5min_hours` (Number) uci option interface_5min_hours.
+- `month_rotate` (Number) uci option month_rotate.
 
 ### Read-Only
 

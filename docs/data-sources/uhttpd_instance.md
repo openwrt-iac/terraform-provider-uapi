@@ -3,18 +3,18 @@
 page_title: "uapi_uhttpd_instance Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a uhttpd instance by id.
+  Look up a uhttpd instance.
 ---
 
 # uapi_uhttpd_instance (Data Source)
 
-Look up a uhttpd instance by id.
+Look up a uhttpd instance.
 
 ## Example Usage
 
 ```terraform
-data "uapi_uhttpd_instance" "main" {
-  id = "main"
+data "uapi_uhttpd_instance" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,24 +27,24 @@ data "uapi_uhttpd_instance" "main" {
 
 ### Read-Only
 
-- `cert` (String) Path to the TLS certificate.
-- `cgi_prefix` (String) URL prefix mapped to CGI scripts.
-- `error_page` (String) Virtual URL or CGI script handling error pages.
+- `cert` (String) uci option cert.
+- `cgi_prefix` (String) uci option cgi_prefix.
+- `error_page` (String) uci option error_page.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `home` (String) Document root served by this instance.
-- `http_keepalive` (String) HTTP keep-alive timeout in seconds.
-- `index_page` (List of String) Index file names tried for directory requests.
-- `key` (String) Path to the TLS private key.
-- `listen_http` (List of String) Addresses listened on for HTTP.
-- `listen_https` (List of String) Addresses listened on for HTTPS.
-- `lua_prefix` (List of String) Lua handler prefixes.
+- `home` (String) uci option home.
+- `http_keepalive` (Number) uci option http_keepalive.
+- `index_page` (List of String) uci option index_page.
+- `key` (String) Encryption passphrase. Write-only: never returned by the API.
+- `listen_http` (List of String) uci option listen_http.
+- `listen_https` (List of String) uci option listen_https.
+- `lua_prefix` (List of String) uci option lua_prefix.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `max_connections` (String) Maximum number of concurrent connections.
-- `max_requests` (String) Maximum number of concurrent requests.
-- `network_timeout` (String) Maximum seconds to wait for network activity.
-- `no_dirlists` (Boolean) Whether directory listings are disabled.
-- `no_symlinks` (Boolean) Whether symbolic links are not followed.
-- `rfc1918_filter` (Boolean) Whether public-to-private (RFC1918) requests are rejected.
-- `script_timeout` (String) Maximum seconds a CGI/Lua/ucode script may run.
-- `tcp_keepalive` (String) TCP keep-alive interval in seconds.
-- `ucode_prefix` (List of String) ucode handler prefixes.
+- `max_connections` (Number) uci option max_connections.
+- `max_requests` (Number) uci option max_requests.
+- `network_timeout` (Number) uci option network_timeout.
+- `no_dirlists` (Boolean) uci option no_dirlists.
+- `no_symlinks` (Boolean) uci option no_symlinks.
+- `rfc1918_filter` (Boolean) uci option rfc1918_filter.
+- `script_timeout` (Number) uci option script_timeout.
+- `tcp_keepalive` (Number) uci option tcp_keepalive.
+- `ucode_prefix` (List of String) uci option ucode_prefix.

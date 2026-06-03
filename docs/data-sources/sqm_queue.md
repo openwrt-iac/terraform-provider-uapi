@@ -3,18 +3,18 @@
 page_title: "uapi_sqm_queue Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up an SQM queue by id.
+  Look up a sqm queue.
 ---
 
 # uapi_sqm_queue (Data Source)
 
-Look up an SQM queue by id.
+Look up a sqm queue.
 
 ## Example Usage
 
 ```terraform
-data "uapi_sqm_queue" "wan" {
-  id = "q_01HX0000000000000000000000"
+data "uapi_sqm_queue" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,13 +27,13 @@ data "uapi_sqm_queue" "wan" {
 
 ### Read-Only
 
-- `download` (String) Download rate limit in kbit/s.
-- `enabled` (Boolean) Whether the queue is enabled.
+- `download` (Number) uci option download.
+- `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `interface` (String) Network interface the queue is attached to.
-- `linklayer` (String) Link layer adaptation: none, ethernet, or atm.
+- `interface` (String) Network interface this entry applies to.
+- `linklayer` (String) uci option linklayer.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `overhead` (String) Per-packet overhead in bytes for link layer adaptation.
-- `qdisc` (String) Queueing discipline: cake, fq_codel, pie, or htb.
-- `script` (String) SQM script: piece_of_cake.qos, simple.qos, simplest.qos, or layer_cake.qos.
-- `upload` (String) Upload rate limit in kbit/s.
+- `overhead` (Number) uci option overhead.
+- `qdisc` (String) uci option qdisc.
+- `script` (String) uci option script.
+- `upload` (Number) uci option upload.

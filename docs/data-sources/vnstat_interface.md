@@ -3,18 +3,18 @@
 page_title: "uapi_vnstat_interface Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a vnstat monitored interface by id.
+  Look up a vnstat interface.
 ---
 
 # uapi_vnstat_interface (Data Source)
 
-Look up a vnstat monitored interface by id.
+Look up a vnstat interface.
 
 ## Example Usage
 
 ```terraform
-data "uapi_vnstat_interface" "wan" {
-  id = "i_01HX0000000000000000000000"
+data "uapi_vnstat_interface" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,7 +27,7 @@ data "uapi_vnstat_interface" "wan" {
 
 ### Read-Only
 
-- `enabled` (Boolean) Whether monitoring of this interface is enabled.
+- `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `interface` (String) Name of the monitored network interface.
+- `interface` (String) Network interface this entry applies to.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.

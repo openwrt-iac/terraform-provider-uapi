@@ -3,18 +3,18 @@
 page_title: "uapi_network_device Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a network device by id.
+  Look up a network device.
 ---
 
 # uapi_network_device (Data Source)
 
-Look up a network device by id.
+Look up a network device.
 
 ## Example Usage
 
 ```terraform
-data "uapi_network_device" "br_lan" {
-  id = "e_01HX0000000000000000000000"
+data "uapi_network_device" "example" {
+  id = "<id>"
 }
 ```
 
@@ -28,12 +28,12 @@ data "uapi_network_device" "br_lan" {
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state.
-- `ifname` (String) Base interface name for VLAN/macvlan devices.
-- `ipv6` (Boolean) Whether IPv6 is enabled on the device.
-- `macaddr` (String) Override MAC address.
+- `ifname` (String) uci option ifname.
+- `ipv6` (Boolean) uci option ipv6.
+- `macaddr` (String) uci option macaddr.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `mtu` (String) Device MTU.
-- `name` (String) Device name (e.g. br-lan).
-- `ports` (List of String) Member interfaces.
-- `type` (String) Device type: bridge, 8021q, 8021ad, macvlan, veth, tun, or tap.
-- `vid` (String) VLAN id.
+- `mtu` (Number) uci option mtu.
+- `name` (String) Optional section name.
+- `ports` (List of String) uci option ports.
+- `type` (String) uci option type.
+- `vid` (Number) uci option vid.

@@ -3,23 +3,17 @@
 page_title: "uapi_system_timeserver Resource - uapi"
 subcategory: ""
 description: |-
-  An NTP timeserver configuration (uci system.timeserver).
+  A system timeserver.
 ---
 
 # uapi_system_timeserver (Resource)
 
-An NTP timeserver configuration (uci system.timeserver).
+A system timeserver.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_system_timeserver" "ntp" {
-  enabled  = true
-  use_dhcp = false
-  server = [
-    "0.openwrt.pool.ntp.org",
-    "1.openwrt.pool.ntp.org",
-  ]
+resource "uapi_system_timeserver" "example" {
 }
 ```
 
@@ -28,11 +22,11 @@ resource "uapi_system_timeserver" "ntp" {
 
 ### Optional
 
-- `enable_server` (Boolean) Whether to act as an NTP server for the local network. Defaults to false.
-- `enabled` (Boolean) Whether the NTP client is enabled. Defaults to true.
-- `interface` (String) Network interface the NTP server binds to.
-- `server` (List of String) Upstream NTP server hostnames. At least one is required when use_dhcp is false.
-- `use_dhcp` (Boolean) Whether to use NTP servers advertised over DHCP. Defaults to true.
+- `enable_server` (Boolean) uci option enable_server.
+- `enabled` (Boolean) Whether the entry is active.
+- `interface` (String) Network interface this entry applies to.
+- `server` (List of String) uci option server.
+- `use_dhcp` (Boolean) uci option use_dhcp.
 
 ### Read-Only
 
@@ -47,10 +41,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed timeserver is imported by its stable id.
-terraform import uapi_system_timeserver.ntp ts_01HX0000000000000000000000
+# Import a managed system timeserver by its stable id.
+terraform import uapi_system_timeserver.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_system_timeserver.ntp cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_system_timeserver.example cfg0a1b2c
 ```

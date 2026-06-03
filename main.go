@@ -10,6 +10,7 @@ import (
 	"github.com/raspbeguy/terraform-provider-uapi/internal/provider"
 )
 
+//go:generate go run ./internal/gen
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name uapi
 
 var version = "dev" // overridden at build time via -ldflags

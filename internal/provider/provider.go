@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -12,6 +13,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+)
+
+var (
+	_ provider.Provider                       = &uapiProvider{}
+	_ provider.ProviderWithEphemeralResources = &uapiProvider{}
 )
 
 type uapiProvider struct {
@@ -91,113 +97,38 @@ func (p *uapiProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	c := client.New(endpoint, token, insecure)
+	c := client.New(endpoint, token, insecure, p.version)
 	resp.ResourceData = c
 	resp.DataSourceData = c
+	resp.EphemeralResourceData = c
 }
 
 func (p *uapiProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		// 1.0 surface
-		NewFirewallRuleResource,
-		NewFirewallZoneResource,
-		NewFirewallRedirectResource,
-		NewNetworkInterfaceResource,
-		NewNetworkDeviceResource,
-		NewWirelessDeviceResource,
-		NewWirelessInterfaceResource,
-		NewDHCPHostResource,
-		NewSystemResource,
-		// 1.1 network
-		NewNetworkRouteResource,
-		NewNetworkRuleResource,
-		NewNetworkBridgeVlanResource,
-		NewNetworkWireguardPeerResource,
-		// 1.1 firewall
-		NewFirewallForwardingResource,
-		NewFirewallDefaultsResource,
-		// 1.1 dhcp
-		NewDhcpServerResource,
-		NewDhcpDnsmasqResource,
-		NewDhcpOdhcpdResource,
-		// 1.1 snmpd
-		NewSnmpdAccessResource,
-		NewSnmpdAgentResource,
-		NewSnmpdCom2secResource,
-		NewSnmpdGroupResource,
-		NewSnmpdSystemResource,
-		// 1.1 uhttpd / dropbear
-		NewUhttpdCertResource,
-		NewUhttpdInstanceResource,
-		NewDropbearInstanceResource,
-		// 1.1 system / sqm
-		NewSystemTimeserverResource,
-		NewSqmQueueResource,
-		// 1.1 vnstat + misc singletons
-		NewVnstatInterfaceResource,
-		NewVnstatConfigResource,
-		NewLldpdConfigResource,
-		NewPrometheusNodeExporterLuaConfigResource,
-		NewUnboundServerResource,
-		// 1.1 packages
+	// Generated curated resources (internal/gen) plus hand-written specials.
+	return append(generatedResources(),
 		NewPackageResource,
 		NewPackageFeedResource,
-		// 1.2
 		NewAuthorizedKeyResource,
 		NewSystemPasswordResource,
-	}
+	)
 }
 
 func (p *uapiProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{
-		// 1.0 surface
-		NewFirewallRuleDataSource,
-		NewFirewallZoneDataSource,
-		NewFirewallRedirectDataSource,
-		NewNetworkInterfaceDataSource,
-		NewNetworkDeviceDataSource,
-		NewWirelessDeviceDataSource,
-		NewWirelessInterfaceDataSource,
-		NewDHCPHostDataSource,
-		NewSystemDataSource,
+	return append(generatedDataSources(),
 		NewDHCPLeasesDataSource,
-		// 1.1 network
-		NewNetworkRouteDataSource,
-		NewNetworkRuleDataSource,
-		NewNetworkBridgeVlanDataSource,
-		NewNetworkWireguardPeerDataSource,
-		// 1.1 firewall
-		NewFirewallForwardingDataSource,
-		NewFirewallDefaultsDataSource,
-		// 1.1 dhcp
-		NewDhcpServerDataSource,
-		NewDhcpDnsmasqDataSource,
-		NewDhcpOdhcpdDataSource,
-		// 1.1 snmpd
-		NewSnmpdAccessDataSource,
-		NewSnmpdAgentDataSource,
-		NewSnmpdCom2secDataSource,
-		NewSnmpdGroupDataSource,
-		NewSnmpdSystemDataSource,
-		// 1.1 uhttpd / dropbear
-		NewUhttpdCertDataSource,
-		NewUhttpdInstanceDataSource,
-		NewDropbearInstanceDataSource,
-		// 1.1 system / sqm
-		NewSystemTimeserverDataSource,
-		NewSqmQueueDataSource,
-		// 1.1 vnstat + misc singletons
-		NewVnstatInterfaceDataSource,
-		NewVnstatConfigDataSource,
-		NewLldpdConfigDataSource,
-		NewPrometheusNodeExporterLuaConfigDataSource,
-		NewUnboundServerDataSource,
-		// 1.1 packages
-		NewPackageDataSource,
-		NewPackageFeedDataSource,
-		// 1.2
 		NewDHCPLeases6DataSource,
 		NewAuthorizedKeyDataSource,
+		NewPackageDataSource,
+		NewPackageFeedDataSource,
+		NewWhoamiDataSource,
+		NewHealthzDataSource,
+		NewDiagnosticsDataSource,
+	)
+}
+
+func (p *uapiProvider) EphemeralResources(_ context.Context) []func() ephemeral.EphemeralResource {
+	return []func() ephemeral.EphemeralResource{
+		NewTokenEphemeral,
 	}
 }
 

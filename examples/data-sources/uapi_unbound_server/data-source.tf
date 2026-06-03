@@ -1,1 +1,1 @@
-data "uapi_unbound_server" "this" {}
+data "uapi_unbound_server" "example" {}

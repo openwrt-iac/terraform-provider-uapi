@@ -3,23 +3,18 @@
 page_title: "uapi_sqm_queue Resource - uapi"
 subcategory: ""
 description: |-
-  An SQM (Smart Queue Management) queue (uci sqm.queue).
+  A sqm queue.
 ---
 
 # uapi_sqm_queue (Resource)
 
-An SQM (Smart Queue Management) queue (uci sqm.queue).
+A sqm queue.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_sqm_queue" "wan" {
-  interface = "wan"
-  download  = "100000"
-  upload    = "20000"
-  qdisc     = "cake"
-  script    = "piece_of_cake.qos"
-  linklayer = "ethernet"
+resource "uapi_sqm_queue" "example" {
+  interface = "example"
 }
 ```
 
@@ -28,17 +23,17 @@ resource "uapi_sqm_queue" "wan" {
 
 ### Required
 
-- `interface` (String) Network interface the queue is attached to.
+- `interface` (String) Network interface this entry applies to.
 
 ### Optional
 
-- `download` (String) Download rate limit in kbit/s. 0 disables the download shaper.
-- `enabled` (Boolean) Whether the queue is enabled. Defaults to true.
-- `linklayer` (String) Link layer adaptation: none, ethernet, or atm.
-- `overhead` (String) Per-packet overhead in bytes for link layer adaptation.
-- `qdisc` (String) Queueing discipline: cake, fq_codel, pie, or htb.
-- `script` (String) SQM script: piece_of_cake.qos, simple.qos, simplest.qos, or layer_cake.qos.
-- `upload` (String) Upload rate limit in kbit/s. 0 disables the upload shaper.
+- `download` (Number) uci option download.
+- `enabled` (Boolean) Whether the entry is active.
+- `linklayer` (String) uci option linklayer.
+- `overhead` (Number) uci option overhead.
+- `qdisc` (String) uci option qdisc.
+- `script` (String) uci option script.
+- `upload` (Number) uci option upload.
 
 ### Read-Only
 
@@ -53,10 +48,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed queue is imported by its stable id.
-terraform import uapi_sqm_queue.wan q_01HX0000000000000000000000
+# Import a managed sqm queue by its stable id.
+terraform import uapi_sqm_queue.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_sqm_queue.wan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_sqm_queue.example cfg0a1b2c
 ```

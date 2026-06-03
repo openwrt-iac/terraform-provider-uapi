@@ -3,22 +3,18 @@
 page_title: "uapi_snmpd_access Resource - uapi"
 subcategory: ""
 description: |-
-  An SNMP VACM access entry (uci snmpd.access). Grants a group access to MIB views.
+  A snmpd access.
 ---
 
 # uapi_snmpd_access (Resource)
 
-An SNMP VACM access entry (uci snmpd.access). Grants a group access to MIB views.
+A snmpd access.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_snmpd_access" "public" {
-  group   = uapi_snmpd_group.public.group
-  version = "v2c"
-  level   = "noauth"
-  prefix  = "exact"
-  read    = "all"
+resource "uapi_snmpd_access" "example" {
+  group = "example"
 }
 ```
 
@@ -27,17 +23,17 @@ resource "uapi_snmpd_access" "public" {
 
 ### Required
 
-- `group` (String) Name of the snmpd group this access entry applies to.
+- `group` (String) uci option group.
 
 ### Optional
 
-- `context` (String) SNMP context the access entry matches.
-- `level` (String) Required security level: noauth, auth, or priv.
-- `notify` (String) View name granted notify access.
-- `prefix` (String) Context match mode: exact or prefix.
-- `read` (String) View name granted read access.
-- `version` (String) Security model the entry matches: any, v1, v2c, or usm.
-- `write` (String) View name granted write access.
+- `context` (String) uci option context.
+- `level` (String) uci option level.
+- `notify` (String) uci option notify.
+- `prefix` (String) uci option prefix.
+- `read` (String) uci option read.
+- `version` (String) uci option version.
+- `write` (String) uci option write.
 
 ### Read-Only
 
@@ -52,10 +48,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed snmpd access entry is imported by its stable id.
-terraform import uapi_snmpd_access.public a_01HX0000000000000000000000
+# Import a managed snmpd access by its stable id.
+terraform import uapi_snmpd_access.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_snmpd_access.public cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_snmpd_access.example cfg0a1b2c
 ```

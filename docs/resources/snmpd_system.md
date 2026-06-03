@@ -3,22 +3,17 @@
 page_title: "uapi_snmpd_system Resource - uapi"
 subcategory: ""
 description: |-
-  SNMP agent system identity (uci snmpd.system). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A snmpd system.
 ---
 
 # uapi_snmpd_system (Resource)
 
-SNMP agent system identity (uci snmpd.system). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A snmpd system.
 
 ## Example Usage
 
 ```terraform
-# uapi_snmpd_system is a singleton: it cannot be created or destroyed. Applying
-# writes the settings; destroying only drops it from state.
-resource "uapi_snmpd_system" "this" {
-  sys_location = "Server Room A"
-  sys_contact  = "noc@example.com"
-  sys_name     = "edge-router"
+resource "uapi_snmpd_system" "example" {
 }
 ```
 
@@ -27,12 +22,12 @@ resource "uapi_snmpd_system" "this" {
 
 ### Optional
 
-- `sys_contact` (String) Value reported as sysContact (the administrative contact).
-- `sys_descr` (String) Value reported as sysDescr (a textual description of the entity).
-- `sys_location` (String) Value reported as sysLocation (the device's physical location).
-- `sys_name` (String) Value reported as sysName (the administratively assigned name).
-- `sys_object_id` (String) Value reported as sysObjectID (the vendor authoritative object identifier).
-- `sys_services` (String) Value reported as sysServices (the OSI layer services bitmask).
+- `sys_contact` (String) uci option sys_contact.
+- `sys_descr` (String) uci option sys_descr.
+- `sys_location` (String) uci option sys_location.
+- `sys_name` (String) uci option sys_name.
+- `sys_object_id` (String) uci option sys_object_id.
+- `sys_services` (Number) uci option sys_services.
 
 ### Read-Only
 

@@ -3,18 +3,18 @@
 page_title: "uapi_snmpd_access Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up an SNMP VACM access entry by id.
+  Look up a snmpd access.
 ---
 
 # uapi_snmpd_access (Data Source)
 
-Look up an SNMP VACM access entry by id.
+Look up a snmpd access.
 
 ## Example Usage
 
 ```terraform
-data "uapi_snmpd_access" "public" {
-  id = "a_01HX0000000000000000000000"
+data "uapi_snmpd_access" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,13 +27,13 @@ data "uapi_snmpd_access" "public" {
 
 ### Read-Only
 
-- `context` (String) SNMP context the access entry matches.
+- `context` (String) uci option context.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `group` (String) Name of the snmpd group this access entry applies to.
-- `level` (String) Required security level: noauth, auth, or priv.
+- `group` (String) uci option group.
+- `level` (String) uci option level.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `notify` (String) View name granted notify access.
-- `prefix` (String) Context match mode: exact or prefix.
-- `read` (String) View name granted read access.
-- `version` (String) Security model the entry matches: any, v1, v2c, or usm.
-- `write` (String) View name granted write access.
+- `notify` (String) uci option notify.
+- `prefix` (String) uci option prefix.
+- `read` (String) uci option read.
+- `version` (String) uci option version.
+- `write` (String) uci option write.

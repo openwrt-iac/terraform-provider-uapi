@@ -1,6 +1,9 @@
 # Built provider binary
 /terraform-provider-uapi
 
+# Stray code-generator binary from `go build ./internal/gen`
+/gen
+
 # GoReleaser output
 /dist/
 
@@ -16,3 +19,6 @@ dev.tfrc
 
 # Editor noise
 *.swp
+
+# Local uapi-maintainer correspondence, not provider source
+/response.md

@@ -126,7 +126,7 @@ func TestWirelessInterfaceReadPreservesKey(t *testing.T) {
 		"ssid":    "home",
 		"has_key": true,
 	}
-	(&wirelessInterfaceResource{}).read(ctx, obj, &m)
+	(&wirelessInterfaceResource{}).read(ctx, obj, &m, newDiagsink(&diag.Diagnostics{}))
 
 	if m.Key.ValueString() != "super-secret" {
 		t.Errorf("key must be preserved, got %v", m.Key)
@@ -134,15 +134,15 @@ func TestWirelessInterfaceReadPreservesKey(t *testing.T) {
 	if !m.HasKey.ValueBool() {
 		t.Errorf("has_key should be true, got %v", m.HasKey)
 	}
-	if m.SSID.ValueString() != "home" {
-		t.Errorf("ssid = %v", m.SSID)
+	if m.Ssid.ValueString() != "home" {
+		t.Errorf("ssid = %v", m.Ssid)
 	}
 }
 
 func TestWirelessInterfaceReadDefaultsHasKey(t *testing.T) {
 	ctx := context.Background()
 	var m wirelessInterfaceModel
-	(&wirelessInterfaceResource{}).read(ctx, map[string]any{"id": "w_1"}, &m)
+	(&wirelessInterfaceResource{}).read(ctx, map[string]any{"id": "w_1"}, &m, newDiagsink(&diag.Diagnostics{}))
 	if m.HasKey.IsNull() || m.HasKey.ValueBool() {
 		t.Errorf("has_key should default to false, got %v", m.HasKey)
 	}

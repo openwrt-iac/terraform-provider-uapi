@@ -1,3 +1,3 @@
-data "uapi_dhcp_server" "lan" {
-  id = "d_01HX0000000000000000000000"
+data "uapi_dhcp_server" "example" {
+  id = "<id>"
 }

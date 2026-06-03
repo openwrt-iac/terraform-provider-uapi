@@ -3,21 +3,17 @@
 page_title: "uapi_dhcp_odhcpd Resource - uapi"
 subcategory: ""
 description: |-
-  Global odhcpd settings (uci dhcp.odhcpd). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A odhcpd settings.
 ---
 
 # uapi_dhcp_odhcpd (Resource)
 
-Global odhcpd settings (uci dhcp.odhcpd). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A odhcpd settings.
 
 ## Example Usage
 
 ```terraform
-# uapi_dhcp_odhcpd is a singleton: it cannot be created or destroyed. Applying
-# writes the settings; destroying only drops it from state.
-resource "uapi_dhcp_odhcpd" "this" {
-  maindhcp = false
-  loglevel = "4"
+resource "uapi_dhcp_odhcpd" "example" {
 }
 ```
 
@@ -26,10 +22,10 @@ resource "uapi_dhcp_odhcpd" "this" {
 
 ### Optional
 
-- `leasefile` (String) Path to the odhcpd lease file.
-- `leasetrigger` (String) Script run when leases change.
-- `loglevel` (String) Syslog log level (0-7).
-- `maindhcp` (Boolean) Let odhcpd serve IPv4 DHCP instead of dnsmasq. Defaults to false.
+- `leasefile` (String) uci option leasefile.
+- `leasetrigger` (String) uci option leasetrigger.
+- `loglevel` (Number) uci option loglevel.
+- `maindhcp` (Boolean) uci option maindhcp.
 
 ### Read-Only
 

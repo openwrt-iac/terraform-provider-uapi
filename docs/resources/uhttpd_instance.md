@@ -3,24 +3,17 @@
 page_title: "uapi_uhttpd_instance Resource - uapi"
 subcategory: ""
 description: |-
-  A uhttpd web server instance (uci uhttpd.uhttpd).
+  A uhttpd instance.
 ---
 
 # uapi_uhttpd_instance (Resource)
 
-A uhttpd web server instance (uci uhttpd.uhttpd).
+A uhttpd instance.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_uhttpd_instance" "main" {
-  listen_http  = ["0.0.0.0:80", "[::]:80"]
-  listen_https = ["0.0.0.0:443", "[::]:443"]
-  home         = "/www"
-  cert         = "/etc/uhttpd.crt"
-  key          = "/etc/uhttpd.key"
-  index_page   = ["index.html"]
-  no_dirlists  = true
+resource "uapi_uhttpd_instance" "example" {
 }
 ```
 
@@ -29,25 +22,25 @@ resource "uapi_uhttpd_instance" "main" {
 
 ### Optional
 
-- `cert` (String) Path to the TLS certificate.
-- `cgi_prefix` (String) URL prefix mapped to CGI scripts.
-- `error_page` (String) Virtual URL or CGI script handling error pages.
-- `home` (String) Document root served by this instance.
-- `http_keepalive` (String) HTTP keep-alive timeout in seconds.
-- `index_page` (List of String) Index file names tried for directory requests.
-- `key` (String) Path to the TLS private key.
-- `listen_http` (List of String) Addresses to listen on for HTTP, each <host>:<port> (e.g. 0.0.0.0:80 or [::]:80).
-- `listen_https` (List of String) Addresses to listen on for HTTPS, each <host>:<port> (e.g. 0.0.0.0:443 or [::]:443).
-- `lua_prefix` (List of String) Lua handler prefixes, each <url>=<handler>.
-- `max_connections` (String) Maximum number of concurrent connections.
-- `max_requests` (String) Maximum number of concurrent requests.
-- `network_timeout` (String) Maximum seconds to wait for network activity.
-- `no_dirlists` (Boolean) Disable directory listings. Defaults to false.
-- `no_symlinks` (Boolean) Do not follow symbolic links. Defaults to false.
-- `rfc1918_filter` (Boolean) Reject requests from public IPs to private (RFC1918) targets. Defaults to false.
-- `script_timeout` (String) Maximum seconds a CGI/Lua/ucode script may run.
-- `tcp_keepalive` (String) TCP keep-alive interval in seconds.
-- `ucode_prefix` (List of String) ucode handler prefixes, each <url>=<handler>.
+- `cert` (String) uci option cert.
+- `cgi_prefix` (String) uci option cgi_prefix.
+- `error_page` (String) uci option error_page.
+- `home` (String) uci option home.
+- `http_keepalive` (Number) uci option http_keepalive.
+- `index_page` (List of String) uci option index_page.
+- `key` (String) Encryption passphrase. Write-only: never returned by the API.
+- `listen_http` (List of String) uci option listen_http.
+- `listen_https` (List of String) uci option listen_https.
+- `lua_prefix` (List of String) uci option lua_prefix.
+- `max_connections` (Number) uci option max_connections.
+- `max_requests` (Number) uci option max_requests.
+- `network_timeout` (Number) uci option network_timeout.
+- `no_dirlists` (Boolean) uci option no_dirlists.
+- `no_symlinks` (Boolean) uci option no_symlinks.
+- `rfc1918_filter` (Boolean) uci option rfc1918_filter.
+- `script_timeout` (Number) uci option script_timeout.
+- `tcp_keepalive` (Number) uci option tcp_keepalive.
+- `ucode_prefix` (List of String) uci option ucode_prefix.
 
 ### Read-Only
 
@@ -62,10 +55,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed uhttpd instance is imported by its stable id.
-terraform import uapi_uhttpd_instance.main main
+# Import a managed uhttpd instance by its stable id.
+terraform import uapi_uhttpd_instance.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_uhttpd_instance.main cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_uhttpd_instance.example cfg0a1b2c
 ```

@@ -3,18 +3,18 @@
 page_title: "uapi_snmpd_agent Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up an SNMP agent listener configuration by id.
+  Look up a snmpd agent.
 ---
 
 # uapi_snmpd_agent (Data Source)
 
-Look up an SNMP agent listener configuration by id.
+Look up a snmpd agent.
 
 ## Example Usage
 
 ```terraform
-data "uapi_snmpd_agent" "this" {
-  id = "g_01HX0000000000000000000000"
+data "uapi_snmpd_agent" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,6 +27,6 @@ data "uapi_snmpd_agent" "this" {
 
 ### Read-Only
 
-- `agentaddress` (List of String) Addresses the SNMP agent listens on (e.g. UDP:161, udp6:161).
+- `agentaddress` (List of String) uci option agentaddress.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.

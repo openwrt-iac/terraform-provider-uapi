@@ -1,3 +1,3 @@
-data "uapi_network_route" "to_dmz" {
-  id = "r_01HX0000000000000000000000"
+data "uapi_network_route" "example" {
+  id = "<id>"
 }

@@ -3,20 +3,17 @@
 page_title: "uapi_network_rule Resource - uapi"
 subcategory: ""
 description: |-
-  An IP routing policy rule (uci network.rule). At least one of in, out, src, or dest must be set.
+  A network rule.
 ---
 
 # uapi_network_rule (Resource)
 
-An IP routing policy rule (uci network.rule). At least one of in, out, src, or dest must be set.
+A network rule.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_network_rule" "from_guests" {
-  src      = "192.168.3.0/24"
-  priority = "100"
-  lookup   = "200"
+resource "uapi_network_rule" "example" {
 }
 ```
 
@@ -25,16 +22,16 @@ resource "uapi_network_rule" "from_guests" {
 
 ### Optional
 
-- `action` (String) Rule action: lookup, goto, unreachable, prohibit, blackhole, or throw. Defaults to lookup.
-- `dest` (String) Destination IPv4 address or CIDR selector.
-- `goto` (String) Priority to jump to. Required when action is goto.
-- `in` (String) Incoming interface selector.
-- `invert` (Boolean) Invert the rule selectors. Defaults to false.
-- `lookup` (String) Routing table to look up. Required when action is lookup.
-- `mark` (String) Firewall mark to match.
-- `out` (String) Outgoing interface selector.
-- `priority` (String) Rule priority (0-32766).
-- `src` (String) Source IPv4 address or CIDR selector.
+- `action` (String) uci option action.
+- `dest` (String) uci option dest.
+- `goto` (Number) uci option goto.
+- `in` (String) uci option in.
+- `invert` (Boolean) uci option invert.
+- `lookup` (Number) uci option lookup.
+- `mark` (String) uci option mark.
+- `out` (String) uci option out.
+- `priority` (Number) uci option priority.
+- `src` (String) uci option src.
 
 ### Read-Only
 
@@ -49,10 +46,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed rule is imported by its stable id.
-terraform import uapi_network_rule.from_guests u_01HX0000000000000000000000
+# Import a managed network rule by its stable id.
+terraform import uapi_network_rule.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_rule.from_guests cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_rule.example cfg0a1b2c
 ```

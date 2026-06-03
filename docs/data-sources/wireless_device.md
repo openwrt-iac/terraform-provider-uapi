@@ -3,18 +3,18 @@
 page_title: "uapi_wireless_device Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a wireless radio by id.
+  Look up a wireless device.
 ---
 
 # uapi_wireless_device (Data Source)
 
-Look up a wireless radio by id.
+Look up a wireless device.
 
 ## Example Usage
 
 ```terraform
-data "uapi_wireless_device" "radio0" {
-  id = "w_01HX0000000000000000000000"
+data "uapi_wireless_device" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,12 +27,12 @@ data "uapi_wireless_device" "radio0" {
 
 ### Read-Only
 
-- `band` (String) Frequency band: 2g, 5g, 6g, or 60g.
-- `channel` (String) Channel number or 'auto'.
-- `country` (String) Regulatory country code.
-- `disabled` (Boolean) Whether the radio is disabled.
+- `band` (String) uci option band.
+- `channel` (Number) uci option channel.
+- `country` (String) uci option country.
+- `disabled` (Boolean) Whether the entry is disabled.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `htmode` (String) HT/VHT/HE mode (e.g. HT20, VHT80).
+- `htmode` (String) uci option htmode.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `txpower` (String) Transmit power in dBm.
-- `type` (String) Driver type: mac80211 or broadcom.
+- `txpower` (Number) uci option txpower.
+- `type` (String) uci option type.

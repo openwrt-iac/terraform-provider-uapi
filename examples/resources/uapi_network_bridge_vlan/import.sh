@@ -1,6 +1,5 @@
-# A uapi-managed bridge VLAN is imported by its stable id.
-terraform import uapi_network_bridge_vlan.guests v_01HX0000000000000000000000
+# Import a managed network bridge VLAN by its stable id.
+terraform import uapi_network_bridge_vlan.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_bridge_vlan.guests cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_bridge_vlan.example cfg0a1b2c

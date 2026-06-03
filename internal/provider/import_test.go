@@ -16,7 +16,7 @@ func TestResolveImportIDManaged(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	id, adopted, err := resolveImportID(context.Background(), client.New(srv.URL, "t", false), "firewall/rules", "r_managed")
+	id, adopted, err := resolveImportID(context.Background(), client.New(srv.URL, "t", false, "test"), "firewall/rules", "r_managed")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestResolveImportIDAdopts(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	id, adopted, err := resolveImportID(context.Background(), client.New(srv.URL, "t", false), "firewall/rules", "cfg0a1b")
+	id, adopted, err := resolveImportID(context.Background(), client.New(srv.URL, "t", false, "test"), "firewall/rules", "cfg0a1b")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

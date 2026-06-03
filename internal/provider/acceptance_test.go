@@ -2,13 +2,41 @@ package provider
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/echoprovider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
+
+// accProvidersWithEcho adds the test "echo" provider, which mirrors an ephemeral
+// resource's value into ordinary state so it can be asserted.
+func accProvidersWithEcho() map[string]func() (tfprotov6.ProviderServer, error) {
+	p := accProviders()
+	p["echo"] = echoprovider.NewProviderServer()
+	return p
+}
+
+// accTarget returns the provider configuration block a test should use and a
+// closer to release any resources it allocated. When UAPI_ACC_ENDPOINT is set
+// the suite runs against that live router (UAPI_ACC_TOKEN supplies the token);
+// otherwise it spins up a fresh in-process mock. Only endpoint-agnostic tests
+// (CRUD + id/managed/etag shape) should use this; mock-value-specific tests
+// instantiate the mock directly.
+func accTarget(t *testing.T) (providerCfg string, closer func()) {
+	t.Helper()
+	if ep := os.Getenv("UAPI_ACC_ENDPOINT"); ep != "" {
+		cfg := fmt.Sprintf("provider \"uapi\" {\n  endpoint = %q\n  token    = %q\n  insecure = true\n}\n",
+			ep, os.Getenv("UAPI_ACC_TOKEN"))
+		return cfg, func() {}
+	}
+	m := newMockUAPI()
+	return providerHCL(m.URL), m.Close
+}
 
 // accProviders serves the real provider in-process; tests point its endpoint at
 // a per-test mock uapi server. resource.Test auto-skips unless TF_ACC=1.
@@ -237,6 +265,57 @@ data "uapi_dhcp_leases" "all" {}
 				resource.TestCheckResourceAttr("data.uapi_network_interface.lan", "runtime.ipv4_address.0.address", "192.168.1.1"),
 				// list data source
 				resource.TestCheckResourceAttr("data.uapi_dhcp_leases.all", "leases.0.ip", "192.168.1.50"),
+			),
+		}},
+	})
+}
+
+func TestAccOpsDataSources(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+data "uapi_whoami" "me" {}
+data "uapi_healthz" "h" {}
+data "uapi_diagnostics" "d" {}
+`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.uapi_whoami.me", "token_id", "acc"),
+				resource.TestCheckResourceAttr("data.uapi_whoami.me", "scopes.0", "network:write"),
+				resource.TestCheckResourceAttr("data.uapi_healthz.h", "status", "ok"),
+				resource.TestCheckResourceAttr("data.uapi_healthz.h", "checks.ubus", "ok"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "uptime_seconds", "12345"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "lock_state.global_held", "false"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "recent_errors.0.code", "validation_failed"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "recent_errors.0.status", "422"),
+			),
+		}},
+	})
+}
+
+func TestAccTokenEphemeral(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_10_0)},
+		ProtoV6ProviderFactories: accProvidersWithEcho(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+ephemeral "uapi_token" "t" {
+  name   = "ci"
+  scopes = ["network:write"]
+}
+
+provider "echo" {
+  data = ephemeral.uapi_token.t.token
+}
+
+resource "echo" "minted" {}
+`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("echo.minted", "data", "deadbeefdeadbeefdeadbeefdeadbeef"),
 			),
 		}},
 	})

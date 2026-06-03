@@ -3,20 +3,18 @@
 page_title: "uapi_snmpd_group Resource - uapi"
 subcategory: ""
 description: |-
-  An SNMP VACM group definition (uci snmpd.group). Binds a security name to a group.
+  A snmpd group.
 ---
 
 # uapi_snmpd_group (Resource)
 
-An SNMP VACM group definition (uci snmpd.group). Binds a security name to a group.
+A snmpd group.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_snmpd_group" "public" {
-  group   = "public"
-  version = "v2c"
-  secname = uapi_snmpd_com2sec.ro.secname
+resource "uapi_snmpd_group" "example" {
+  group = "example"
 }
 ```
 
@@ -25,12 +23,12 @@ resource "uapi_snmpd_group" "public" {
 
 ### Required
 
-- `group` (String) Group name referenced by snmpd access entries.
+- `group` (String) uci option group.
 
 ### Optional
 
-- `secname` (String) Security name added to the group.
-- `version` (String) Security model for the membership: v1, v2c, or usm.
+- `secname` (String) uci option secname.
+- `version` (String) uci option version.
 
 ### Read-Only
 
@@ -45,10 +43,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed snmpd group is imported by its stable id.
-terraform import uapi_snmpd_group.public r_01HX0000000000000000000000
+# Import a managed snmpd group by its stable id.
+terraform import uapi_snmpd_group.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_snmpd_group.public cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_snmpd_group.example cfg0a1b2c
 ```

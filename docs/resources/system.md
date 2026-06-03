@@ -3,22 +3,17 @@
 page_title: "uapi_system Resource - uapi"
 subcategory: ""
 description: |-
-  Global system settings (uci system.system). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A system settings.
 ---
 
 # uapi_system (Resource)
 
-Global system settings (uci system.system). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A system settings.
 
 ## Example Usage
 
 ```terraform
-# uapi_system is a singleton: it cannot be created or destroyed. Applying writes
-# the settings; destroying only drops it from state.
-resource "uapi_system" "this" {
-  hostname = "edge-router"
-  timezone = "CET-1CEST,M3.5.0,M10.5.0/3"
-  zonename = "Europe/Paris"
+resource "uapi_system" "example" {
 }
 ```
 
@@ -27,16 +22,16 @@ resource "uapi_system" "this" {
 
 ### Optional
 
-- `description` (String) Short device description.
-- `hostname` (String) System hostname.
-- `log_ip` (String) Remote syslog server IP.
-- `log_proto` (String) Remote syslog protocol (udp or tcp).
-- `log_remote` (Boolean) Enable remote logging. Defaults to false.
-- `log_size` (String) Kernel log buffer size in KiB.
-- `notes` (String) Free-form notes.
-- `timezone` (String) POSIX timezone string (e.g. CET-1CEST,M3.5.0,M10.5.0/3).
-- `urandom_seed` (Boolean) Save a random seed across reboots. Defaults to false.
-- `zonename` (String) IANA zone name (e.g. Europe/Paris).
+- `description` (String) uci option description.
+- `hostname` (String) uci option hostname.
+- `log_ip` (String) uci option log_ip.
+- `log_proto` (String) uci option log_proto.
+- `log_remote` (Boolean) uci option log_remote.
+- `log_size` (Number) uci option log_size.
+- `notes` (String) uci option notes.
+- `timezone` (String) uci option timezone.
+- `urandom_seed` (Boolean) uci option urandom_seed.
+- `zonename` (String) uci option zonename.
 
 ### Read-Only
 

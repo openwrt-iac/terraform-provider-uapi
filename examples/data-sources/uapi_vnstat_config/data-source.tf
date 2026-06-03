@@ -1,1 +1,1 @@
-data "uapi_vnstat_config" "this" {}
+data "uapi_vnstat_config" "example" {}

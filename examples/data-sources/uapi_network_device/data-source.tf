@@ -1,3 +1,3 @@
-data "uapi_network_device" "br_lan" {
-  id = "e_01HX0000000000000000000000"
+data "uapi_network_device" "example" {
+  id = "<id>"
 }

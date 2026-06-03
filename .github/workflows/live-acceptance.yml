@@ -1,0 +1,36 @@
+name: Live acceptance
+
+# Manually triggered acceptance run against a real uapi 2.0 router. The default
+# CI acceptance job runs against the in-process mock on every PR; this one is for
+# verifying the provider end to end against hardware (strict ints, snake_case,
+# 429/pagination). It creates and destroys resources, so point it at a test
+# router only.
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: "uapi v2 endpoint, e.g. https://router.example.com/api/v2"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: live acceptance (real router)
+    runs-on: ubuntu-latest
+    environment: live-acceptance
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: endpoint-agnostic acceptance against the live router
+        env:
+          UAPI_ACC_ENDPOINT: ${{ inputs.endpoint }}
+          UAPI_ACC_TOKEN: ${{ secrets.UAPI_ACC_TOKEN }}
+        run: TF_ACC=1 go test ./internal/provider/ -run TestAccAllResources -count=1 -timeout 30m -v

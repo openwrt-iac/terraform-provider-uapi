@@ -3,18 +3,18 @@
 page_title: "uapi_network_route Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a static network route by id.
+  Look up a network route.
 ---
 
 # uapi_network_route (Data Source)
 
-Look up a static network route by id.
+Look up a network route.
 
 ## Example Usage
 
 ```terraform
-data "uapi_network_route" "to_dmz" {
-  id = "r_01HX0000000000000000000000"
+data "uapi_network_route" "example" {
+  id = "<id>"
 }
 ```
 
@@ -28,13 +28,13 @@ data "uapi_network_route" "to_dmz" {
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state.
-- `gateway` (String) Next-hop gateway IPv4 address.
-- `interface` (String) Logical network interface the route is bound to.
+- `gateway` (String) uci option gateway.
+- `interface` (String) Network interface this entry applies to.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `metric` (String) Route metric (priority).
-- `mtu` (String) Path MTU for the route.
-- `netmask` (String) Destination netmask, when target is a bare address.
-- `source` (String) Preferred source IPv4 address or CIDR.
-- `table` (String) Routing table the route is installed into.
-- `target` (String) Destination IPv4 address or CIDR.
-- `type` (String) Route type: unicast, blackhole, unreachable, prohibit, throw, anycast, multicast, local, or broadcast.
+- `metric` (Number) uci option metric.
+- `mtu` (Number) uci option mtu.
+- `netmask` (String) uci option netmask.
+- `source` (String) uci option source.
+- `table` (Number) uci option table.
+- `target` (String) Target / action.
+- `type` (String) uci option type.

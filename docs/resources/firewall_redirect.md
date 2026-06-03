@@ -3,26 +3,19 @@
 page_title: "uapi_firewall_redirect Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall redirect / port forward (uci firewall.redirect).
+  A firewall redirect.
 ---
 
 # uapi_firewall_redirect (Resource)
 
-A firewall redirect / port forward (uci firewall.redirect).
+A firewall redirect.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_firewall_redirect" "web" {
-  name   = "Forward-HTTP"
-  target = "DNAT"
-
+resource "uapi_firewall_redirect" "example" {
   match = {
-    src_zone  = "wan"
-    proto     = ["tcp"]
-    src_dport = ["80"]
-    dest_ip   = ["192.168.1.10"]
-    dest_port = ["8080"]
+    src_zone = "example"
   }
 }
 ```
@@ -32,16 +25,16 @@ resource "uapi_firewall_redirect" "web" {
 
 ### Required
 
-- `match` (Attributes) Match conditions for the redirect. (see [below for nested schema](#nestedatt--match))
+- `match` (Attributes) Match conditions. (see [below for nested schema](#nestedatt--match))
 
 ### Optional
 
-- `enabled` (Boolean) Whether the redirect is active. Defaults to true.
-- `name` (String) Optional human-readable redirect name.
-- `reflection` (Boolean) Enable NAT loopback / hairpinning for this redirect.
-- `reflection_src` (String) Source address used for hairpinned packets: internal or external.
-- `reflection_zone` (List of String) Firewall zones in which NAT reflection is applied.
-- `target` (String) Redirect type: DNAT or SNAT. Defaults to DNAT.
+- `enabled` (Boolean) Whether the entry is active.
+- `name` (String) Optional section name.
+- `reflection` (Boolean) uci option reflection.
+- `reflection_src` (String) uci option reflection_src.
+- `reflection_zone` (List of String) uci option reflection_zone.
+- `target` (String) Target / action.
 
 ### Read-Only
 
@@ -54,15 +47,15 @@ resource "uapi_firewall_redirect" "web" {
 
 Required:
 
-- `src_zone` (String) Source firewall zone name. Must reference an existing zone.
+- `src_zone` (String) Source firewall zone name.
 
 Optional:
 
 - `dest_ip` (List of String) Internal destination IP addresses.
 - `dest_port` (List of String) Internal destination ports.
 - `dest_zone` (String) Destination firewall zone name.
-- `family` (String) Address family: any, ipv4, or ipv6. Defaults to any.
-- `proto` (List of String) Protocols: tcp, udp, icmp, icmpv6, esp, ah, any, all.
+- `family` (String) Address family: any, ipv4, or ipv6.
+- `proto` (List of String) Protocols.
 - `src_dport` (List of String) Incoming (destination) ports to redirect.
 - `src_ip` (List of String) Source IP addresses or CIDRs.
 - `src_port` (List of String) Source ports.
@@ -74,10 +67,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed redirect is imported by its stable id.
-terraform import uapi_firewall_redirect.web d_01HX0000000000000000000000
+# Import a managed firewall redirect by its stable id.
+terraform import uapi_firewall_redirect.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_firewall_redirect.web cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_firewall_redirect.example cfg0a1b2c
 ```

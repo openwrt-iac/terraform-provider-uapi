@@ -3,20 +3,20 @@
 page_title: "uapi_snmpd_com2sec Resource - uapi"
 subcategory: ""
 description: |-
-  An SNMP community-to-security-name mapping (uci snmpd.com2sec).
+  A snmpd com2sec.
 ---
 
 # uapi_snmpd_com2sec (Resource)
 
-An SNMP community-to-security-name mapping (uci snmpd.com2sec).
+A snmpd com2sec.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_snmpd_com2sec" "ro" {
-  secname   = "ro"
-  source    = "default"
-  community = "public"
+resource "uapi_snmpd_com2sec" "example" {
+  community = "example"
+  secname = "example"
+  source = "example"
 }
 ```
 
@@ -25,9 +25,9 @@ resource "uapi_snmpd_com2sec" "ro" {
 
 ### Required
 
-- `community` (String) SNMP community string.
-- `secname` (String) Security name the community maps to.
-- `source` (String) Source network range or 'default'.
+- `community` (String) uci option community.
+- `secname` (String) uci option secname.
+- `source` (String) uci option source.
 
 ### Read-Only
 
@@ -42,10 +42,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed snmpd com2sec is imported by its stable id.
-terraform import uapi_snmpd_com2sec.ro c_01HX0000000000000000000000
+# Import a managed snmpd com2sec by its stable id.
+terraform import uapi_snmpd_com2sec.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_snmpd_com2sec.ro cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_snmpd_com2sec.example cfg0a1b2c
 ```

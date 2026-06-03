@@ -1,1 +1,1 @@
-data "uapi_system" "this" {}
+data "uapi_system" "example" {}

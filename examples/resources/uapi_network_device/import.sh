@@ -1,6 +1,5 @@
-# A uapi-managed device is imported by its stable id.
-terraform import uapi_network_device.br_lan e_01HX0000000000000000000000
+# Import a managed network device by its stable id.
+terraform import uapi_network_device.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_device.br_lan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_device.example cfg0a1b2c

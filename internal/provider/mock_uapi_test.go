@@ -107,6 +107,45 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(path, "/system/authorized_keys/"):
 		m.handleAuthKeys(w, r, strings.TrimPrefix(path, "/system/authorized_keys/"))
 		return
+	case path == "/tokens" && r.Method == http.MethodPost:
+		body := m.decode(r)
+		name, _ := body["name"].(string)
+		writeJSON(w, http.StatusCreated, map[string]any{"name": name, "bearer": "deadbeefdeadbeefdeadbeefdeadbeef"}, "")
+		return
+	case strings.HasPrefix(path, "/tokens/") && r.Method == http.MethodDelete:
+		w.WriteHeader(http.StatusNoContent)
+		return
+	case path == "/auth/whoami" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"token_id":      "acc",
+			"scopes":        []any{"network:write", "firewall:write"},
+			"source_ip":     "10.0.0.2",
+			"expires_at":    1893456000,
+			"allowed_cidrs": []any{},
+			"last_used_at":  nil,
+			"last_used_ip":  nil,
+		}, "")
+		return
+	case path == "/healthz" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":  "ok",
+			"version": "2.0.0",
+			"checks":  map[string]any{"ubus": "ok", "uci": "ok", "lock_dir": "ok", "time_sync": "ok"},
+		}, "")
+		return
+	case path == "/diagnostics" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"version":          "2.0.0",
+			"uptime_seconds":   12345,
+			"resources_loaded": []any{"network:interface", "firewall:rule"},
+			"lock_state":       map[string]any{"global_held": false, "per_package": map[string]any{}},
+			"recent_errors": []any{map[string]any{
+				"ts": 1893456000, "request_id": "req-err-1", "code": "validation_failed",
+				"status": 422, "method": "POST", "path": "/api/v2/firewall/rules", "message": "bad",
+			}},
+			"request_id": "req-acc-1",
+		}, "")
+		return
 	}
 
 	// Generic routing by path shape + method. The provider's access patterns are
@@ -291,7 +330,7 @@ func (m *mockUAPI) withRuntime(coll string, obj map[string]any) map[string]any {
 		out["runtime"] = map[string]any{
 			"up": true, "pending": false, "available": true,
 			"l3_device": "br-lan", "uptime": 1234,
-			"ipv4-address": []any{map[string]any{"address": "192.168.1.1", "mask": 24}},
+			"ipv4_address": []any{map[string]any{"address": "192.168.1.1", "mask": 24}},
 			"route":        []any{map[string]any{"target": "0.0.0.0", "mask": 0, "nexthop": "192.168.1.254"}},
 		}
 	case "/wireless/interfaces":

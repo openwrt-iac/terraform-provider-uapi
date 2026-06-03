@@ -3,19 +3,18 @@
 page_title: "uapi_vnstat_interface Resource - uapi"
 subcategory: ""
 description: |-
-  A vnstat monitored interface (uci vnstat.interface).
+  A vnstat interface.
 ---
 
 # uapi_vnstat_interface (Resource)
 
-A vnstat monitored interface (uci vnstat.interface).
+A vnstat interface.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_vnstat_interface" "wan" {
-  interface = "wan"
-  enabled   = true
+resource "uapi_vnstat_interface" "example" {
+  interface = "example"
 }
 ```
 
@@ -24,11 +23,11 @@ resource "uapi_vnstat_interface" "wan" {
 
 ### Required
 
-- `interface` (String) Name of the network interface to monitor. Must reference an existing network interface.
+- `interface` (String) Network interface this entry applies to.
 
 ### Optional
 
-- `enabled` (Boolean) Whether monitoring of this interface is enabled. Defaults to true.
+- `enabled` (Boolean) Whether the entry is active.
 
 ### Read-Only
 
@@ -43,10 +42,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed vnstat interface is imported by its stable id.
-terraform import uapi_vnstat_interface.wan i_01HX0000000000000000000000
+# Import a managed vnstat interface by its stable id.
+terraform import uapi_vnstat_interface.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_vnstat_interface.wan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_vnstat_interface.example cfg0a1b2c
 ```

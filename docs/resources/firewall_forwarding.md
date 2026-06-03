@@ -3,19 +3,19 @@
 page_title: "uapi_firewall_forwarding Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall forwarding between two zones (uci firewall.forwarding).
+  A firewall forwarding.
 ---
 
 # uapi_firewall_forwarding (Resource)
 
-A firewall forwarding between two zones (uci firewall.forwarding).
+A firewall forwarding.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_firewall_forwarding" "lan_to_wan" {
-  src  = "lan"
-  dest = "wan"
+resource "uapi_firewall_forwarding" "example" {
+  dest = "example"
+  src = "example"
 }
 ```
 
@@ -24,13 +24,13 @@ resource "uapi_firewall_forwarding" "lan_to_wan" {
 
 ### Required
 
-- `dest` (String) Destination zone name.
-- `src` (String) Source zone name.
+- `dest` (String) uci option dest.
+- `src` (String) uci option src.
 
 ### Optional
 
-- `enabled` (Boolean) Whether the forwarding is active. Defaults to true.
-- `family` (String) Address family: any, ipv4, or ipv6. Defaults to any.
+- `enabled` (Boolean) Whether the entry is active.
+- `family` (String) Address family: any, ipv4, or ipv6.
 
 ### Read-Only
 
@@ -45,10 +45,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed forwarding is imported by its stable id.
-terraform import uapi_firewall_forwarding.lan_to_wan f_01HX0000000000000000000000
+# Import a managed firewall forwarding by its stable id.
+terraform import uapi_firewall_forwarding.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_firewall_forwarding.lan_to_wan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_firewall_forwarding.example cfg0a1b2c
 ```

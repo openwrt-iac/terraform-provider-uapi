@@ -3,18 +3,18 @@
 page_title: "uapi_snmpd_group Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up an SNMP VACM group definition by id.
+  Look up a snmpd group.
 ---
 
 # uapi_snmpd_group (Data Source)
 
-Look up an SNMP VACM group definition by id.
+Look up a snmpd group.
 
 ## Example Usage
 
 ```terraform
-data "uapi_snmpd_group" "public" {
-  id = "r_01HX0000000000000000000000"
+data "uapi_snmpd_group" "example" {
+  id = "<id>"
 }
 ```
 
@@ -28,7 +28,7 @@ data "uapi_snmpd_group" "public" {
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state.
-- `group` (String) Group name referenced by snmpd access entries.
+- `group` (String) uci option group.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `secname` (String) Security name added to the group.
-- `version` (String) Security model for the membership: v1, v2c, or usm.
+- `secname` (String) uci option secname.
+- `version` (String) uci option version.

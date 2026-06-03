@@ -1,6 +1,5 @@
-# A uapi-managed timeserver is imported by its stable id.
-terraform import uapi_system_timeserver.ntp ts_01HX0000000000000000000000
+# Import a managed system timeserver by its stable id.
+terraform import uapi_system_timeserver.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_system_timeserver.ntp cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_system_timeserver.example cfg0a1b2c

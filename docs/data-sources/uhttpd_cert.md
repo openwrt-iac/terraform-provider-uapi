@@ -3,18 +3,18 @@
 page_title: "uapi_uhttpd_cert Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a uhttpd certificate by id.
+  Look up a uhttpd cert.
 ---
 
 # uapi_uhttpd_cert (Data Source)
 
-Look up a uhttpd certificate by id.
+Look up a uhttpd cert.
 
 ## Example Usage
 
 ```terraform
-data "uapi_uhttpd_cert" "router" {
-  id = "c_01HX0000000000000000000000"
+data "uapi_uhttpd_cert" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,12 +27,12 @@ data "uapi_uhttpd_cert" "router" {
 
 ### Read-Only
 
-- `bits` (String) RSA key size in bits.
-- `commonname` (String) Certificate common name (CN).
-- `country` (String) Two-letter country code (C).
-- `days` (String) Certificate validity in days.
+- `bits` (Number) uci option bits.
+- `commonname` (String) uci option commonname.
+- `country` (String) uci option country.
+- `days` (Number) uci option days.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `location` (String) Certificate locality (L).
+- `location` (String) uci option location.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `organization` (String) Certificate organization (O).
-- `state` (String) Certificate state or province (ST).
+- `organization` (String) uci option organization.
+- `state` (String) uci option state.

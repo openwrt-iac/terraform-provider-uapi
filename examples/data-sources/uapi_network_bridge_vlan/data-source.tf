@@ -1,3 +1,3 @@
-data "uapi_network_bridge_vlan" "guests" {
-  id = "v_01HX0000000000000000000000"
+data "uapi_network_bridge_vlan" "example" {
+  id = "<id>"
 }

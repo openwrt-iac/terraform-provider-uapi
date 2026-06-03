@@ -3,22 +3,17 @@
 page_title: "uapi_firewall_defaults Resource - uapi"
 subcategory: ""
 description: |-
-  Global firewall defaults (uci firewall.defaults). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A firewall defaults.
 ---
 
 # uapi_firewall_defaults (Resource)
 
-Global firewall defaults (uci firewall.defaults). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A firewall defaults.
 
 ## Example Usage
 
 ```terraform
-# uapi_firewall_defaults is a singleton: it cannot be created or destroyed.
-# Applying writes the settings; destroying only drops it from state.
-resource "uapi_firewall_defaults" "this" {
-  input   = "ACCEPT"
-  output  = "ACCEPT"
-  forward = "REJECT"
+resource "uapi_firewall_defaults" "example" {
 }
 ```
 
@@ -27,16 +22,16 @@ resource "uapi_firewall_defaults" "this" {
 
 ### Optional
 
-- `drop_invalid` (Boolean) Drop packets in an invalid conntrack state. Defaults to false.
-- `flow_offloading` (Boolean) Enable software flow offloading. Defaults to false.
-- `flow_offloading_hw` (Boolean) Enable hardware flow offloading. Defaults to false.
-- `forward` (String) Default policy for forwarded traffic: ACCEPT, REJECT, or DROP.
-- `input` (String) Default policy for input traffic: ACCEPT, REJECT, or DROP.
-- `output` (String) Default policy for output traffic: ACCEPT, REJECT, or DROP.
-- `syn_flood` (Boolean) Enable SYN-flood protection. Defaults to false.
-- `synflood_burst` (String) SYN-flood burst limit (positive integer).
-- `synflood_rate` (String) SYN-flood rate limit (positive integer).
-- `tcp_syncookies` (Boolean) Enable TCP SYN cookies. Defaults to false.
+- `drop_invalid` (Boolean) uci option drop_invalid.
+- `flow_offloading` (Boolean) uci option flow_offloading.
+- `flow_offloading_hw` (Boolean) uci option flow_offloading_hw.
+- `forward` (String) uci option forward.
+- `input` (String) uci option input.
+- `output_policy` (String) uci option output_policy.
+- `syn_flood` (Boolean) uci option syn_flood.
+- `synflood_burst` (Number) uci option synflood_burst.
+- `synflood_rate` (Number) uci option synflood_rate.
+- `tcp_syncookies` (Boolean) uci option tcp_syncookies.
 
 ### Read-Only
 

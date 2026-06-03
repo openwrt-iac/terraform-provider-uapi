@@ -1,1 +1,1 @@
-data "uapi_dhcp_dnsmasq" "this" {}
+data "uapi_dhcp_dnsmasq" "example" {}

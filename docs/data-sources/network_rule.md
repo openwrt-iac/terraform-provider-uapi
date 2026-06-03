@@ -3,18 +3,18 @@
 page_title: "uapi_network_rule Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up an IP routing policy rule by id.
+  Look up a network rule.
 ---
 
 # uapi_network_rule (Data Source)
 
-Look up an IP routing policy rule by id.
+Look up a network rule.
 
 ## Example Usage
 
 ```terraform
-data "uapi_network_rule" "from_guests" {
-  id = "u_01HX0000000000000000000000"
+data "uapi_network_rule" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,15 +27,15 @@ data "uapi_network_rule" "from_guests" {
 
 ### Read-Only
 
-- `action` (String) Rule action: lookup, goto, unreachable, prohibit, blackhole, or throw.
-- `dest` (String) Destination IPv4 address or CIDR selector.
+- `action` (String) uci option action.
+- `dest` (String) uci option dest.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `goto` (String) Priority to jump to.
-- `in` (String) Incoming interface selector.
-- `invert` (Boolean) Whether the rule selectors are inverted.
-- `lookup` (String) Routing table to look up.
+- `goto` (Number) uci option goto.
+- `in` (String) uci option in.
+- `invert` (Boolean) uci option invert.
+- `lookup` (Number) uci option lookup.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `mark` (String) Firewall mark to match.
-- `out` (String) Outgoing interface selector.
-- `priority` (String) Rule priority (0-32766).
-- `src` (String) Source IPv4 address or CIDR selector.
+- `mark` (String) uci option mark.
+- `out` (String) uci option out.
+- `priority` (Number) uci option priority.
+- `src` (String) uci option src.

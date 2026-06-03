@@ -3,22 +3,18 @@
 page_title: "uapi_wireless_device Resource - uapi"
 subcategory: ""
 description: |-
-  A wireless radio (uci wireless.wifi-device).
+  A wireless device.
 ---
 
 # uapi_wireless_device (Resource)
 
-A wireless radio (uci wireless.wifi-device).
+A wireless device.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_wireless_device" "radio0" {
-  type    = "mac80211"
-  band    = "5g"
-  channel = "36"
-  htmode  = "VHT80"
-  country = "FR"
+resource "uapi_wireless_device" "example" {
+  type = "example"
 }
 ```
 
@@ -27,16 +23,16 @@ resource "uapi_wireless_device" "radio0" {
 
 ### Required
 
-- `type` (String) Driver type: mac80211 or broadcom.
+- `type` (String) uci option type.
 
 ### Optional
 
-- `band` (String) Frequency band: 2g, 5g, 6g, or 60g.
-- `channel` (String) Channel number or 'auto'.
-- `country` (String) Regulatory country code.
-- `disabled` (Boolean) Disable the radio. Defaults to false.
-- `htmode` (String) HT/VHT/HE mode (e.g. HT20, VHT80).
-- `txpower` (String) Transmit power in dBm.
+- `band` (String) uci option band.
+- `channel` (Number) uci option channel.
+- `country` (String) uci option country.
+- `disabled` (Boolean) Whether the entry is disabled.
+- `htmode` (String) uci option htmode.
+- `txpower` (Number) uci option txpower.
 
 ### Read-Only
 
@@ -51,10 +47,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed radio is imported by its stable id.
-terraform import uapi_wireless_device.radio0 w_01HX0000000000000000000000
+# Import a managed wireless device by its stable id.
+terraform import uapi_wireless_device.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_wireless_device.radio0 cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_wireless_device.example cfg0a1b2c
 ```

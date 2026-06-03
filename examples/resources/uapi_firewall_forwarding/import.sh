@@ -1,6 +1,5 @@
-# A uapi-managed forwarding is imported by its stable id.
-terraform import uapi_firewall_forwarding.lan_to_wan f_01HX0000000000000000000000
+# Import a managed firewall forwarding by its stable id.
+terraform import uapi_firewall_forwarding.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_firewall_forwarding.lan_to_wan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_firewall_forwarding.example cfg0a1b2c

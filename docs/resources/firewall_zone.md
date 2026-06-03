@@ -3,23 +3,18 @@
 page_title: "uapi_firewall_zone Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall zone (uci firewall.zone).
+  A firewall zone.
 ---
 
 # uapi_firewall_zone (Resource)
 
-A firewall zone (uci firewall.zone).
+A firewall zone.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_firewall_zone" "dmz" {
-  name    = "dmz"
-  input   = "DROP"
-  output  = "ACCEPT"
-  forward = "DROP"
-  network = ["dmz"]
-  masq    = true
+resource "uapi_firewall_zone" "example" {
+  name = "example"
 }
 ```
 
@@ -28,17 +23,17 @@ resource "uapi_firewall_zone" "dmz" {
 
 ### Required
 
-- `name` (String) Zone name. Used by rules/redirects to reference this zone.
+- `name` (String) Optional section name.
 
 ### Optional
 
-- `family` (String) Address family: any, ipv4, or ipv6. Defaults to any.
-- `forward` (String) Default policy for forwarded traffic. Defaults to REJECT.
-- `input` (String) Default policy for input traffic: ACCEPT, REJECT, or DROP. Defaults to REJECT.
-- `masq` (Boolean) Enable masquerading (NAT). Defaults to false.
-- `mtu_fix` (Boolean) Enable MSS clamping. Defaults to false.
-- `network` (List of String) Network interfaces covered by this zone.
-- `output` (String) Default policy for output traffic. Defaults to REJECT.
+- `family` (String) Address family: any, ipv4, or ipv6.
+- `forward` (String) uci option forward.
+- `input` (String) uci option input.
+- `masq` (Boolean) uci option masq.
+- `mtu_fix` (Boolean) uci option mtu_fix.
+- `network` (List of String) uci option network.
+- `output_policy` (String) uci option output_policy.
 
 ### Read-Only
 
@@ -53,10 +48,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed zone is imported by its stable id.
-terraform import uapi_firewall_zone.dmz z_01HX0000000000000000000000
+# Import a managed firewall zone by its stable id.
+terraform import uapi_firewall_zone.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_firewall_zone.dmz cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_firewall_zone.example cfg0a1b2c
 ```

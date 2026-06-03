@@ -3,20 +3,19 @@
 page_title: "uapi_network_bridge_vlan Resource - uapi"
 subcategory: ""
 description: |-
-  A bridge VLAN (uci network.bridge-vlan).
+  A network bridge VLAN.
 ---
 
 # uapi_network_bridge_vlan (Resource)
 
-A bridge VLAN (uci network.bridge-vlan).
+A network bridge VLAN.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_network_bridge_vlan" "guests" {
-  device = "br-lan"
-  vlan   = "30"
-  ports  = ["lan1:t", "lan2:u"]
+resource "uapi_network_bridge_vlan" "example" {
+  device = "example"
+  vlan = 1
 }
 ```
 
@@ -25,12 +24,12 @@ resource "uapi_network_bridge_vlan" "guests" {
 
 ### Required
 
-- `device` (String) Bridge device name this VLAN belongs to. Must reference an existing bridge device.
-- `vlan` (String) VLAN id (1-4094).
+- `device` (String) Underlying device.
+- `vlan` (Number) uci option vlan.
 
 ### Optional
 
-- `ports` (List of String) Member ports, each as <name>[:t|:u|:*] (e.g. eth0:t).
+- `ports` (List of String) uci option ports.
 
 ### Read-Only
 
@@ -45,10 +44,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed bridge VLAN is imported by its stable id.
-terraform import uapi_network_bridge_vlan.guests v_01HX0000000000000000000000
+# Import a managed network bridge VLAN by its stable id.
+terraform import uapi_network_bridge_vlan.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_bridge_vlan.guests cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_bridge_vlan.example cfg0a1b2c
 ```

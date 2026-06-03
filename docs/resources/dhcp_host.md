@@ -3,21 +3,18 @@
 page_title: "uapi_dhcp_host Resource - uapi"
 subcategory: ""
 description: |-
-  A static DHCP lease (uci dhcp.host).
+  A dhcp host.
 ---
 
 # uapi_dhcp_host (Resource)
 
-A static DHCP lease (uci dhcp.host).
+A dhcp host.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_dhcp_host" "printer" {
-  name = "printer"
-  mac  = "aa:bb:cc:dd:ee:ff"
-  ip   = "192.168.1.50"
-  dns  = true
+resource "uapi_dhcp_host" "example" {
+  ip = "example"
 }
 ```
 
@@ -26,20 +23,20 @@ resource "uapi_dhcp_host" "printer" {
 
 ### Required
 
-- `ip` (String) IPv4 or IPv6 address to assign.
+- `ip` (String) uci option ip.
 
 ### Optional
 
-- `broadcast` (Boolean) Force broadcast replies for clients that need it. Defaults to false.
-- `dns` (Boolean) Add a DNS entry for the host. Defaults to false.
-- `duid` (String) Client DUID for a DHCPv6 reservation. Either mac or duid is required.
-- `hostid` (String) Static IPv6 host id hint (suffix), like '::42'.
-- `instance` (String) Pin this reservation to a specific dhcp/dnsmasq instance (section name).
-- `leasetime` (String) Lease duration like '12h', '30m', '1d', or seconds.
-- `mac` (String) Primary client MAC address for an IPv4 reservation (aa:bb:cc:dd:ee:ff). Either mac or duid is required.
-- `mac_aliases` (List of String) Additional MAC addresses sharing the same reservation.
-- `name` (String) Hostname for the static lease.
-- `tag` (String) dnsmasq tag to apply to the host.
+- `broadcast` (Boolean) uci option broadcast.
+- `dns` (Boolean) uci option dns.
+- `duid` (String) uci option duid.
+- `hostid` (String) uci option hostid.
+- `instance` (String) uci option instance.
+- `leasetime` (String) uci option leasetime.
+- `mac` (String) uci option mac.
+- `mac_aliases` (List of String) uci option mac_aliases.
+- `name` (String) Optional section name.
+- `tag` (String) uci option tag.
 
 ### Read-Only
 
@@ -54,10 +51,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed static lease is imported by its stable id.
-terraform import uapi_dhcp_host.printer h_01HX0000000000000000000000
+# Import a managed dhcp host by its stable id.
+terraform import uapi_dhcp_host.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_dhcp_host.printer cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_dhcp_host.example cfg0a1b2c
 ```

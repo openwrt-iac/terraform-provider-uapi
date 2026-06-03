@@ -20,7 +20,7 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 
 ```hcl
 provider "uapi" {
-  endpoint = "https://192.168.1.1/api/v1" # or env UAPI_ENDPOINT / UAPI_BASE
+  endpoint = "https://192.168.1.1/api/v2" # or env UAPI_ENDPOINT / UAPI_BASE
   token    = var.uapi_token               # or env UAPI_TOKEN
   insecure = true                         # or env UAPI_INSECURE=1
 }
@@ -28,7 +28,7 @@ provider "uapi" {
 
 | Argument   | Env                          | Description                                                        |
 |------------|------------------------------|--------------------------------------------------------------------|
-| `endpoint` | `UAPI_ENDPOINT`, `UAPI_BASE` | API root including the `/api/v1` prefix.                            |
+| `endpoint` | `UAPI_ENDPOINT`, `UAPI_BASE` | API root including the `/api/v2` prefix.                            |
 | `token`    | `UAPI_TOKEN`                 | Bearer token. Sensitive.                                           |
 | `insecure` | `UAPI_INSECURE`              | Skip TLS verification. Needed for uapi's default self-signed cert. |
 
@@ -56,8 +56,19 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
   `uapi_snmpd_access`, `uapi_snmpd_agent`.
 - **Traffic/metrics:** `uapi_sqm_queue`, `uapi_vnstat_interface`, `uapi_vnstat_config` (singleton),
   `uapi_prometheus_node_exporter_lua_config` (singleton).
+- **mwan3:** `uapi_mwan3_interface`, `uapi_mwan3_member`, `uapi_mwan3_policy`, `uapi_mwan3_rule`,
+  `uapi_mwan3_globals` (singleton). Requires the `mwan3` package on the router.
+- **usteer / OpenVPN:** `uapi_usteer_config` (singleton), `uapi_openvpn_instance` (write-only
+  `key`/`tls_auth`/`pkcs12`). Require the `usteer` / `openvpn` packages respectively.
 - **Packages:** `uapi_package` (apk install/remove), `uapi_package_feed`. These have no update
   endpoint, so changing an input forces replacement.
+
+### Ephemeral resources
+
+- `uapi_token`: mints a scoped bearer token for the duration of a run and revokes it on close. The
+  cleartext token is exposed only as an ephemeral value (never written to state), so it can feed a
+  second, scoped provider instance or a downstream ephemeral consumer. Requires Terraform 1.10+ or
+  OpenTofu 1.11+.
 
 ## Data sources
 
@@ -65,6 +76,9 @@ Every resource type has a matching lookup data source (by `id`, or no argument f
 
 - `uapi_dhcp_leases`: active IPv4 DHCP leases reported at runtime (read-only, list).
 - `uapi_dhcp_leases6`: active IPv6 (odhcpd) leases (read-only, list).
+- `uapi_whoami`: identity and scopes of the configured token.
+- `uapi_healthz`: liveness/readiness of the service and its dependencies.
+- `uapi_diagnostics`: loaded resources, uptime, and lock state.
 
 The `uapi_network_interface` and `uapi_wireless_interface` data sources also expose a computed
 `runtime` block (live ubus state: interface up/addresses/routes, wireless signal/assoclist). It is
@@ -73,11 +87,30 @@ read-only observed state, surfaced only on the data sources, never on the resour
 ## Behaviour notes
 
 - **Stable IDs.** uapi assigns every managed section a prefixed ULID (e.g. `r_01HX...`) that
-  survives reorders and rewrites; that ID is the Terraform resource `id`.
+  survives reorders and rewrites; that ID is the Terraform resource `id`. A managed section's
+  *name* is that ULID, so when one resource references another by name, point it at the
+  referenced resource's `id`, not a hand-picked label:
+
+  ```hcl
+  resource "uapi_network_interface" "lab" {
+    proto  = "static"
+    ipaddr = "192.168.250.1"
+  }
+  resource "uapi_dhcp_server" "lab" {
+    interface = uapi_network_interface.lab.id # the interface's name IS its ULID
+  }
+  ```
+
+  Pre-existing *unmanaged* sections created out of band (LuCI/SSH/`wifi config`, e.g.
+  `lan`, `wan`, `radio0`) keep their human name and are referenced by it
+  (`match = { src_zone = "lan" }`).
 - **Server-defaulted fields** (booleans, enum fallbacks, etc.) are modeled as
   `Optional + Computed`, so omitting them in config does not produce perpetual diffs.
-- **423 locked retries.** uapi serializes writes behind a global lock and returns `423` with
-  `Retry-After` under contention. The provider retries automatically.
+- **423 / 429 retries.** uapi serializes writes behind a global lock (`423`) and rate-limits
+  clients (`429`), both with `Retry-After`. The provider retries automatically, and sends an
+  `Idempotency-Key` on every create so a retried `POST` cannot duplicate a resource.
+- **Cursor pagination.** Collection reads follow the server's cursor automatically, so large
+  lists are returned in full.
 - **Write-only secrets.** `uapi_wireless_interface.key`, `uapi_network_interface.private_key`, and
   `uapi_network_wireguard_peer.preshared_key` are never returned by the API; the provider keeps the
   configured value and exposes a `has_*` computed flag. `uapi_system_password.password_wo` is a
@@ -141,12 +174,25 @@ make build            # build ./terraform-provider-uapi
 make install          # install into ~/.terraform.d/plugins for dev_overrides
 make test             # unit tests
 make fmt vet          # format and vet
-make docs             # regenerate docs/ from schemas + examples (tfplugindocs)
+make gen              # regenerate the curated resources/data sources from the OpenAPI spec
+make docs             # regenerate code (gen) then docs/ from schemas + examples
 ```
 
+The curated resources and data sources are **generated** from the vendored uapi
+OpenAPI spec (`internal/gen/openapi.json`) plus a hand-maintained descriptor
+overlay (`internal/gen/descriptors.go`), which supplies the semantics the spec
+cannot express (required-ness, nested `match` shapes, the runtime sub-blocks,
+Optional-vs-Optional+Computed). Field names, types, `readOnly`, and `writeOnly`
+come straight from the spec, so a uapi minor that adds fields or flips a string
+to an integer is picked up by re-running `make gen`. The generator is
+idempotent; CI fails if the committed output drifts from a fresh run. The
+hand-written specials (`package`, `package_feed`, `system_password`,
+`authorized_key`, the leases lists, and the `token`/`whoami`/`healthz`/
+`diagnostics` surface) are not generated.
+
 The `docs/` tree is generated by `tfplugindocs` from the schema attribute
-descriptions and the snippets under `examples/`. Regenerate it with `make docs`
-after changing any schema or example, and commit the result; the Terraform
+descriptions and the snippets under `examples/`. `make docs` runs the code
+generator first, then tfplugindocs; commit the result, since the Terraform
 Registry renders these pages.
 
 To try it against a router, use a CLI config with `dev_overrides` (see `examples/dev.tfrc`).
@@ -156,7 +202,7 @@ so combine the provider block with a resource snippet to get a runnable config:
 ```sh
 make install
 export TF_CLI_CONFIG_FILE=$PWD/examples/dev.tfrc   # edit the path inside first
-export UAPI_ENDPOINT=https://192.168.1.1/api/v1 UAPI_TOKEN=... UAPI_INSECURE=1
+export UAPI_ENDPOINT=https://192.168.1.1/api/v2 UAPI_TOKEN=... UAPI_INSECURE=1
 
 mkdir -p /tmp/uapi-dev
 cat examples/provider/provider.tf \

@@ -3,18 +3,18 @@
 page_title: "uapi_snmpd_com2sec Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up an SNMP community-to-security-name mapping by id.
+  Look up a snmpd com2sec.
 ---
 
 # uapi_snmpd_com2sec (Data Source)
 
-Look up an SNMP community-to-security-name mapping by id.
+Look up a snmpd com2sec.
 
 ## Example Usage
 
 ```terraform
-data "uapi_snmpd_com2sec" "ro" {
-  id = "c_01HX0000000000000000000000"
+data "uapi_snmpd_com2sec" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,8 +27,8 @@ data "uapi_snmpd_com2sec" "ro" {
 
 ### Read-Only
 
-- `community` (String) SNMP community string.
+- `community` (String) uci option community.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `secname` (String) Security name the community maps to.
-- `source` (String) Source network range or 'default'.
+- `secname` (String) uci option secname.
+- `source` (String) uci option source.

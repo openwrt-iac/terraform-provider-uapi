@@ -20,16 +20,38 @@ Terraform / OpenTofu provider for [uapi](https://github.com/raspbeguy/uapi), the
 
 ```
 main.go                       providerserver entry; address registry.terraform.io/raspbeguy/uapi
-internal/client/client.go     transport: bearer auth, 423 retry, error envelope -> *APIError
+internal/client/client.go     transport: bearer auth, 423/429 retry, idempotency key, cursor pagination, error envelope -> *APIError
+internal/gen/                  code generator: openapi.json + descriptors.go overlay -> the <type>_*.go files below
 internal/provider/
-  provider.go                 schema (endpoint/token/insecure), Configure, registration
-  helpers.go                  map<->tfsdk conversion (strVal/boolVal/listVal, putStr/putBool/putList), resolveImportID
+  provider.go                 schema (endpoint/token/insecure), Configure, registration (incl. ephemeral)
+  helpers.go                  map<->tfsdk conversion (strVal/boolVal/int64Val/listVal, putStr/putBool/putInt64/putList), resolveImportID
   schema_helpers.go           shared attribute builders, diagsink
-  <type>_resource.go          one CRUD resource per curated type, plus the system singleton
-  <type>_data_sources.go      lookup-by-id data sources, plus dhcp_leases (list)
+  ds_helpers.go               data-source attribute builders
+  zz_generated_registration.go  (generated) the generated*() constructor slices
+  <type>_resource.go          (generated) one CRUD resource per curated type, plus the system singleton
+  <type>_data_source.go       (generated) lookup-by-id data sources
+  token_ephemeral.go          uapi_token ephemeral resource (mint on Open, revoke on Close)
+  whoami/healthz/diagnostics_data_source.go, dhcp_leases*_data_source.go, package*/authorized_key/system_password   hand-written specials (not generated)
 ```
 
 Each resource is a typed model with `tfsdk` tags, a `body()` (model -> request map) and a `read()` (response map -> model). Data sources reuse the resource model and its `read()`.
+
+## Code generation
+
+The curated CRUD/singleton resources and their data sources are **generated** by `internal/gen`
+(`make gen`, or `go generate ./...` which runs it before tfplugindocs). Inputs:
+
+- `internal/gen/openapi.json`: a vendored copy of uapi's spec. Field **names, types, `readOnly`,
+  `writeOnly`** are read from here, so strict-int and snake_case changes within a uapi minor are
+  picked up automatically by re-vendoring the spec and re-running `make gen`.
+- `internal/gen/descriptors.go`: the hand-maintained overlay supplying what the spec cannot express:
+  required-ness, nested `match` structure, the `runtime` sub-shape, and Optional-vs-Optional+Computed.
+
+The generator is **idempotent** (CI fails if committed output drifts from a fresh run) and must stay
+that way: no `Date.now()`/random/map-iteration-order in emitted output. Do not hand-edit the
+generated `<type>_resource.go`, `<type>_data_source.go`, `zz_generated_registration.go`, or the
+generated `examples/` snippets; change `descriptors.go` (or the spec) and regenerate. The
+hand-written specials are skipped by the generator and edited directly.
 
 ## Conventions that prevent bugs
 
@@ -71,7 +93,7 @@ provider major.
 
 - `make test` runs unit tests: client behavior against `httptest` (423 retry, error envelope, 404, list) and the value-conversion helpers.
 - `TestProviderSchema` drives the protocol server's `GetProviderSchema`, which validates every resource and data source schema at once. Run it after any schema change; it catches `Required`+`Computed` conflicts and nested-type mistakes.
-- `make testacc` runs the `terraform-plugin-testing` acceptance suite (`TestAcc*`): it serves the provider in-process and drives a real terraform binary against an **in-process fake uapi** (`mock_uapi_test.go`), so it needs no router and runs in CI (the `acceptance` job). The fake is JSON-native and covers the curated CRUD/adopt/ETag/singleton/specials surface; extend it when a new pattern needs coverage. The suite tests *patterns* (flat CRUD + import, nested match, write-only secret, singleton, import-adopt, list + runtime data sources, the 1.2 resources), not all 35 resources one by one.
+- `make testacc` runs the `terraform-plugin-testing` acceptance suite (`TestAcc*`): it serves the provider in-process and drives a real terraform binary against an **in-process fake uapi** (`mock_uapi_test.go`), so it needs no router and runs in CI (the `acceptance` job). The fake is JSON-native and covers the curated CRUD/adopt/ETag/singleton/specials surface; extend it when a new pattern needs coverage. The suite tests *patterns* (flat CRUD + import, nested match, write-only secret, singleton, import-adopt, list + runtime data sources, the 1.2 resources), not every resource one by one.
 - Quick end-to-end without acceptance tests: `make install`, point `TF_CLI_CONFIG_FILE` at `examples/dev.tfrc`, then `terraform validate` / `plan` in `examples/`.
 
 ## Docs
@@ -82,6 +104,11 @@ attribute `Description`s and the snippets under `examples/` (`examples/provider/
 Never hand-edit `docs/`; change the schema description or the example and regenerate. Give every new
 attribute a `Description` (resources and data sources both) or its doc row will be blank. Commit the
 regenerated `docs/` alongside the code change.
+
+**Narrative guides** (the "Guides" section on the registry, e.g. the v1->v2 migration note) live in
+`templates/guides/<name>.md.tmpl` and are rendered to `docs/guides/<name>.md` by tfplugindocs. Do
+NOT write them directly into `docs/guides/`: tfplugindocs deletes any guide file that has no
+`templates/guides/` source on the next `make docs`. Edit the `.md.tmpl` and regenerate.
 
 ## Source of truth for the API
 

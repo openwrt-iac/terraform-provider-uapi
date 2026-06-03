@@ -3,22 +3,18 @@
 page_title: "uapi_uhttpd_cert Resource - uapi"
 subcategory: ""
 description: |-
-  A self-signed certificate generator for uhttpd (uci uhttpd.cert).
+  A uhttpd cert.
 ---
 
 # uapi_uhttpd_cert (Resource)
 
-A self-signed certificate generator for uhttpd (uci uhttpd.cert).
+A uhttpd cert.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_uhttpd_cert" "router" {
-  commonname   = "router.lan"
-  days         = "3650"
-  bits         = "2048"
-  organization = "Example Org"
-  country      = "FR"
+resource "uapi_uhttpd_cert" "example" {
+  commonname = "example"
 }
 ```
 
@@ -27,16 +23,16 @@ resource "uapi_uhttpd_cert" "router" {
 
 ### Required
 
-- `commonname` (String) Certificate common name (CN).
+- `commonname` (String) uci option commonname.
 
 ### Optional
 
-- `bits` (String) RSA key size in bits (>= 1024).
-- `country` (String) Two-letter country code (C).
-- `days` (String) Certificate validity in days (1-36500).
-- `location` (String) Certificate locality (L).
-- `organization` (String) Certificate organization (O).
-- `state` (String) Certificate state or province (ST).
+- `bits` (Number) uci option bits.
+- `country` (String) uci option country.
+- `days` (Number) uci option days.
+- `location` (String) uci option location.
+- `organization` (String) uci option organization.
+- `state` (String) uci option state.
 
 ### Read-Only
 
@@ -51,10 +47,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed uhttpd certificate is imported by its stable id.
-terraform import uapi_uhttpd_cert.router c_01HX0000000000000000000000
+# Import a managed uhttpd cert by its stable id.
+terraform import uapi_uhttpd_cert.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_uhttpd_cert.router cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_uhttpd_cert.example cfg0a1b2c
 ```

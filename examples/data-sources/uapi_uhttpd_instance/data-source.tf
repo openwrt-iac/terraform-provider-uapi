@@ -1,3 +1,3 @@
-data "uapi_uhttpd_instance" "main" {
-  id = "main"
+data "uapi_uhttpd_instance" "example" {
+  id = "<id>"
 }

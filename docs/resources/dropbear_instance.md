@@ -3,21 +3,17 @@
 page_title: "uapi_dropbear_instance Resource - uapi"
 subcategory: ""
 description: |-
-  A dropbear SSH server instance (uci dropbear.dropbear).
+  A dropbear instance.
 ---
 
 # uapi_dropbear_instance (Resource)
 
-A dropbear SSH server instance (uci dropbear.dropbear).
+A dropbear instance.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_dropbear_instance" "lan" {
-  port          = "22"
-  interface     = "lan"
-  password_auth = false
-  root_login    = false
+resource "uapi_dropbear_instance" "example" {
 }
 ```
 
@@ -26,14 +22,14 @@ resource "uapi_dropbear_instance" "lan" {
 
 ### Optional
 
-- `banner_file` (String) Path to a file displayed before authentication.
-- `enable` (Boolean) Whether this dropbear instance is enabled. Defaults to true.
-- `gateway_ports` (Boolean) Allow remote hosts to connect to forwarded ports. Defaults to false.
-- `interface` (String) Network interface to bind to.
-- `password_auth` (Boolean) Allow password authentication. Defaults to true.
-- `port` (String) TCP port to listen on (1-65535).
-- `root_login` (Boolean) Allow root logins. Defaults to true.
-- `root_password_auth` (Boolean) Allow root password authentication. Defaults to true.
+- `banner_file` (String) uci option banner_file.
+- `enable` (Boolean) uci option enable.
+- `gateway_ports` (Boolean) uci option gateway_ports.
+- `interface` (String) Network interface this entry applies to.
+- `password_auth` (Boolean) uci option password_auth.
+- `port` (Number) uci option port.
+- `root_login` (Boolean) uci option root_login.
+- `root_password_auth` (Boolean) uci option root_password_auth.
 
 ### Read-Only
 
@@ -48,10 +44,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed dropbear instance is imported by its stable id.
-terraform import uapi_dropbear_instance.lan d_01HX0000000000000000000000
+# Import a managed dropbear instance by its stable id.
+terraform import uapi_dropbear_instance.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_dropbear_instance.lan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_dropbear_instance.example cfg0a1b2c
 ```

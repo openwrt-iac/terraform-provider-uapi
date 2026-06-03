@@ -114,6 +114,22 @@ func putBool(m map[string]any, key string, v types.Bool) {
 	}
 }
 
+func putInt64(m map[string]any, key string, v types.Int64) {
+	if !v.IsNull() && !v.IsUnknown() {
+		m[key] = v.ValueInt64()
+	}
+}
+
+// boolValDefault maps a read-only/computed boolean, defaulting to false when the
+// API omits it (used for has_* companions of write-only fields).
+func boolValDefault(m map[string]any, key string) types.Bool {
+	v := boolVal(m, key)
+	if v.IsNull() {
+		return types.BoolValue(false)
+	}
+	return v
+}
+
 func putList(ctx context.Context, m map[string]any, key string, v types.List, diags *diag.Diagnostics) {
 	if v.IsNull() || v.IsUnknown() {
 		return

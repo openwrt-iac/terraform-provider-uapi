@@ -3,18 +3,18 @@
 page_title: "uapi_system_timeserver Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up an NTP timeserver configuration by id.
+  Look up a system timeserver.
 ---
 
 # uapi_system_timeserver (Data Source)
 
-Look up an NTP timeserver configuration by id.
+Look up a system timeserver.
 
 ## Example Usage
 
 ```terraform
-data "uapi_system_timeserver" "ntp" {
-  id = "ts_01HX0000000000000000000000"
+data "uapi_system_timeserver" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,10 +27,10 @@ data "uapi_system_timeserver" "ntp" {
 
 ### Read-Only
 
-- `enable_server` (Boolean) Whether the router acts as an NTP server for the local network.
-- `enabled` (Boolean) Whether the NTP client is enabled.
+- `enable_server` (Boolean) uci option enable_server.
+- `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `interface` (String) Network interface the NTP server binds to.
+- `interface` (String) Network interface this entry applies to.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `server` (List of String) Upstream NTP server hostnames.
-- `use_dhcp` (Boolean) Whether NTP servers advertised over DHCP are used.
+- `server` (List of String) uci option server.
+- `use_dhcp` (Boolean) uci option use_dhcp.

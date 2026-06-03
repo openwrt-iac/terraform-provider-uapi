@@ -3,18 +3,18 @@
 page_title: "uapi_network_bridge_vlan Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a bridge VLAN by id.
+  Look up a network bridge VLAN.
 ---
 
 # uapi_network_bridge_vlan (Data Source)
 
-Look up a bridge VLAN by id.
+Look up a network bridge VLAN.
 
 ## Example Usage
 
 ```terraform
-data "uapi_network_bridge_vlan" "guests" {
-  id = "v_01HX0000000000000000000000"
+data "uapi_network_bridge_vlan" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,8 +27,8 @@ data "uapi_network_bridge_vlan" "guests" {
 
 ### Read-Only
 
-- `device` (String) Bridge device name this VLAN belongs to.
+- `device` (String) Underlying device.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `ports` (List of String) Member ports, each as <name>[:t|:u|:*].
-- `vlan` (String) VLAN id (1-4094).
+- `ports` (List of String) uci option ports.
+- `vlan` (Number) uci option vlan.

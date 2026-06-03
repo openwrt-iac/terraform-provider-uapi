@@ -3,35 +3,18 @@
 page_title: "uapi_network_interface Resource - uapi"
 subcategory: ""
 description: |-
-  A network interface (uci network.interface). Caution: reloading an interface that backs your management connection can lock you out; uapi only observes the init script exit code, not runtime convergence.
+  A network interface.
 ---
 
 # uapi_network_interface (Resource)
 
-A network interface (uci network.interface). Caution: reloading an interface that backs your management connection can lock you out; uapi only observes the init script exit code, not runtime convergence.
+A network interface.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_network_interface" "lan" {
-  device  = "br-lan"
-  proto   = "static"
-  ipaddr  = "192.168.1.1"
-  netmask = "255.255.255.0"
-  dns     = ["1.1.1.1", "9.9.9.9"]
-}
-
-# A WireGuard interface. private_key is write-only (never read back).
-resource "uapi_network_interface" "wg0" {
-  proto       = "wireguard"
-  private_key = var.wg_private_key
-  listen_port = "51820"
-  addresses   = ["10.10.0.1/24"]
-}
-
-variable "wg_private_key" {
-  type      = string
-  sensitive = true
+resource "uapi_network_interface" "example" {
+  proto = "example"
 }
 ```
 
@@ -40,40 +23,40 @@ variable "wg_private_key" {
 
 ### Required
 
-- `proto` (String) Protocol: static, dhcp, dhcpv6, pppoe, none, ppp, wwan, or wireguard.
+- `proto` (String) Protocol.
 
 ### Optional
 
-- `addresses` (List of String) WireGuard interface addresses as CIDRs (proto = wireguard).
-- `auto` (Boolean) Bring the interface up automatically. Defaults to true.
-- `clientid` (String) DHCP client identifier (proto = dhcp).
-- `defaultroute` (Boolean) Install the default route received over DHCP (proto = dhcp). Defaults to true.
-- `delegate` (Boolean) Accept prefix delegation downstream (proto = dhcpv6). Defaults to true.
-- `device` (String) Underlying device this interface binds to.
-- `dns` (List of String) DNS servers.
-- `gateway` (String) Default gateway.
-- `hostname` (String) Client hostname sent in DHCPDISCOVER (proto = dhcp).
-- `ip4table` (String) WireGuard IPv4 routing table (proto = wireguard).
-- `ip6assign` (String) IPv6 prefix assignment length.
-- `ip6hint` (String) Preferred IPv6 prefix hint for prefix delegation, like 2001:db8::/56 (proto = dhcpv6).
-- `ip6ifaceid` (String) Static IPv6 interface id for IA_NA, like ::1 or an EUI-64 form (proto = dhcpv6).
-- `ip6table` (String) WireGuard IPv6 routing table (proto = wireguard).
-- `ipaddr` (String) IPv4 address (required when proto is static, unless ipaddrs is set).
-- `ipaddrs` (List of String) Full IPv4 address list for a static interface (uci `list ipaddr`). Preferred over ipaddr for multi-address interfaces.
-- `listen_port` (String) WireGuard UDP listen port (proto = wireguard).
-- `metric` (String) Default-route metric (proto = dhcp).
-- `mtu` (String) Interface MTU.
-- `netmask` (String) IPv4 netmask.
-- `nohostroute` (Boolean) WireGuard: skip adding host routes for peers. Defaults to false.
-- `peerdns` (Boolean) Accept DNS servers advertised by the upstream (proto = dhcp or dhcpv6). Defaults to true.
-- `private_key` (String, Sensitive) WireGuard private key (proto = wireguard). Write-only: the API never returns it, so it is not refreshed from the router.
-- `reqaddress` (String) DHCPv6 IA_NA request mode: try, force, or none (proto = dhcpv6).
-- `reqprefix` (String) DHCPv6 prefix-delegation request: auto, no, or a numeric prefix size (proto = dhcpv6).
+- `addresses` (List of String) uci option addresses.
+- `auto` (Boolean) uci option auto.
+- `clientid` (String) uci option clientid.
+- `defaultroute` (Boolean) uci option defaultroute.
+- `delegate` (Boolean) uci option delegate.
+- `device` (String) Underlying device.
+- `dns` (List of String) uci option dns.
+- `gateway` (String) uci option gateway.
+- `hostname` (String) uci option hostname.
+- `ip4table` (String) uci option ip4table.
+- `ip6assign` (Number) uci option ip6assign.
+- `ip6hint` (String) uci option ip6hint.
+- `ip6ifaceid` (String) uci option ip6ifaceid.
+- `ip6table` (String) uci option ip6table.
+- `ipaddr` (String) uci option ipaddr.
+- `ipaddrs` (List of String) uci option ipaddrs.
+- `listen_port` (Number) uci option listen_port.
+- `metric` (Number) uci option metric.
+- `mtu` (Number) uci option mtu.
+- `netmask` (String) uci option netmask.
+- `nohostroute` (Boolean) uci option nohostroute.
+- `peerdns` (Boolean) uci option peerdns.
+- `private_key` (String, Sensitive) WireGuard private key. Write-only: never returned by the API.
+- `reqaddress` (String) uci option reqaddress.
+- `reqprefix` (String) uci option reqprefix.
 
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state, used for If-Match optimistic concurrency.
-- `has_private_key` (Boolean) Whether a WireGuard private key is configured (the key itself is never returned).
+- `has_private_key` (Boolean) Whether a private key is configured.
 - `id` (String) Stable resource id assigned by uapi (a prefixed ULID).
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 
@@ -84,10 +67,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed interface is imported by its stable id.
-terraform import uapi_network_interface.lan i_01HX0000000000000000000000
+# Import a managed network interface by its stable id.
+terraform import uapi_network_interface.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_network_interface.lan cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_network_interface.example cfg0a1b2c
 ```

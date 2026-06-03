@@ -1,0 +1,61 @@
+---
+page_title: "Referencing other resources (managed sections use their id)"
+subcategory: "Guides"
+description: |-
+  How to wire one uapi resource to another, and why managed sections are referenced by id rather than by a human name.
+---
+
+# Referencing other resources
+
+Many uapi resources reference another section by name: `uapi_dhcp_server.interface`
+points at a network interface, `uapi_network_bridge_vlan.device` at a device,
+`uapi_firewall_rule.match.src_zone` at a firewall zone, `uapi_snmpd_access.group`
+at an snmpd group, and so on.
+
+The thing to know: **a uapi-managed section's name is the ULID uapi assigned it**
+(its `id`). So when the section you are referencing is itself managed by Terraform,
+reference it by `.id`, not by a label you chose:
+
+```hcl
+resource "uapi_network_interface" "lab" {
+  proto   = "static"
+  ipaddr  = "192.168.250.1"
+  netmask = "255.255.255.0"
+}
+
+resource "uapi_dhcp_server" "lab" {
+  # the interface's name IS its ULID, so use .id
+  interface = uapi_network_interface.lab.id
+}
+```
+
+Using a hand-picked string here (`interface = "lab"`) fails server-side with
+`422 ... interface "lab" does not exist`, because no section by that name exists:
+uapi named it with a ULID.
+
+## Pre-existing (unmanaged) sections
+
+Sections created outside Terraform (by LuCI, SSH, `wifi config`, or shipped in the
+default config) keep their human name and are referenced by it. Common examples are
+the stock interfaces and zones and the radios that `wifi config` generates:
+
+```hcl
+resource "uapi_firewall_rule" "ssh" {
+  target = "ACCEPT"
+  match = {
+    src_zone  = "lan" # pre-existing zone, referenced by name
+    proto     = ["tcp"]
+    dest_port = ["22"]
+  }
+}
+
+resource "uapi_wireless_interface" "ap" {
+  device = "radio0" # pre-existing radio, referenced by name
+  ssid   = "example"
+}
+```
+
+If you later `terraform import` one of those unmanaged sections, uapi **adopts** it
+and renames it to a ULID (import is a mutating operation for unmanaged sections; the
+provider emits a warning naming the old and new id). After adoption, reference it by
+its new `id` like any other managed section.

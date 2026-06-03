@@ -1,6 +1,5 @@
-# A uapi-managed redirect is imported by its stable id.
-terraform import uapi_firewall_redirect.web d_01HX0000000000000000000000
+# Import a managed firewall redirect by its stable id.
+terraform import uapi_firewall_redirect.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_firewall_redirect.web cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_firewall_redirect.example cfg0a1b2c

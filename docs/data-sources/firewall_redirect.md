@@ -3,18 +3,18 @@
 page_title: "uapi_firewall_redirect Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall redirect by id.
+  Look up a firewall redirect.
 ---
 
 # uapi_firewall_redirect (Data Source)
 
-Look up a firewall redirect by id.
+Look up a firewall redirect.
 
 ## Example Usage
 
 ```terraform
-data "uapi_firewall_redirect" "web" {
-  id = "d_01HX0000000000000000000000"
+data "uapi_firewall_redirect" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,15 +27,15 @@ data "uapi_firewall_redirect" "web" {
 
 ### Read-Only
 
-- `enabled` (Boolean) Whether the redirect is active.
+- `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `match` (Attributes) Match conditions for the redirect. (see [below for nested schema](#nestedatt--match))
-- `name` (String) Redirect name.
-- `reflection` (Boolean) Whether NAT loopback / hairpinning is enabled for this redirect.
-- `reflection_src` (String) Source address used for hairpinned packets: internal or external.
-- `reflection_zone` (List of String) Firewall zones in which NAT reflection is applied.
-- `target` (String) Redirect type: DNAT or SNAT.
+- `match` (Attributes) Match conditions. (see [below for nested schema](#nestedatt--match))
+- `name` (String) Optional section name.
+- `reflection` (Boolean) uci option reflection.
+- `reflection_src` (String) uci option reflection_src.
+- `reflection_zone` (List of String) uci option reflection_zone.
+- `target` (String) Target / action.
 
 <a id="nestedatt--match"></a>
 ### Nested Schema for `match`
@@ -46,7 +46,7 @@ Read-Only:
 - `dest_port` (List of String) Internal destination ports.
 - `dest_zone` (String) Destination firewall zone name.
 - `family` (String) Address family: any, ipv4, or ipv6.
-- `proto` (List of String) Protocols: tcp, udp, icmp, icmpv6, esp, ah, any, all.
+- `proto` (List of String) Protocols.
 - `src_dport` (List of String) Incoming (destination) ports to redirect.
 - `src_ip` (List of String) Source IP addresses or CIDRs.
 - `src_port` (List of String) Source ports.

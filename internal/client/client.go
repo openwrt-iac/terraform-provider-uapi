@@ -4,13 +4,17 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,26 +22,43 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// maxLockRetries bounds how many times a write is retried when the server
-// reports 423 locked (the global transaction flock is held by another writer).
-const maxLockRetries = 5
+// maxRetries bounds retries on the throttling statuses 423 (locked) and 429
+// (rate limited); both carry Retry-After.
+const maxRetries = 5
 
-type Client struct {
-	baseURL string
-	token   string
-	http    *http.Client
+// maxPages bounds cursor-pagination so a misbehaving server cannot loop forever.
+const maxPages = 1000
+
+func newIdempotencyKey() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b[:])
 }
 
-// insecure skips TLS verification, needed against uapi's default self-signed certificate.
-func New(baseURL, token string, insecure bool) *Client {
+type Client struct {
+	baseURL   string
+	token     string
+	userAgent string
+	http      *http.Client
+}
+
+// insecure skips TLS verification, needed against uapi's default self-signed
+// certificate. version is the provider version, surfaced in the User-Agent.
+func New(baseURL, token string, insecure bool, version string) *Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if insecure {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
+	if version == "" {
+		version = "dev"
+	}
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   token,
-		http:    &http.Client{Timeout: 60 * time.Second, Transport: transport},
+		baseURL:   strings.TrimRight(baseURL, "/"),
+		token:     token,
+		userAgent: fmt.Sprintf("terraform-provider-uapi/%s (%s/%s)", version, runtime.GOOS, runtime.GOARCH),
+		http:      &http.Client{Timeout: 60 * time.Second, Transport: transport},
 	}
 }
 
@@ -63,16 +84,17 @@ func (e *APIError) Error() string {
 	return b.String()
 }
 
-// do performs a request with 423-retry. ifMatch, when set, is sent as the
-// ?if_match= query parameter: uhttpd's CGI env drops the If-Match header, so
-// uapi accepts the ETag via query string as the portable path. The response
-// ETag (quoted) is returned so callers can persist it for later If-Match writes.
-func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch string) (respBody []byte, status int, etag string, err error) {
+// do performs a request, retrying the throttling statuses 423/429 (honoring
+// Retry-After). ifMatch, when set, is sent as the ?if_match= query parameter
+// (uhttpd's CGI env drops the header). POSTs carry a stable Idempotency-Key so a
+// retried create cannot double-apply. Returns the response ETag and, for
+// collection GETs, the X-Next-Cursor for pagination.
+func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch string) (respBody []byte, status int, etag, nextCursor string, err error) {
 	var payload []byte
 	if body != nil {
 		payload, err = json.Marshal(body)
 		if err != nil {
-			return nil, 0, "", fmt.Errorf("encoding request body: %w", err)
+			return nil, 0, "", "", fmt.Errorf("encoding request body: %w", err)
 		}
 	}
 
@@ -85,6 +107,12 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		target += sep + "if_match=" + url.QueryEscape(ifMatch)
 	}
 
+	// One idempotency key per logical create, reused across this call's retries.
+	idemKey := ""
+	if method == http.MethodPost {
+		idemKey = newIdempotencyKey()
+	}
+
 	for attempt := 0; ; attempt++ {
 		var reader io.Reader
 		if payload != nil {
@@ -92,12 +120,16 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		}
 		req, err := http.NewRequestWithContext(ctx, method, target, reader)
 		if err != nil {
-			return nil, 0, "", err
+			return nil, 0, "", "", err
 		}
 		req.Header.Set("Authorization", "Bearer "+c.token)
 		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", c.userAgent)
 		if ifMatch != "" {
 			req.Header.Set("If-Match", ifMatch)
+		}
+		if idemKey != "" {
+			req.Header.Set("Idempotency-Key", idemKey)
 		}
 		if payload != nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -109,42 +141,57 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		})
 		resp, err := c.http.Do(req)
 		if err != nil {
-			return nil, 0, "", err
+			return nil, 0, "", "", err
 		}
 		raw, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if readErr != nil {
-			return nil, resp.StatusCode, "", fmt.Errorf("reading response body: %w", readErr)
+			return nil, resp.StatusCode, "", "", fmt.Errorf("reading response body: %w", readErr)
 		}
 
-		if resp.StatusCode == http.StatusLocked && attempt < maxLockRetries {
-			wait := retryAfter(resp.Header.Get("Retry-After"))
+		throttled := resp.StatusCode == http.StatusLocked || resp.StatusCode == http.StatusTooManyRequests
+		if throttled && attempt < maxRetries {
+			wait := retryWait(resp.Header.Get("Retry-After"), attempt)
 			select {
 			case <-ctx.Done():
-				return nil, resp.StatusCode, "", ctx.Err()
+				return nil, resp.StatusCode, "", "", ctx.Err()
 			case <-time.After(wait):
 			}
 			continue
 		}
 
 		etag = resp.Header.Get("ETag")
+		nextCursor = resp.Header.Get("X-Next-Cursor")
+		// X-Reload-Status is uapi's "did the init-script reload run" signal (ok |
+		// no_reload). 2xx means the write committed, not that the daemon converged;
+		// surface it at debug for "applied but nothing changed" diagnosis.
 		tflog.Debug(ctx, "uapi response", map[string]any{
 			"method": method, "path": path, "status": resp.StatusCode, "etag": etag,
+			"reload_status":   resp.Header.Get("X-Reload-Status"),
+			"reload_services": resp.Header.Get("X-Reload-Services"),
 		})
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			return raw, resp.StatusCode, etag, nil
+			return raw, resp.StatusCode, etag, nextCursor, nil
 		}
-		return nil, resp.StatusCode, etag, decodeError(resp.StatusCode, raw)
+		return nil, resp.StatusCode, etag, nextCursor, decodeError(resp.StatusCode, raw)
 	}
 }
 
-func retryAfter(header string) time.Duration {
+// retryWait honors a server Retry-After when present; otherwise it falls back to
+// exponential backoff with jitter, so concurrent clients retrying a 423/429 do
+// not synchronize into a thundering herd.
+func retryWait(header string, attempt int) time.Duration {
 	if header != "" {
 		if secs, err := strconv.Atoi(strings.TrimSpace(header)); err == nil && secs >= 0 {
 			return time.Duration(secs) * time.Second
 		}
 	}
-	return time.Second
+	const base = 200 * time.Millisecond
+	backoff := base << attempt // 200ms, 400ms, 800ms, ...
+	if backoff > 5*time.Second {
+		backoff = 5 * time.Second
+	}
+	return backoff + time.Duration(mrand.Int63n(int64(base)))
 }
 
 func decodeError(status int, body []byte) error {
@@ -176,7 +223,7 @@ func IsPreconditionFailed(err error) bool { return statusIs(err, http.StatusPrec
 
 // GetObject fetches a single resource and its ETag. found is false on 404.
 func (c *Client) GetObject(ctx context.Context, path string) (obj map[string]any, etag string, found bool, err error) {
-	raw, _, etag, err := c.do(ctx, http.MethodGet, path, nil, "")
+	raw, _, etag, _, err := c.do(ctx, http.MethodGet, path, nil, "")
 	if err != nil {
 		if IsNotFound(err) {
 			return nil, "", false, nil
@@ -189,21 +236,44 @@ func (c *Client) GetObject(ctx context.Context, path string) (obj map[string]any
 	return obj, etag, true, nil
 }
 
-// GetList fetches a collection (read-only; no ETag tracking needed).
+// GetList fetches a collection, following cursor pagination (X-Next-Cursor)
+// until the server stops returning a next cursor.
 func (c *Client) GetList(ctx context.Context, path string) ([]map[string]any, error) {
-	raw, _, _, err := c.do(ctx, http.MethodGet, path, nil, "")
-	if err != nil {
-		return nil, err
+	var all []map[string]any
+	next := ""
+	for page := 0; page < maxPages; page++ {
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		p := path + sep + "limit=500"
+		if next != "" {
+			p += "&cursor=" + url.QueryEscape(next)
+		}
+		raw, _, _, cursor, err := c.do(ctx, http.MethodGet, p, nil, "")
+		if err != nil {
+			return nil, err
+		}
+		var list []map[string]any
+		if err := json.Unmarshal(raw, &list); err != nil {
+			return nil, fmt.Errorf("decoding response: %w", err)
+		}
+		all = append(all, list...)
+		if cursor == "" {
+			return all, nil
+		}
+		next = cursor
 	}
-	var list []map[string]any
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-	return list, nil
+	// Hit the page bound with the server still offering a next cursor: return what
+	// we have but make the truncation visible rather than silently capping.
+	tflog.Warn(ctx, "uapi list truncated at page bound", map[string]any{
+		"path": path, "max_pages": maxPages, "items": len(all),
+	})
+	return all, nil
 }
 
 func (c *Client) writeObject(ctx context.Context, method, path string, body any, ifMatch string) (map[string]any, string, error) {
-	raw, _, etag, err := c.do(ctx, method, path, body, ifMatch)
+	raw, _, etag, _, err := c.do(ctx, method, path, body, ifMatch)
 	if err != nil {
 		return nil, "", err
 	}
@@ -233,7 +303,7 @@ func (c *Client) Patch(ctx context.Context, path string, body any, ifMatch strin
 
 // Delete removes a resource, optionally guarded by If-Match. A 404 is success.
 func (c *Client) Delete(ctx context.Context, path string, ifMatch string) error {
-	_, _, _, err := c.do(ctx, http.MethodDelete, path, nil, ifMatch)
+	_, _, _, _, err := c.do(ctx, http.MethodDelete, path, nil, ifMatch)
 	if err != nil && !IsNotFound(err) {
 		return err
 	}

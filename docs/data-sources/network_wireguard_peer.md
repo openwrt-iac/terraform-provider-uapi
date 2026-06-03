@@ -3,18 +3,18 @@
 page_title: "uapi_network_wireguard_peer Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a WireGuard peer by id. The preshared key is never returned.
+  Look up a network WireGuard peer.
 ---
 
 # uapi_network_wireguard_peer (Data Source)
 
-Look up a WireGuard peer by id. The preshared key is never returned.
+Look up a network WireGuard peer.
 
 ## Example Usage
 
 ```terraform
-data "uapi_network_wireguard_peer" "laptop" {
-  id = "g_01HX0000000000000000000000"
+data "uapi_network_wireguard_peer" "example" {
+  id = "<id>"
 }
 ```
 
@@ -27,16 +27,16 @@ data "uapi_network_wireguard_peer" "laptop" {
 
 ### Read-Only
 
-- `allowed_ips` (List of String) IPv4 CIDRs routed to this peer.
-- `description` (String) Human-readable peer description.
-- `disabled` (Boolean) Whether this peer is disabled.
-- `endpoint_host` (String) Peer endpoint hostname or IP address.
-- `endpoint_port` (String) Peer endpoint UDP port (1-65535).
+- `allowed_ips` (List of String) uci option allowed_ips.
+- `description` (String) uci option description.
+- `disabled` (Boolean) Whether the entry is disabled.
+- `endpoint_host` (String) uci option endpoint_host.
+- `endpoint_port` (Number) uci option endpoint_port.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `has_preshared_key` (Boolean) Whether a preshared key is configured on the router.
-- `interface` (String) Parent WireGuard interface name.
+- `has_preshared_key` (Boolean) Whether a preshared key is configured.
+- `interface` (String) Network interface this entry applies to.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `persistent_keepalive` (String) Keepalive interval in seconds (0-65535).
-- `preshared_key` (String, Sensitive) Always null; the API never returns the preshared key.
-- `public_key` (String) Peer public key (44-char base64).
-- `route_allowed_ips` (Boolean) Whether routes for allowed_ips are created automatically.
+- `persistent_keepalive` (Number) uci option persistent_keepalive.
+- `preshared_key` (String, Sensitive) Always null; never returned by the API.
+- `public_key` (String) uci option public_key.
+- `route_allowed_ips` (Boolean) uci option route_allowed_ips.

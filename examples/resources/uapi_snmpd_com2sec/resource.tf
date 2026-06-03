@@ -1,5 +1,5 @@
-resource "uapi_snmpd_com2sec" "ro" {
-  secname   = "ro"
-  source    = "default"
-  community = "public"
+resource "uapi_snmpd_com2sec" "example" {
+  community = "example"
+  secname = "example"
+  source = "example"
 }

@@ -40,22 +40,24 @@ func TestAccAllResources(t *testing.T) {
   proto = "dhcp"
 }`},
 		{typ: "uapi_network_device", hcl: `resource "uapi_network_device" "t" {
-  name = "br0"
-  type = "bridge"
+  name  = "br0"
+  type  = "bridge"
+  ports = ["lan1"]
 }`},
 		{typ: "uapi_network_route", hcl: `resource "uapi_network_route" "t" {
   target = "10.9.0.0/24"
 }`},
 		{typ: "uapi_network_rule", hcl: `resource "uapi_network_rule" "t" {
-  src = "192.168.9.0/24"
+  src    = "192.168.9.0/24"
+  lookup = 1
 }`},
 		{typ: "uapi_network_bridge_vlan", hcl: `resource "uapi_network_bridge_vlan" "t" {
   device = "br-lan"
-  vlan   = "9"
+  vlan   = 9
 }`},
 		{typ: "uapi_network_wireguard_peer", hcl: `resource "uapi_network_wireguard_peer" "t" {
   interface   = "wg0"
-  public_key  = "k"
+  public_key  = "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg="
   allowed_ips = ["10.9.0.2/32"]
 }`},
 		// wireless
@@ -108,6 +110,26 @@ func TestAccAllResources(t *testing.T) {
 		{typ: "uapi_vnstat_config", singleton: true, hcl: `resource "uapi_vnstat_config" "t" {}`},
 		{typ: "uapi_lldpd_config", singleton: true, hcl: `resource "uapi_lldpd_config" "t" {}`},
 		{typ: "uapi_prometheus_node_exporter_lua_config", singleton: true, hcl: `resource "uapi_prometheus_node_exporter_lua_config" "t" {}`},
+		// mwan3 / usteer / openvpn (rc3)
+		{typ: "uapi_mwan3_interface", hcl: `resource "uapi_mwan3_interface" "t" {
+  family      = "ipv4"
+  probe_count = 3
+}`},
+		{typ: "uapi_mwan3_member", hcl: `resource "uapi_mwan3_member" "t" {
+  interface = "wan"
+}`},
+		{typ: "uapi_mwan3_policy", hcl: `resource "uapi_mwan3_policy" "t" {
+  use_members = ["wan_m1_w3"]
+}`},
+		{typ: "uapi_mwan3_rule", hcl: `resource "uapi_mwan3_rule" "t" {
+  use_policy = "wan_only"
+}`},
+		{typ: "uapi_mwan3_globals", singleton: true, hcl: `resource "uapi_mwan3_globals" "t" {}`},
+		{typ: "uapi_usteer_config", singleton: true, hcl: `resource "uapi_usteer_config" "t" {}`},
+		{typ: "uapi_openvpn_instance", hcl: `resource "uapi_openvpn_instance" "t" {
+  client = true
+  key    = "-----BEGIN OpenVPN Static key-----"
+}`},
 		// packages (no etag)
 		{typ: "uapi_package", noEtag: true, hcl: `resource "uapi_package" "t" {
   name = "curl"
@@ -120,8 +142,8 @@ func TestAccAllResources(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.typ, func(t *testing.T) {
-			m := newMockUAPI()
-			defer m.Close()
+			providerCfg, closer := accTarget(t)
+			defer closer()
 			addr := c.typ + ".t"
 			checks := []resource.TestCheckFunc{
 				resource.TestCheckResourceAttrSet(addr, "id"),
@@ -135,7 +157,7 @@ func TestAccAllResources(t *testing.T) {
 			resource.Test(t, resource.TestCase{
 				ProtoV6ProviderFactories: accProviders(),
 				Steps: []resource.TestStep{{
-					Config: providerHCL(m.URL) + "\n" + c.hcl,
+					Config: providerCfg + "\n" + c.hcl,
 					Check:  resource.ComposeAggregateTestCheckFunc(checks...),
 				}},
 			})

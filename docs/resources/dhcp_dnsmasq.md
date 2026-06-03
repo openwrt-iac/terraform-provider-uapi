@@ -3,22 +3,17 @@
 page_title: "uapi_dhcp_dnsmasq Resource - uapi"
 subcategory: ""
 description: |-
-  Global dnsmasq settings (uci dhcp.dnsmasq). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A dnsmasq settings.
 ---
 
 # uapi_dhcp_dnsmasq (Resource)
 
-Global dnsmasq settings (uci dhcp.dnsmasq). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A dnsmasq settings.
 
 ## Example Usage
 
 ```terraform
-# uapi_dhcp_dnsmasq is a singleton: it cannot be created or destroyed. Applying
-# writes the settings; destroying only drops it from state.
-resource "uapi_dhcp_dnsmasq" "this" {
-  domain        = "lan"
-  local         = "/lan/"
-  authoritative = true
+resource "uapi_dhcp_dnsmasq" "example" {
 }
 ```
 
@@ -27,23 +22,23 @@ resource "uapi_dhcp_dnsmasq" "this" {
 
 ### Optional
 
-- `address` (List of String) Static DNS address overrides (e.g. /router.lan/192.168.1.1).
-- `authoritative` (Boolean) Act as the authoritative DHCP server on the segment. Defaults to true.
-- `boguspriv` (Boolean) Never forward reverse lookups for private ranges. Defaults to true.
-- `cachesize` (String) DNS cache size (0-1000000).
-- `domain` (String) Local DNS domain.
-- `domainneeded` (Boolean) Never forward plain names without a domain. Defaults to true.
-- `expandhosts` (Boolean) Add the local domain to names in /etc/hosts. Defaults to false.
-- `filterwin2k` (Boolean) Filter Windows DNS queries that pollute upstream. Defaults to false.
-- `leasefile` (String) Path to the DHCP lease file.
-- `local` (String) Local domain suffix served authoritatively (e.g. /lan/).
-- `nonwildcard` (Boolean) Bind only to configured interfaces instead of the wildcard address. Defaults to true.
-- `noresolv` (Boolean) Do not read upstream resolvers from resolvfile. Defaults to false.
-- `port` (String) DNS service port (1-65535).
-- `readethers` (Boolean) Read static leases from /etc/ethers. Defaults to true.
-- `rebind_protection` (Boolean) Enable DNS rebind protection. Defaults to true.
-- `resolvfile` (String) Path to the upstream resolver file.
-- `server` (List of String) Upstream DNS servers.
+- `address` (List of String) uci option address.
+- `authoritative` (Boolean) uci option authoritative.
+- `boguspriv` (Boolean) uci option boguspriv.
+- `cachesize` (Number) uci option cachesize.
+- `domain` (String) uci option domain.
+- `domainneeded` (Boolean) uci option domainneeded.
+- `expandhosts` (Boolean) uci option expandhosts.
+- `filterwin2k` (Boolean) uci option filterwin2k.
+- `leasefile` (String) uci option leasefile.
+- `local` (String) uci option local.
+- `nonwildcard` (Boolean) uci option nonwildcard.
+- `noresolv` (Boolean) uci option noresolv.
+- `port` (Number) uci option port.
+- `readethers` (Boolean) uci option readethers.
+- `rebind_protection` (Boolean) uci option rebind_protection.
+- `resolvfile` (String) uci option resolvfile.
+- `server` (List of String) uci option server.
 
 ### Read-Only
 

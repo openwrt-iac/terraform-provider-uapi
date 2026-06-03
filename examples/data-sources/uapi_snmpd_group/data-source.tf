@@ -1,3 +1,3 @@
-data "uapi_snmpd_group" "public" {
-  id = "r_01HX0000000000000000000000"
+data "uapi_snmpd_group" "example" {
+  id = "<id>"
 }

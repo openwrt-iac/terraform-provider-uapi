@@ -3,26 +3,17 @@
 page_title: "uapi_unbound_server Resource - uapi"
 subcategory: ""
 description: |-
-  Global unbound resolver settings (uci unbound.unbound). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A unbound server.
 ---
 
 # uapi_unbound_server (Resource)
 
-Global unbound resolver settings (uci unbound.unbound). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A unbound server.
 
 ## Example Usage
 
 ```terraform
-# uapi_unbound_server is a singleton: it cannot be created or destroyed. Applying
-# writes the settings; destroying only drops it from state.
-resource "uapi_unbound_server" "this" {
-  enabled        = true
-  listen_port    = "53"
-  dhcp_link      = "dnsmasq"
-  dnssec_enabled = true
-  recursion      = "default"
-  resource       = "medium"
-  protocol       = "mixed"
+resource "uapi_unbound_server" "example" {
 }
 ```
 
@@ -31,27 +22,27 @@ resource "uapi_unbound_server" "this" {
 
 ### Optional
 
-- `add_local_fqdn` (String) How aggressively to add LAN host FQDN records.
-- `add_wan_fqdn` (String) How aggressively to add WAN host FQDN records.
-- `dhcp_link` (String) DHCP integration source: none, odhcpd, or dnsmasq.
-- `dnssec_enabled` (Boolean) Enable DNSSEC validation. Defaults to false.
-- `domain` (String) Local domain name unbound serves authoritatively.
-- `domain_type` (String) Local-zone type for the configured domain (e.g. deny, refuse, static, transparent, redirect).
-- `enabled` (Boolean) Whether the unbound resolver is enabled. Defaults to true.
-- `extended_stats` (Boolean) Emit extended statistics (stats-extended). Defaults to false.
-- `hide_binddata` (Boolean) Hide identity and version from binddata queries. Defaults to true.
-- `interface_auto` (Boolean) Bind to all interfaces (interface-automatic). Disable to bind manually. Defaults to true.
-- `listen_port` (String) Port unbound listens on for DNS queries.
-- `localservice` (Boolean) Restrict access to clients on local subnets. Defaults to true.
-- `manual_conf` (Boolean) Skip uci generation and use a hand-written /etc/unbound/unbound.conf. Defaults to false.
-- `num_threads` (String) Number of resolver threads (1-64).
-- `prefetch` (Boolean) Prefetch popular cache entries before they expire. Defaults to false.
-- `protocol` (String) IP protocol mode: auto, ip4_only, ip6_only, or mixed.
-- `query_minimize` (Boolean) Enable QNAME minimization. Defaults to false.
-- `rebind_protection` (String) DNS rebind protection: 0 (off), 1 (private nets), or 2 (all rebind attacks blocked).
-- `recursion` (String) Recursion tuning preset: default, passive, or aggressive.
-- `resource` (String) Memory/cache sizing preset: tiny, small, medium, large, big, or huge.
-- `ttl_min` (String) Minimum TTL in seconds to enforce on cached records (0-86400).
+- `add_local_fqdn` (Number) uci option add_local_fqdn.
+- `add_wan_fqdn` (Number) uci option add_wan_fqdn.
+- `dhcp_link` (String) uci option dhcp_link.
+- `dnssec_enabled` (Boolean) uci option dnssec_enabled.
+- `domain` (String) uci option domain.
+- `domain_type` (String) uci option domain_type.
+- `enabled` (Boolean) Whether the entry is active.
+- `extended_stats` (Boolean) uci option extended_stats.
+- `hide_binddata` (Boolean) uci option hide_binddata.
+- `interface_auto` (Boolean) uci option interface_auto.
+- `listen_port` (Number) uci option listen_port.
+- `localservice` (Boolean) uci option localservice.
+- `manual_conf` (Boolean) uci option manual_conf.
+- `num_threads` (Number) uci option num_threads.
+- `prefetch` (Boolean) uci option prefetch.
+- `protocol` (String) uci option protocol.
+- `query_minimize` (Boolean) uci option query_minimize.
+- `rebind_protection` (String) uci option rebind_protection.
+- `recursion` (String) uci option recursion.
+- `resource_limits` (String) uci option resource_limits.
+- `ttl_min` (Number) uci option ttl_min.
 
 ### Read-Only
 

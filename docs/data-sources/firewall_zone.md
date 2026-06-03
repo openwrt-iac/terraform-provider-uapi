@@ -3,18 +3,18 @@
 page_title: "uapi_firewall_zone Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall zone by id.
+  Look up a firewall zone.
 ---
 
 # uapi_firewall_zone (Data Source)
 
-Look up a firewall zone by id.
+Look up a firewall zone.
 
 ## Example Usage
 
 ```terraform
-data "uapi_firewall_zone" "lan" {
-  id = "z_01HX0000000000000000000000"
+data "uapi_firewall_zone" "example" {
+  id = "<id>"
 }
 ```
 
@@ -29,11 +29,11 @@ data "uapi_firewall_zone" "lan" {
 
 - `etag` (String) Opaque ETag of the resource's current state.
 - `family` (String) Address family: any, ipv4, or ipv6.
-- `forward` (String) Default policy for forwarded traffic.
-- `input` (String) Default policy for input traffic: ACCEPT, REJECT, or DROP.
+- `forward` (String) uci option forward.
+- `input` (String) uci option input.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `masq` (Boolean) Whether masquerading (NAT) is enabled.
-- `mtu_fix` (Boolean) Whether MSS clamping is enabled.
-- `name` (String) Zone name.
-- `network` (List of String) Network interfaces covered by this zone.
-- `output` (String) Default policy for output traffic.
+- `masq` (Boolean) uci option masq.
+- `mtu_fix` (Boolean) uci option mtu_fix.
+- `name` (String) Optional section name.
+- `network` (List of String) uci option network.
+- `output_policy` (String) uci option output_policy.

@@ -3,28 +3,18 @@
 page_title: "uapi_wireless_interface Resource - uapi"
 subcategory: ""
 description: |-
-  A wireless interface / SSID (uci wireless.wifi-iface).
+  A wireless interface.
 ---
 
 # uapi_wireless_interface (Resource)
 
-A wireless interface / SSID (uci wireless.wifi-iface).
+A wireless interface.
 
 ## Example Usage
 
 ```terraform
-resource "uapi_wireless_interface" "home" {
-  device     = uapi_wireless_device.radio0.id
-  network    = "lan"
-  mode       = "ap"
-  ssid       = "home-net"
-  encryption = "psk2"
-  key        = var.wifi_key # write-only: never returned by the API
-}
-
-variable "wifi_key" {
-  type      = string
-  sensitive = true
+resource "uapi_wireless_interface" "example" {
+  device = "example"
 }
 ```
 
@@ -33,23 +23,23 @@ variable "wifi_key" {
 
 ### Required
 
-- `device` (String) Wireless radio id this interface belongs to.
+- `device` (String) Underlying device.
 
 ### Optional
 
-- `disabled` (Boolean) Disable this SSID. Defaults to false.
-- `encryption` (String) Encryption suite (none, psk2, sae, wpa3, ...). Defaults to none.
-- `hidden` (Boolean) Hide the SSID. Defaults to false.
-- `isolate` (Boolean) Isolate clients on this SSID. Defaults to false.
-- `key` (String, Sensitive) Encryption passphrase. Write-only: the API never returns it, so it is not refreshed from the router. Required when encryption needs a key.
-- `mode` (String) Operating mode: ap, sta, adhoc, wds, monitor, or mesh. Defaults to ap.
-- `network` (String) Network interface this SSID is bridged to.
-- `ssid` (String) Network name (SSID).
+- `disabled` (Boolean) Whether the entry is disabled.
+- `encryption` (String) uci option encryption.
+- `hidden` (Boolean) uci option hidden.
+- `isolate` (Boolean) uci option isolate.
+- `key` (String, Sensitive) Encryption passphrase. Write-only: never returned by the API.
+- `mode` (String) uci option mode.
+- `network` (String) uci option network.
+- `ssid` (String) uci option ssid.
 
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state, used for If-Match optimistic concurrency.
-- `has_key` (Boolean) Whether a key is configured on the router (the cleartext is never returned).
+- `has_key` (Boolean) Whether a key is configured (the value is never returned).
 - `id` (String) Stable resource id assigned by uapi (a prefixed ULID).
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 
@@ -60,11 +50,9 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# A uapi-managed SSID is imported by its stable id. The key is write-only and is
-# never read back, so set it in config after import to be able to rotate it.
-terraform import uapi_wireless_interface.home f_01HX0000000000000000000000
+# Import a managed wireless interface by its stable id.
+terraform import uapi_wireless_interface.example <id>
 
-# Importing a pre-existing anonymous (unmanaged) section adopts it: uapi renames
-# it to a stable id and the provider emits a warning naming the old and new ids.
-terraform import uapi_wireless_interface.home cfg0a1b2c
+# Importing an anonymous (unmanaged) section adopts it (renames to a stable id).
+terraform import uapi_wireless_interface.example cfg0a1b2c
 ```

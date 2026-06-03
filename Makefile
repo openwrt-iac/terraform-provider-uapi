@@ -7,7 +7,7 @@ NAME := uapi
 OS_ARCH := $(shell go env GOOS)_$(shell go env GOARCH)
 INSTALL_DIR := $(HOME)/.terraform.d/plugins/$(HOSTNAME)/$(NAMESPACE)/$(NAME)/$(VERSION)/$(OS_ARCH)
 
-.PHONY: build install test testacc fmt vet tidy docs clean
+.PHONY: build install test testacc fmt vet tidy gen docs clean
 
 build:
 	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) .
@@ -34,7 +34,13 @@ vet:
 tidy:
 	go mod tidy
 
-# Regenerate docs/ from schema descriptions and examples/.
+# Regenerate the curated resources/data sources from internal/gen/openapi.json
+# plus the descriptor overlay. Idempotent: re-run after bumping the spec.
+gen:
+	go run ./internal/gen
+
+# Regenerate code then docs/ from schema descriptions and examples/.
+# `go generate ./...` runs the code generator first, then tfplugindocs.
 docs:
 	go generate ./...
 

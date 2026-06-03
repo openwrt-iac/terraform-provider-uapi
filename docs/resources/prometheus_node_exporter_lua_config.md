@@ -3,24 +3,17 @@
 page_title: "uapi_prometheus_node_exporter_lua_config Resource - uapi"
 subcategory: ""
 description: |-
-  Global prometheus-node-exporter-lua settings (uci prometheus-node-exporter-lua). This is a singleton: it cannot be created or destroyed. terraform destroy only removes it from state; the underlying settings are left as-is on the router.
+  A prometheus node_exporter config.
 ---
 
 # uapi_prometheus_node_exporter_lua_config (Resource)
 
-Global prometheus-node-exporter-lua settings (uci prometheus-node-exporter-lua). This is a singleton: it cannot be created or destroyed. `terraform destroy` only removes it from state; the underlying settings are left as-is on the router.
+A prometheus node_exporter config.
 
 ## Example Usage
 
 ```terraform
-# uapi_prometheus_node_exporter_lua_config is a singleton: it cannot be created
-# or destroyed. Applying writes the settings; destroying only drops it from state.
-resource "uapi_prometheus_node_exporter_lua_config" "this" {
-  listen_port = "9100"
-  cpu         = true
-  meminfo     = true
-  netdev      = true
-  loadavg     = true
+resource "uapi_prometheus_node_exporter_lua_config" "example" {
 }
 ```
 
@@ -29,26 +22,26 @@ resource "uapi_prometheus_node_exporter_lua_config" "this" {
 
 ### Optional
 
-- `boottime` (Boolean) Enable the boottime collector. Defaults to false.
-- `cpu` (Boolean) Enable the cpu collector. Defaults to false.
-- `diskstats` (Boolean) Enable the diskstats collector. Defaults to false.
-- `edac` (Boolean) Enable the edac collector. Defaults to false.
-- `entropy` (Boolean) Enable the entropy collector. Defaults to false.
-- `filesystem` (Boolean) Enable the filesystem collector. Defaults to false.
-- `hwmon` (Boolean) Enable the hwmon collector. Defaults to false.
-- `listen_interface` (String) Network interface to bind the exporter to.
-- `listen_ipv6` (Boolean) Listen on IPv6 as well as IPv4. Defaults to false.
-- `listen_port` (String) TCP port the exporter listens on.
-- `loadavg` (Boolean) Enable the loadavg collector. Defaults to false.
-- `meminfo` (Boolean) Enable the meminfo collector. Defaults to false.
-- `netdev` (Boolean) Enable the netdev collector. Defaults to false.
-- `netstat` (Boolean) Enable the netstat collector. Defaults to false.
-- `stat` (Boolean) Enable the stat collector. Defaults to false.
-- `textfile` (Boolean) Enable the textfile collector. Defaults to false.
-- `thermal_zone` (Boolean) Enable the thermal_zone collector. Defaults to false.
-- `time` (Boolean) Enable the time collector. Defaults to false.
-- `uname` (Boolean) Enable the uname collector. Defaults to false.
-- `vmstat` (Boolean) Enable the vmstat collector. Defaults to false.
+- `boottime` (Boolean) uci option boottime.
+- `cpu` (Boolean) uci option cpu.
+- `diskstats` (Boolean) uci option diskstats.
+- `edac` (Boolean) uci option edac.
+- `entropy` (Boolean) uci option entropy.
+- `filesystem` (Boolean) uci option filesystem.
+- `hwmon` (Boolean) uci option hwmon.
+- `listen_interface` (String) uci option listen_interface.
+- `listen_ipv6` (Boolean) uci option listen_ipv6.
+- `listen_port` (Number) uci option listen_port.
+- `loadavg` (Boolean) uci option loadavg.
+- `meminfo` (Boolean) uci option meminfo.
+- `netdev` (Boolean) uci option netdev.
+- `netstat` (Boolean) uci option netstat.
+- `stat` (Boolean) uci option stat.
+- `textfile` (Boolean) uci option textfile.
+- `thermal_zone` (Boolean) uci option thermal_zone.
+- `time` (Boolean) uci option time.
+- `uname` (Boolean) uci option uname.
+- `vmstat` (Boolean) uci option vmstat.
 
 ### Read-Only
 
