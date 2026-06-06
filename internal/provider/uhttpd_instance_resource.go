@@ -85,7 +85,7 @@ func (r *uhttpdInstanceResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
-func (r *uhttpdInstanceResource) body(ctx context.Context, m uhttpdInstanceModel, diags *diagsink) map[string]any {
+func (r *uhttpdInstanceResource) body(ctx context.Context, m uhttpdInstanceModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "cert", m.Cert)
 	putStr(out, "cgi_prefix", m.CgiPrefix)
@@ -140,7 +140,7 @@ func (r *uhttpdInstanceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -183,7 +183,7 @@ func (r *uhttpdInstanceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

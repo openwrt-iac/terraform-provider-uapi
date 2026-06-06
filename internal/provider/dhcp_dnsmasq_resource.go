@@ -82,7 +82,7 @@ func (r *dhcpDnsmasqResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
-func (r *dhcpDnsmasqResource) body(ctx context.Context, m dhcpDnsmasqModel, diags *diagsink) map[string]any {
+func (r *dhcpDnsmasqResource) body(ctx context.Context, m dhcpDnsmasqModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putList(ctx, out, "address", m.Address, diags.d)
 	putBool(out, "authoritative", m.Authoritative)
@@ -133,7 +133,7 @@ func (r *dhcpDnsmasqResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -176,7 +176,7 @@ func (r *dhcpDnsmasqResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -90,7 +90,7 @@ func (r *prometheusNodeExporterLuaConfigResource) Schema(_ context.Context, _ re
 	}
 }
 
-func (r *prometheusNodeExporterLuaConfigResource) body(ctx context.Context, m prometheusNodeExporterLuaConfigModel, diags *diagsink) map[string]any {
+func (r *prometheusNodeExporterLuaConfigResource) body(ctx context.Context, m prometheusNodeExporterLuaConfigModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "boottime", m.Boottime)
 	putBool(out, "cpu", m.Cpu)
@@ -147,7 +147,7 @@ func (r *prometheusNodeExporterLuaConfigResource) Create(ctx context.Context, re
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -190,7 +190,7 @@ func (r *prometheusNodeExporterLuaConfigResource) Update(ctx context.Context, re
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

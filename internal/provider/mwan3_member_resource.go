@@ -53,7 +53,7 @@ func (r *mwan3MemberResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
-func (r *mwan3MemberResource) body(ctx context.Context, m mwan3MemberModel, diags *diagsink) map[string]any {
+func (r *mwan3MemberResource) body(ctx context.Context, m mwan3MemberModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "interface", m.Interface)
 	putInt64(out, "metric", m.Metric)
@@ -76,7 +76,7 @@ func (r *mwan3MemberResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -119,7 +119,7 @@ func (r *mwan3MemberResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

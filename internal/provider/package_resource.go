@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -30,11 +31,12 @@ func NewPackageResource() resource.Resource {
 }
 
 type packageModel struct {
-	ID        types.String `tfsdk:"id"`
-	Managed   types.Bool   `tfsdk:"managed"`
-	Name      types.String `tfsdk:"name"`
-	Version   types.String `tfsdk:"version"`
-	Installed types.Bool   `tfsdk:"installed"`
+	ID         types.String `tfsdk:"id"`
+	Managed    types.Bool   `tfsdk:"managed"`
+	Name       types.String `tfsdk:"name"`
+	Version    types.String `tfsdk:"version"`
+	Installed  types.Bool   `tfsdk:"installed"`
+	PreExisted types.Bool   `tfsdk:"pre_existed"`
 }
 
 func (r *packageResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -64,6 +66,12 @@ func (r *packageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:    true,
 				Description: "Whether the package is installed.",
 			},
+			"pre_existed": schema.BoolAttribute{
+				Computed: true,
+				Description: "Whether the package was already installed before Terraform managed it. " +
+					"When true, `terraform destroy` does NOT uninstall it (it was not installed by this resource).",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
 		},
 	}
 }
@@ -82,12 +90,22 @@ func (r *packageResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	// Record whether the package pre-existed so Delete can avoid uninstalling
+	// something Terraform did not install. POST is idempotent on an already-
+	// installed package, so we install regardless.
+	_, _, found, err := r.client.GetObject(ctx, "/"+packageCollection+"/"+plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error checking package", err.Error())
+		return
+	}
+	preExisted := found
 	obj, _, err := r.client.Post(ctx, "/"+packageCollection, map[string]any{"name": plan.Name.ValueString()}, "")
 	if err != nil {
 		resp.Diagnostics.AddError("Error installing package", err.Error())
 		return
 	}
 	r.read(ctx, obj, &plan)
+	plan.PreExisted = types.BoolValue(preExisted)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -135,6 +153,11 @@ func (r *packageResource) Delete(ctx context.Context, req resource.DeleteRequest
 	var state packageModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	// Do not uninstall a package that was already present before Terraform
+	// managed it; destroying the resource just stops managing it.
+	if state.PreExisted.ValueBool() {
 		return
 	}
 	if err := r.client.Delete(ctx, "/"+packageCollection+"/"+state.ID.ValueString(), ""); err != nil {

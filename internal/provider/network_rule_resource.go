@@ -67,7 +67,7 @@ func (r *networkRuleResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
-func (r *networkRuleResource) body(ctx context.Context, m networkRuleModel, diags *diagsink) map[string]any {
+func (r *networkRuleResource) body(ctx context.Context, m networkRuleModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "action", m.Action)
 	putStr(out, "dest", m.Dest)
@@ -104,7 +104,7 @@ func (r *networkRuleResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -147,7 +147,7 @@ func (r *networkRuleResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

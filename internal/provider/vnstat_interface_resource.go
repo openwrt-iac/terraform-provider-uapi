@@ -51,7 +51,7 @@ func (r *vnstatInterfaceResource) Schema(_ context.Context, _ resource.SchemaReq
 	}
 }
 
-func (r *vnstatInterfaceResource) body(ctx context.Context, m vnstatInterfaceModel, diags *diagsink) map[string]any {
+func (r *vnstatInterfaceResource) body(ctx context.Context, m vnstatInterfaceModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "enabled", m.Enabled)
 	putStr(out, "interface", m.Interface)
@@ -72,7 +72,7 @@ func (r *vnstatInterfaceResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -115,7 +115,7 @@ func (r *vnstatInterfaceResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

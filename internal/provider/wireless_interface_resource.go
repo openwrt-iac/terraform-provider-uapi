@@ -67,7 +67,7 @@ func (r *wirelessInterfaceResource) Schema(_ context.Context, _ resource.SchemaR
 	}
 }
 
-func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfaceModel, diags *diagsink) map[string]any {
+func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfaceModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "device", m.Device)
 	putBool(out, "disabled", m.Disabled)
@@ -103,7 +103,7 @@ func (r *wirelessInterfaceResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -146,7 +146,7 @@ func (r *wirelessInterfaceResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

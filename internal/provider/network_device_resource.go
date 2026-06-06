@@ -63,7 +63,7 @@ func (r *networkDeviceResource) Schema(_ context.Context, _ resource.SchemaReque
 	}
 }
 
-func (r *networkDeviceResource) body(ctx context.Context, m networkDeviceModel, diags *diagsink) map[string]any {
+func (r *networkDeviceResource) body(ctx context.Context, m networkDeviceModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "ifname", m.Ifname)
 	putBool(out, "ipv6", m.Ipv6)
@@ -96,7 +96,7 @@ func (r *networkDeviceResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +139,7 @@ func (r *networkDeviceResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

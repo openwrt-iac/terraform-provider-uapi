@@ -69,7 +69,7 @@ func (r *networkWireguardPeerResource) Schema(_ context.Context, _ resource.Sche
 	}
 }
 
-func (r *networkWireguardPeerResource) body(ctx context.Context, m networkWireguardPeerModel, diags *diagsink) map[string]any {
+func (r *networkWireguardPeerResource) body(ctx context.Context, m networkWireguardPeerModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putList(ctx, out, "allowed_ips", m.AllowedIps, diags.d)
 	putStr(out, "description", m.Description)
@@ -107,7 +107,7 @@ func (r *networkWireguardPeerResource) Create(ctx context.Context, req resource.
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -150,7 +150,7 @@ func (r *networkWireguardPeerResource) Update(ctx context.Context, req resource.
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

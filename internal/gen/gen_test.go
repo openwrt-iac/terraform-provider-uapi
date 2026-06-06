@@ -11,8 +11,9 @@ import (
 var update = flag.Bool("update", false, "update golden files in testdata/")
 
 // fixtureProps exercises every field-classification branch the generator has:
-// required string, optional+computed string/int/bool/list, write-only, and
-// read-only bool/string. buildResource sorts field names, so output is stable.
+// required string, optional+computed string/int/bool/list, write-only,
+// read-only bool/string, and create-only. buildResource sorts field names, so
+// output is stable.
 func fixtureProps() map[string]specProp {
 	return map[string]specProp{
 		"name":       {Type: "string"},
@@ -22,6 +23,7 @@ func fixtureProps() map[string]specProp {
 		"secret":     {Type: "string", WriteOnly: true},
 		"has_secret": {Type: "boolean", ReadOnly: true},
 		"note":       {Type: "string", ReadOnly: true},
+		"wgname":     {Type: "string", Description: "Create-only kernel name."},
 	}
 }
 
@@ -36,6 +38,7 @@ func goldenCases() map[string]string {
 	collection := descriptor{
 		Type: "lab_thing", Schema: "LabThings", Collection: "lab/things",
 		Kind: "collection", Label: "lab thing", GenDataSource: true, Nested: fixtureNested(),
+		CreateOnly: []string{"wgname"},
 	}
 	singleton := descriptor{
 		Type: "lab_single", Schema: "LabSingle", Collection: "lab/single",

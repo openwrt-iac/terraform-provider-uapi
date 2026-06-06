@@ -53,7 +53,7 @@ func (r *networkBridgeVlanResource) Schema(_ context.Context, _ resource.SchemaR
 	}
 }
 
-func (r *networkBridgeVlanResource) body(ctx context.Context, m networkBridgeVlanModel, diags *diagsink) map[string]any {
+func (r *networkBridgeVlanResource) body(ctx context.Context, m networkBridgeVlanModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "device", m.Device)
 	putList(ctx, out, "ports", m.Ports, diags.d)
@@ -76,7 +76,7 @@ func (r *networkBridgeVlanResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -119,7 +119,7 @@ func (r *networkBridgeVlanResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

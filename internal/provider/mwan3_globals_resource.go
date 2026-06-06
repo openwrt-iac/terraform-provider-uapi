@@ -58,7 +58,7 @@ func (r *mwan3GlobalsResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *mwan3GlobalsResource) body(ctx context.Context, m mwan3GlobalsModel, diags *diagsink) map[string]any {
+func (r *mwan3GlobalsResource) body(ctx context.Context, m mwan3GlobalsModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "local_source", m.LocalSource)
 	putBool(out, "logging", m.Logging)
@@ -85,7 +85,7 @@ func (r *mwan3GlobalsResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -128,7 +128,7 @@ func (r *mwan3GlobalsResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

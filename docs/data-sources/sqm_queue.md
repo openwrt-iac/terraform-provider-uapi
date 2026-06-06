@@ -27,7 +27,7 @@ data "uapi_sqm_queue" "example" {
 
 ### Read-Only
 
-- `download` (Number) uci option download.
+- `download` (Number) Download shaping rate in kbit/s.
 - `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `interface` (String) Network interface this entry applies to.
@@ -36,4 +36,4 @@ data "uapi_sqm_queue" "example" {
 - `overhead` (Number) uci option overhead.
 - `qdisc` (String) uci option qdisc.
 - `script` (String) uci option script.
-- `upload` (Number) uci option upload.
+- `upload` (Number) Upload shaping rate in kbit/s.

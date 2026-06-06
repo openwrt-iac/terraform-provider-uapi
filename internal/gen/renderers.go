@@ -40,6 +40,8 @@ func resAttr(f field) string {
 		}
 	case "writeonly":
 		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
+	case "createonly":
+		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: %q},", f.Name, f.Desc)
 	case "computedbool":
 		return fmt.Sprintf("%q: schema.BoolAttribute{Computed: true, Description: %q},", f.Name, f.Desc)
 	default: // computedstring
@@ -88,6 +90,8 @@ func readStmt(f field, mv, ov string) string {
 	switch f.Kind {
 	case "writeonly":
 		return fmt.Sprintf("// %s is write-only: preserve the planned value (the API never returns it).", f.Name)
+	case "createonly":
+		return fmt.Sprintf("// %s is create-only: preserve the planned value (the API never returns it).", f.Name)
 	case "computedbool":
 		return fmt.Sprintf("%s.%s = boolValDefault(%s, %q)", mv, f.GoName, ov, f.Name)
 	}
@@ -116,6 +120,10 @@ func renderResource(r resModel) string {
 	}
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource")
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema")
+	if r.hasCreateOnly() {
+		p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier")
+		p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier")
+	}
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/types")
 	p("\t%q", "github.com/raspbeguy/terraform-provider-uapi/internal/client")
 	p(")\n")
@@ -188,10 +196,20 @@ func renderResource(r resModel) string {
 	p("}\n")
 
 	// body
-	p("func (r *%sResource) body(ctx context.Context, m %sModel, diags *diagsink) map[string]any {", r.Camel, r.Camel)
+	p("func (r *%sResource) body(ctx context.Context, m %sModel, diags *diagsink, create bool) map[string]any {", r.Camel, r.Camel)
 	p("\tout := map[string]any{}")
 	for _, f := range r.Fields {
-		if s := bodyStmt(f, "m", "out"); s != "" {
+		s := bodyStmt(f, "m", "out")
+		if s == "" {
+			continue
+		}
+		if f.Kind == "createonly" {
+			// create-only fields (e.g. an interface name) set the uci section name
+			// and are rejected on PUT/PATCH, so only send them on create.
+			p("\tif create {")
+			p("\t\t%s", s)
+			p("\t}")
+		} else {
 			p("\t%s", s)
 		}
 	}
@@ -246,7 +264,7 @@ func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Post(ctx, "/"+%[2]s, body, "")
 	if err != nil { writeErr(&resp.Diagnostics, "creating", %[3]q, err); return }
@@ -274,7 +292,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Put(ctx, "/"+%[2]s+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
 	if err != nil { writeErr(&resp.Diagnostics, "updating", %[3]q, err); return }
@@ -307,7 +325,7 @@ func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, "")
 	if err != nil { writeErr(&resp.Diagnostics, "configuring", %[3]q, err); return }
@@ -335,7 +353,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, state.ETag.ValueString())
 	if err != nil { writeErr(&resp.Diagnostics, "updating", %[3]q, err); return }
@@ -380,7 +398,7 @@ func renderRuntimeDataSource(r resModel) string {
 	p("\tID types.String `tfsdk:\"id\"`")
 	p("\tManaged types.Bool `tfsdk:\"managed\"`")
 	p("\tETag types.String `tfsdk:\"etag\"`")
-	for _, f := range r.Fields {
+	for _, f := range r.dsFields() {
 		p("%s", modelField(f))
 	}
 	p("\tRuntime *%s `tfsdk:\"runtime\"`", rb.model)
@@ -404,7 +422,7 @@ func renderRuntimeDataSource(r resModel) string {
 	p("\t\t\t\"id\": dsIDAttribute(),")
 	p("\t\t\t\"managed\": dsManagedAttribute(),")
 	p("\t\t\t\"etag\": dsComputedString(\"Opaque ETag of the resource's current state.\"),")
-	for _, f := range r.Fields {
+	for _, f := range r.dsFields() {
 		p("\t\t\t%s", dsAttr(f))
 	}
 	p("\t\t\t\"runtime\": %s,", rb.attr)
@@ -424,7 +442,7 @@ func renderRuntimeDataSource(r resModel) string {
 	p("\tbase.ETag = types.StringValue(etag)")
 	p("\tm := %sDSModel{", r.Camel)
 	p("\t\tID: base.ID, Managed: base.Managed, ETag: base.ETag,")
-	for _, f := range r.Fields {
+	for _, f := range r.dsFields() {
 		p("\t\t%s: base.%s,", f.GoName, f.GoName)
 	}
 	p("\t\tRuntime: %s(obj),", rb.parse)

@@ -90,7 +90,7 @@ func (r *unboundServerResource) Schema(_ context.Context, _ resource.SchemaReque
 	}
 }
 
-func (r *unboundServerResource) body(ctx context.Context, m unboundServerModel, diags *diagsink) map[string]any {
+func (r *unboundServerResource) body(ctx context.Context, m unboundServerModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putInt64(out, "add_local_fqdn", m.AddLocalFqdn)
 	putInt64(out, "add_wan_fqdn", m.AddWanFqdn)
@@ -149,7 +149,7 @@ func (r *unboundServerResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -192,7 +192,7 @@ func (r *unboundServerResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

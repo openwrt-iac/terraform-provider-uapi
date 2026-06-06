@@ -61,7 +61,7 @@ func (r *uhttpdCertResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
-func (r *uhttpdCertResource) body(ctx context.Context, m uhttpdCertModel, diags *diagsink) map[string]any {
+func (r *uhttpdCertResource) body(ctx context.Context, m uhttpdCertModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putInt64(out, "bits", m.Bits)
 	putStr(out, "commonname", m.Commonname)
@@ -92,7 +92,7 @@ func (r *uhttpdCertResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -135,7 +135,7 @@ func (r *uhttpdCertResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

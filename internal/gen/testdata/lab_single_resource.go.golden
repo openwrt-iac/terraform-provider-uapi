@@ -34,6 +34,7 @@ type labSingleModel struct {
 	Secret    types.String `tfsdk:"secret"`
 	Tags      types.List   `tfsdk:"tags"`
 	Weight    types.Int64  `tfsdk:"weight"`
+	Wgname    types.String `tfsdk:"wgname"`
 }
 
 func (r *labSingleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -58,17 +59,19 @@ func (r *labSingleResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"secret":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "uci option secret."},
 			"tags":       optionalComputedStringList("uci option tags."),
 			"weight":     optionalComputedInt64("uci option weight."),
+			"wgname":     optionalComputedString("uci option wgname."),
 		},
 	}
 }
 
-func (r *labSingleResource) body(ctx context.Context, m labSingleModel, diags *diagsink) map[string]any {
+func (r *labSingleResource) body(ctx context.Context, m labSingleModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "flag", m.Flag)
 	putStr(out, "name", m.Name)
 	putStr(out, "secret", m.Secret)
 	putList(ctx, out, "tags", m.Tags, diags.d)
 	putInt64(out, "weight", m.Weight)
+	putStr(out, "wgname", m.Wgname)
 	return out
 }
 
@@ -82,6 +85,7 @@ func (r *labSingleResource) read(ctx context.Context, obj map[string]any, m *lab
 	// secret is write-only: preserve the planned value (the API never returns it).
 	m.Tags = diags.list(listVal(ctx, obj, "tags"))
 	m.Weight = int64Val(obj, "weight")
+	m.Wgname = strVal(obj, "wgname")
 }
 
 func (r *labSingleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -91,7 +95,7 @@ func (r *labSingleResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -134,7 +138,7 @@ func (r *labSingleResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -46,6 +46,7 @@ resource "uapi_network_interface" "example" {
 - `listen_port` (Number) uci option listen_port.
 - `metric` (Number) uci option metric.
 - `mtu` (Number) uci option mtu.
+- `name` (String) Create-time only; picks the uci section name (which becomes the uapi `id`). When omitted, the server emits a 14-char `wg_<rand>` for proto=wireguard (fits Linux IFNAMSIZ for the kernel netdev) or a 28-char ULID otherwise. Useful for LuCI parity (`lan`, `wan`, `guest`) and readable cross-references.
 - `netmask` (String) uci option netmask.
 - `nohostroute` (Boolean) uci option nohostroute.
 - `peerdns` (Boolean) uci option peerdns.

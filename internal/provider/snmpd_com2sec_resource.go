@@ -53,7 +53,7 @@ func (r *snmpdCom2secResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *snmpdCom2secResource) body(ctx context.Context, m snmpdCom2secModel, diags *diagsink) map[string]any {
+func (r *snmpdCom2secResource) body(ctx context.Context, m snmpdCom2secModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "community", m.Community)
 	putStr(out, "secname", m.Secname)
@@ -76,7 +76,7 @@ func (r *snmpdCom2secResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -119,7 +119,7 @@ func (r *snmpdCom2secResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

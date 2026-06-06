@@ -55,7 +55,7 @@ func (r *firewallForwardingResource) Schema(_ context.Context, _ resource.Schema
 	}
 }
 
-func (r *firewallForwardingResource) body(ctx context.Context, m firewallForwardingModel, diags *diagsink) map[string]any {
+func (r *firewallForwardingResource) body(ctx context.Context, m firewallForwardingModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "dest", m.Dest)
 	putBool(out, "enabled", m.Enabled)
@@ -80,7 +80,7 @@ func (r *firewallForwardingResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -123,7 +123,7 @@ func (r *firewallForwardingResource) Update(ctx context.Context, req resource.Up
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -6,6 +6,8 @@ import (
 	"context"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
 )
@@ -46,6 +48,7 @@ type networkInterfaceModel struct {
 	ListenPort    types.Int64  `tfsdk:"listen_port"`
 	Metric        types.Int64  `tfsdk:"metric"`
 	Mtu           types.Int64  `tfsdk:"mtu"`
+	Name          types.String `tfsdk:"name"`
 	Netmask       types.String `tfsdk:"netmask"`
 	Nohostroute   types.Bool   `tfsdk:"nohostroute"`
 	Peerdns       types.Bool   `tfsdk:"peerdns"`
@@ -90,6 +93,7 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"listen_port":     optionalComputedInt64("uci option listen_port."),
 			"metric":          optionalComputedInt64("uci option metric."),
 			"mtu":             optionalComputedInt64("uci option mtu."),
+			"name":            schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Create-time only; picks the uci section name (which becomes the uapi `id`). When omitted, the server emits a 14-char `wg_<rand>` for proto=wireguard (fits Linux IFNAMSIZ for the kernel netdev) or a 28-char ULID otherwise. Useful for LuCI parity (`lan`, `wan`, `guest`) and readable cross-references."},
 			"netmask":         optionalComputedString("uci option netmask."),
 			"nohostroute":     optionalComputedBool("uci option nohostroute."),
 			"peerdns":         optionalComputedBool("uci option peerdns."),
@@ -101,7 +105,7 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 	}
 }
 
-func (r *networkInterfaceResource) body(ctx context.Context, m networkInterfaceModel, diags *diagsink) map[string]any {
+func (r *networkInterfaceResource) body(ctx context.Context, m networkInterfaceModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putList(ctx, out, "addresses", m.Addresses, diags.d)
 	putBool(out, "auto", m.Auto)
@@ -122,6 +126,9 @@ func (r *networkInterfaceResource) body(ctx context.Context, m networkInterfaceM
 	putInt64(out, "listen_port", m.ListenPort)
 	putInt64(out, "metric", m.Metric)
 	putInt64(out, "mtu", m.Mtu)
+	if create {
+		putStr(out, "name", m.Name)
+	}
 	putStr(out, "netmask", m.Netmask)
 	putBool(out, "nohostroute", m.Nohostroute)
 	putBool(out, "peerdns", m.Peerdns)
@@ -155,6 +162,7 @@ func (r *networkInterfaceResource) read(ctx context.Context, obj map[string]any,
 	m.ListenPort = int64Val(obj, "listen_port")
 	m.Metric = int64Val(obj, "metric")
 	m.Mtu = int64Val(obj, "mtu")
+	// name is create-only: preserve the planned value (the API never returns it).
 	m.Netmask = strVal(obj, "netmask")
 	m.Nohostroute = boolVal(obj, "nohostroute")
 	m.Peerdns = boolVal(obj, "peerdns")
@@ -171,7 +179,7 @@ func (r *networkInterfaceResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -214,7 +222,7 @@ func (r *networkInterfaceResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

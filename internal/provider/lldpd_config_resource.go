@@ -68,7 +68,7 @@ func (r *lldpdConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
-func (r *lldpdConfigResource) body(ctx context.Context, m lldpdConfigModel, diags *diagsink) map[string]any {
+func (r *lldpdConfigResource) body(ctx context.Context, m lldpdConfigModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "enable_cdp", m.EnableCdp)
 	putBool(out, "enable_edp", m.EnableEdp)
@@ -105,7 +105,7 @@ func (r *lldpdConfigResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -148,7 +148,7 @@ func (r *lldpdConfigResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

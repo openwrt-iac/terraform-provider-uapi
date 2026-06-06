@@ -56,7 +56,7 @@ func (r *dhcpOdhcpdResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
-func (r *dhcpOdhcpdResource) body(ctx context.Context, m dhcpOdhcpdModel, diags *diagsink) map[string]any {
+func (r *dhcpOdhcpdResource) body(ctx context.Context, m dhcpOdhcpdModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "leasefile", m.Leasefile)
 	putStr(out, "leasetrigger", m.Leasetrigger)
@@ -81,7 +81,7 @@ func (r *dhcpOdhcpdResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -124,7 +124,7 @@ func (r *dhcpOdhcpdResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

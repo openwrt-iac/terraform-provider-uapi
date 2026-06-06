@@ -69,7 +69,7 @@ func (r *dhcpHostResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	}
 }
 
-func (r *dhcpHostResource) body(ctx context.Context, m dhcpHostModel, diags *diagsink) map[string]any {
+func (r *dhcpHostResource) body(ctx context.Context, m dhcpHostModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "broadcast", m.Broadcast)
 	putBool(out, "dns", m.Dns)
@@ -108,7 +108,7 @@ func (r *dhcpHostResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -151,7 +151,7 @@ func (r *dhcpHostResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

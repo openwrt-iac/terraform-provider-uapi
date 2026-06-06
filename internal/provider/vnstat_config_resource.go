@@ -54,7 +54,7 @@ func (r *vnstatConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *vnstatConfigResource) body(ctx context.Context, m vnstatConfigModel, diags *diagsink) map[string]any {
+func (r *vnstatConfigResource) body(ctx context.Context, m vnstatConfigModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "database_dir", m.DatabaseDir)
 	putInt64(out, "interface_5min_hours", m.Interface5minHours)
@@ -77,7 +77,7 @@ func (r *vnstatConfigResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -120,7 +120,7 @@ func (r *vnstatConfigResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

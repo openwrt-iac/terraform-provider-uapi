@@ -30,6 +30,7 @@ resource "uapi_package" "curl" {
 - `id` (String) Stable resource id assigned by uapi (a prefixed ULID).
 - `installed` (Boolean) Whether the package is installed.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
+- `pre_existed` (Boolean) Whether the package was already installed before Terraform managed it. When true, `terraform destroy` does NOT uninstall it (it was not installed by this resource).
 - `version` (String) Installed package version.
 
 ## Import

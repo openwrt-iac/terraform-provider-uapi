@@ -21,9 +21,10 @@ import (
 )
 
 type specProp struct {
-	Type      any  `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
-	WriteOnly bool `json:"writeOnly"`
-	ReadOnly  bool `json:"readOnly"`
+	Type        any    `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
+	WriteOnly   bool   `json:"writeOnly"`
+	ReadOnly    bool   `json:"readOnly"`
+	Description string `json:"description"`
 }
 
 func main() {
@@ -87,6 +88,28 @@ type resModel struct {
 	Runtime    string
 }
 
+func (r resModel) hasCreateOnly() bool {
+	for _, f := range r.Fields {
+		if f.Kind == "createonly" {
+			return true
+		}
+	}
+	return false
+}
+
+// dsFields drops create-only fields: they are caller-supplied write inputs the
+// API never returns, so they would only ever be null on a (read-only) data
+// source. Used by the runtime data source, which has a dedicated DS model.
+func (r resModel) dsFields() []field {
+	out := make([]field, 0, len(r.Fields))
+	for _, f := range r.Fields {
+		if f.Kind != "createonly" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 func buildResource(d descriptor, props map[string]specProp, required []string) resModel {
 	r := resModel{
 		Type: d.Type, Pascal: pascal(d.Type), Camel: camel(d.Type),
@@ -100,6 +123,10 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 		if x != "match" {
 			req[x] = true
 		}
+	}
+	createOnly := map[string]bool{}
+	for _, x := range d.CreateOnly {
+		createOnly[x] = true
 	}
 	names := make([]string, 0, len(props))
 	for n := range props {
@@ -115,6 +142,17 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 			continue // nested (match) comes from the descriptor, not the spec
 		}
 		f := field{Name: n, GoName: pascal(n), Desc: d.Desc(n)}
+		// createonly fields (e.g. an interface `name`): caller-supplied at create,
+		// immutable, never returned, rejected on PUT/PATCH. Use the spec's own
+		// description since these are too special for the commonDesc table.
+		if createOnly[n] {
+			f.GoType, f.Kind = "types.String", "createonly"
+			if p.Description != "" {
+				f.Desc = p.Description
+			}
+			r.Fields = append(r.Fields, f)
+			continue
+		}
 		switch {
 		case p.ReadOnly:
 			if typeOf(p) == "boolean" {

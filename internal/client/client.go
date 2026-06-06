@@ -22,9 +22,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// maxRetries bounds retries on the throttling statuses 423 (locked) and 429
-// (rate limited); both carry Retry-After.
-const maxRetries = 5
+// lockRetryBudget bounds, by wall-clock, how long a single request retries the
+// throttling statuses 423 (locked) and 429 (rate limited). Time-bounded rather
+// than attempt-bounded so the default Terraform parallelism (10 concurrent
+// same-package writers all contending one lock) drains through instead of
+// exhausting a small attempt count. maxThrottleAttempts is a runaway backstop.
+const (
+	lockRetryBudget     = 45 * time.Second
+	maxThrottleAttempts = 50
+)
 
 // maxPages bounds cursor-pagination so a misbehaving server cannot loop forever.
 const maxPages = 1000
@@ -113,6 +119,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		idemKey = newIdempotencyKey()
 	}
 
+	var throttleDeadline time.Time // set on the first 423/429; bounds retry wall-clock
 	for attempt := 0; ; attempt++ {
 		var reader io.Reader
 		if payload != nil {
@@ -150,14 +157,19 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		}
 
 		throttled := resp.StatusCode == http.StatusLocked || resp.StatusCode == http.StatusTooManyRequests
-		if throttled && attempt < maxRetries {
-			wait := retryWait(resp.Header.Get("Retry-After"), attempt)
-			select {
-			case <-ctx.Done():
-				return nil, resp.StatusCode, "", "", ctx.Err()
-			case <-time.After(wait):
+		if throttled {
+			if throttleDeadline.IsZero() {
+				throttleDeadline = time.Now().Add(lockRetryBudget)
 			}
-			continue
+			if attempt < maxThrottleAttempts && time.Now().Before(throttleDeadline) {
+				wait := retryWait(resp.Header.Get("Retry-After"), attempt)
+				select {
+				case <-ctx.Done():
+					return nil, resp.StatusCode, "", "", ctx.Err()
+				case <-time.After(wait):
+				}
+				continue
+			}
 		}
 
 		etag = resp.Header.Get("ETag")
@@ -186,10 +198,15 @@ func retryWait(header string, attempt int) time.Duration {
 			return time.Duration(secs) * time.Second
 		}
 	}
-	const base = 200 * time.Millisecond
-	backoff := base << attempt // 200ms, 400ms, 800ms, ...
-	if backoff > 5*time.Second {
-		backoff = 5 * time.Second
+	const (
+		base    = 200 * time.Millisecond
+		maxWait = 5 * time.Second
+	)
+	// Cap the shift exponent: 200ms<<5 already exceeds maxWait, and a large
+	// attempt would overflow int64 to a negative the cap below would not catch.
+	backoff := maxWait
+	if attempt < 5 {
+		backoff = base << attempt // 200ms, 400ms, 800ms, 1.6s, 3.2s
 	}
 	return backoff + time.Duration(mrand.Int63n(int64(base)))
 }

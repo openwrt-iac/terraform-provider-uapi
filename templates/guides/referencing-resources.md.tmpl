@@ -59,3 +59,38 @@ If you later `terraform import` one of those unmanaged sections, uapi **adopts**
 and renames it to a ULID (import is a mutating operation for unmanaged sections; the
 provider emits a warning naming the old and new id). After adoption, reference it by
 its new `id` like any other managed section.
+
+## Exception: references to a *device* use its name, not its id
+
+A `uapi_network_device` is named by its own `name` field (the kernel device name,
+e.g. `br-lan`), while its `id` is still a ULID. Resources that point at a *device*
+reference that **name**, not the `.id`:
+
+```hcl
+resource "uapi_network_device" "br" {
+  name  = "br-tf"
+  type  = "bridge"
+  ports = ["lan1"]
+}
+
+resource "uapi_network_bridge_vlan" "v" {
+  device = uapi_network_device.br.name # the device NAME, not .id
+  vlan   = 9
+}
+```
+
+The same holds for any field that names a kernel object directly rather than a uapi
+section: a network interface's `device`, and `uapi_sqm_queue.interface` /
+`uapi_vnstat_interface.interface` (a device/interface name). Rule of thumb: if the
+field is a *section* reference, use `.id`; if it names a kernel device, use the
+device's `name` (or the literal kernel name for pre-existing devices).
+
+## Destroy semantics
+
+`terraform destroy` of an adopted or imported resource **deletes** it, the same as
+a resource Terraform created (the standard Terraform contract). To stop managing a
+section *without* deleting it, use `terraform state rm <address>` instead of
+`destroy`. Singletons (`uapi_system`, `uapi_dhcp_dnsmasq`, `uapi_unbound_server`,
+etc.) cannot be deleted: their `destroy` drops them from state and leaves the
+router's settings as last applied. `uapi_package` will not uninstall a package that
+was already installed before Terraform managed it (`pre_existed = true`).

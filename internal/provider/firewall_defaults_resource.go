@@ -68,7 +68,7 @@ func (r *firewallDefaultsResource) Schema(_ context.Context, _ resource.SchemaRe
 	}
 }
 
-func (r *firewallDefaultsResource) body(ctx context.Context, m firewallDefaultsModel, diags *diagsink) map[string]any {
+func (r *firewallDefaultsResource) body(ctx context.Context, m firewallDefaultsModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "drop_invalid", m.DropInvalid)
 	putBool(out, "flow_offloading", m.FlowOffloading)
@@ -105,7 +105,7 @@ func (r *firewallDefaultsResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -148,7 +148,7 @@ func (r *firewallDefaultsResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

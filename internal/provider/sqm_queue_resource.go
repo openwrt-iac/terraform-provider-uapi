@@ -51,19 +51,19 @@ func (r *sqmQueueResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"id":        computedIDAttribute(),
 			"managed":   managedAttribute(),
 			"etag":      etagAttribute(),
-			"download":  optionalComputedInt64("uci option download."),
+			"download":  optionalComputedInt64("Download shaping rate in kbit/s."),
 			"enabled":   optionalComputedBool("Whether the entry is active."),
 			"interface": schema.StringAttribute{Required: true, Description: "Network interface this entry applies to."},
 			"linklayer": optionalComputedString("uci option linklayer."),
 			"overhead":  optionalComputedInt64("uci option overhead."),
 			"qdisc":     optionalComputedString("uci option qdisc."),
 			"script":    optionalComputedString("uci option script."),
-			"upload":    optionalComputedInt64("uci option upload."),
+			"upload":    optionalComputedInt64("Upload shaping rate in kbit/s."),
 		},
 	}
 }
 
-func (r *sqmQueueResource) body(ctx context.Context, m sqmQueueModel, diags *diagsink) map[string]any {
+func (r *sqmQueueResource) body(ctx context.Context, m sqmQueueModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putInt64(out, "download", m.Download)
 	putBool(out, "enabled", m.Enabled)
@@ -96,7 +96,7 @@ func (r *sqmQueueResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +139,7 @@ func (r *sqmQueueResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

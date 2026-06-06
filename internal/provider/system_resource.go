@@ -68,7 +68,7 @@ func (r *systemResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 	}
 }
 
-func (r *systemResource) body(ctx context.Context, m systemModel, diags *diagsink) map[string]any {
+func (r *systemResource) body(ctx context.Context, m systemModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "description", m.Description)
 	putStr(out, "hostname", m.Hostname)
@@ -105,7 +105,7 @@ func (r *systemResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -148,7 +148,7 @@ func (r *systemResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

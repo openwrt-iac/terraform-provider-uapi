@@ -41,6 +41,7 @@ func (d *labThingDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"secret":     dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"tags":       dsComputedStringList("uci option tags."),
 			"weight":     dsComputedInt64("uci option weight."),
+			"wgname":     dsComputedString("Create-only kernel name."),
 			"match": dsschema.SingleNestedAttribute{
 				Computed:    true,
 				Description: "Match conditions.",

@@ -34,14 +34,14 @@ func (d *sqmQueueDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"id":        dsIDAttribute(),
 			"managed":   dsManagedAttribute(),
 			"etag":      dsComputedString("Opaque ETag of the resource's current state."),
-			"download":  dsComputedInt64("uci option download."),
+			"download":  dsComputedInt64("Download shaping rate in kbit/s."),
 			"enabled":   dsComputedBool("Whether the entry is active."),
 			"interface": dsComputedString("Network interface this entry applies to."),
 			"linklayer": dsComputedString("uci option linklayer."),
 			"overhead":  dsComputedInt64("uci option overhead."),
 			"qdisc":     dsComputedString("uci option qdisc."),
 			"script":    dsComputedString("uci option script."),
-			"upload":    dsComputedInt64("uci option upload."),
+			"upload":    dsComputedInt64("Upload shaping rate in kbit/s."),
 		},
 	}
 }

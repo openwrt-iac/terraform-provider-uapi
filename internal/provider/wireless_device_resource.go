@@ -61,7 +61,7 @@ func (r *wirelessDeviceResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
-func (r *wirelessDeviceResource) body(ctx context.Context, m wirelessDeviceModel, diags *diagsink) map[string]any {
+func (r *wirelessDeviceResource) body(ctx context.Context, m wirelessDeviceModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "band", m.Band)
 	putInt64(out, "channel", m.Channel)
@@ -92,7 +92,7 @@ func (r *wirelessDeviceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -135,7 +135,7 @@ func (r *wirelessDeviceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

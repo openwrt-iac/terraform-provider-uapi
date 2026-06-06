@@ -12,7 +12,8 @@ type descriptor struct {
 	Label         string
 	GenDataSource bool
 	Nested        *nested
-	Runtime       string // "" | "interface" | "wireless": adds a computed runtime block to the data source
+	Runtime       string   // "" | "interface" | "wireless": adds a computed runtime block to the data source
+	CreateOnly    []string // fields that are create-time only and immutable (Optional + RequiresReplace, sent only on create, never returned), e.g. an interface `name`
 }
 
 // Desc returns a human description for a field (best-effort; docs only).
@@ -50,6 +51,8 @@ var commonDesc = map[string]string{
 	"has_tls_auth":      "Whether tls-auth/tls-crypt key material is configured.",
 	"has_pkcs12":        "Whether a PKCS#12 bundle is configured.",
 	"probe_count":       "Probes per cycle per track_ip.",
+	"download":          "Download shaping rate in kbit/s.",
+	"upload":            "Upload shaping rate in kbit/s.",
 }
 
 func matchFields(redirect bool) *nested {
@@ -86,7 +89,7 @@ var descriptors = []descriptor{
 	{Type: "firewall_forwarding", Schema: "FirewallForwardings", Collection: "firewall/forwardings", Kind: "collection", Label: "firewall forwarding", GenDataSource: true},
 	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
-	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface"},
+	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", CreateOnly: []string{"name"}},
 	{Type: "network_device", Schema: "NetworkDevices", Collection: "network/devices", Kind: "collection", Label: "network device", GenDataSource: true},
 	{Type: "network_route", Schema: "NetworkRoutes", Collection: "network/routes", Kind: "collection", Label: "network route", GenDataSource: true},
 	{Type: "network_rule", Schema: "NetworkRules", Collection: "network/rules", Kind: "collection", Label: "network rule", GenDataSource: true},

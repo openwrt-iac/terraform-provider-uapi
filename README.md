@@ -12,9 +12,19 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 
 ## Requirements
 
-- An OpenWrt router running uapi (OpenWrt 25.12+), reachable over HTTP(S).
+- An OpenWrt router running **uapi >= 2.0.2** (OpenWrt 25.12+), reachable over HTTP(S).
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
-- Terraform >= 1.0 or OpenTofu.
+- Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
+
+> **OpenTofu users:** the provider is published on `registry.terraform.io`. Until it is also on
+> the OpenTofu registry, set a `dev_overrides` / mirror so `tofu init` resolves
+> `raspbeguy/uapi` (see `examples/dev.tfrc`).
+
+> **Daemon packages first.** Resources whose daemon ships as a separate OpenWrt package
+> (`uapi_unbound_server`, `uapi_sqm_queue`, `uapi_snmpd_*`, `uapi_openvpn_instance`,
+> `uapi_mwan3_*`, `uapi_vnstat_*`, `uapi_lldpd_config`) need that package installed first, or
+> the write returns `503 init_script_missing`. Install it out of band, or manage it with
+> `uapi_package` and `depends_on = [uapi_package.<name>]`.
 
 ## Provider configuration
 
@@ -84,6 +94,37 @@ The `uapi_network_interface` and `uapi_wireless_interface` data sources also exp
 `runtime` block (live ubus state: interface up/addresses/routes, wireless signal/assoclist). It is
 read-only observed state, surfaced only on the data sources, never on the resources.
 
+## Worked examples
+
+The registry "Guides" section has worked examples for the patterns that are easy to get wrong:
+the **firewall rules / redirects / forwardings** guide (the nested `match` vs flat distinction)
+and the **referencing other resources** guide (`.id` vs kernel-name references, and destroy
+semantics).
+
+A minimal SNMP v2c read-only setup wires com2sec -> group -> access (each references the
+previous), and needs the `snmpd` package installed:
+
+```hcl
+resource "uapi_snmpd_com2sec" "ro" {
+  secname   = "ro"
+  source    = "192.168.1.0/24"
+  community = "public"
+}
+
+resource "uapi_snmpd_group" "ro" {
+  group   = "ro_group"
+  version = "v2c"
+  secname = uapi_snmpd_com2sec.ro.secname
+}
+
+resource "uapi_snmpd_access" "ro" {
+  group   = uapi_snmpd_group.ro.group
+  version = "v2c"
+  level   = "noauth"
+  read    = "all"
+}
+```
+
 ## Behaviour notes
 
 - **Stable IDs.** uapi assigns every managed section a prefixed ULID (e.g. `r_01HX...`) that
@@ -106,9 +147,12 @@ read-only observed state, surfaced only on the data sources, never on the resour
   (`match = { src_zone = "lan" }`).
 - **Server-defaulted fields** (booleans, enum fallbacks, etc.) are modeled as
   `Optional + Computed`, so omitting them in config does not produce perpetual diffs.
-- **423 / 429 retries.** uapi serializes writes behind a global lock (`423`) and rate-limits
-  clients (`429`), both with `Retry-After`. The provider retries automatically, and sends an
-  `Idempotency-Key` on every create so a retried `POST` cannot duplicate a resource.
+- **423 / 429 retries and parallelism.** uapi serializes writes per uci package (`423` locked)
+  and rate-limits clients (`429`), both with `Retry-After`. The provider retries automatically
+  (time-bounded with exponential backoff + jitter) and sends an `Idempotency-Key` on every create
+  so a retried `POST` cannot duplicate a resource. Because writes to the same package serialize,
+  high Terraform parallelism is counterproductive there; for a large fleet of same-package
+  resources (e.g. many `uapi_dhcp_host`), run with **`-parallelism=1`** to avoid lock churn.
 - **Cursor pagination.** Collection reads follow the server's cursor automatically, so large
   lists are returned in full.
 - **Write-only secrets.** `uapi_wireless_interface.key`, `uapi_network_interface.private_key`, and

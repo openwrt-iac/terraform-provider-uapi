@@ -57,7 +57,7 @@ func (r *systemTimeserverResource) Schema(_ context.Context, _ resource.SchemaRe
 	}
 }
 
-func (r *systemTimeserverResource) body(ctx context.Context, m systemTimeserverModel, diags *diagsink) map[string]any {
+func (r *systemTimeserverResource) body(ctx context.Context, m systemTimeserverModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "enable_server", m.EnableServer)
 	putBool(out, "enabled", m.Enabled)
@@ -84,7 +84,7 @@ func (r *systemTimeserverResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -127,7 +127,7 @@ func (r *systemTimeserverResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

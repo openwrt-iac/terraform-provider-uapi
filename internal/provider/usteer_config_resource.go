@@ -112,7 +112,7 @@ func (r *usteerConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *usteerConfigResource) body(ctx context.Context, m usteerConfigModel, diags *diagsink) map[string]any {
+func (r *usteerConfigResource) body(ctx context.Context, m usteerConfigModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "assoc_steering", m.AssocSteering)
 	putInt64(out, "band_steering_threshold", m.BandSteeringThreshold)
@@ -193,7 +193,7 @@ func (r *usteerConfigResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -236,7 +236,7 @@ func (r *usteerConfigResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

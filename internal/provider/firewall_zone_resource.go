@@ -63,7 +63,7 @@ func (r *firewallZoneResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *firewallZoneResource) body(ctx context.Context, m firewallZoneModel, diags *diagsink) map[string]any {
+func (r *firewallZoneResource) body(ctx context.Context, m firewallZoneModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "family", m.Family)
 	putStr(out, "forward", m.Forward)
@@ -96,7 +96,7 @@ func (r *firewallZoneResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +139,7 @@ func (r *firewallZoneResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

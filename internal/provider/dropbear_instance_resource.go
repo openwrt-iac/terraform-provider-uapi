@@ -63,7 +63,7 @@ func (r *dropbearInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 	}
 }
 
-func (r *dropbearInstanceResource) body(ctx context.Context, m dropbearInstanceModel, diags *diagsink) map[string]any {
+func (r *dropbearInstanceResource) body(ctx context.Context, m dropbearInstanceModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putStr(out, "banner_file", m.BannerFile)
 	putBool(out, "enable", m.Enable)
@@ -96,7 +96,7 @@ func (r *dropbearInstanceResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +139,7 @@ func (r *dropbearInstanceResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

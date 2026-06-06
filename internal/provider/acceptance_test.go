@@ -240,6 +240,24 @@ resource "uapi_system_password" "root" {
 	})
 }
 
+func TestAccPackagePreExisted(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	// Seed the package as already installed; managing it must record pre_existed=true
+	// so destroy will skip the uninstall.
+	m.seedUnmanaged("/packages/installed", "curl", map[string]any{"name": "curl", "installed": true})
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+resource "uapi_package" "c" {
+  name = "curl"
+}`,
+			Check: resource.TestCheckResourceAttr("uapi_package.c", "pre_existed", "true"),
+		}},
+	})
+}
+
 func TestAccDataSources(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

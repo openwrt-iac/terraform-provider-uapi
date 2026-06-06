@@ -79,7 +79,7 @@ func (r *firewallRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *firewallRuleResource) body(ctx context.Context, m firewallRuleModel, diags *diagsink) map[string]any {
+func (r *firewallRuleResource) body(ctx context.Context, m firewallRuleModel, diags *diagsink, create bool) map[string]any {
 	out := map[string]any{}
 	putBool(out, "enabled", m.Enabled)
 	putStr(out, "name", m.Name)
@@ -128,7 +128,7 @@ func (r *firewallRuleResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -171,7 +171,7 @@ func (r *firewallRuleResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds)
+	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -27,13 +27,13 @@ resource "uapi_sqm_queue" "example" {
 
 ### Optional
 
-- `download` (Number) uci option download.
+- `download` (Number) Download shaping rate in kbit/s.
 - `enabled` (Boolean) Whether the entry is active.
 - `linklayer` (String) uci option linklayer.
 - `overhead` (Number) uci option overhead.
 - `qdisc` (String) uci option qdisc.
 - `script` (String) uci option script.
-- `upload` (Number) uci option upload.
+- `upload` (Number) Upload shaping rate in kbit/s.
 
 ### Read-Only
 
