@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const uhttpdInstanceCollection = "uhttpd/instances"
@@ -57,7 +57,7 @@ func (r *uhttpdInstanceResource) Configure(_ context.Context, req resource.Confi
 
 func (r *uhttpdInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A uhttpd instance.",
+		Description: "Uhttpd instance.",
 		Attributes: map[string]schema.Attribute{
 			"id":              computedIDAttribute(),
 			"managed":         managedAttribute(),
@@ -85,7 +85,7 @@ func (r *uhttpdInstanceResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
-func (r *uhttpdInstanceResource) body(ctx context.Context, m uhttpdInstanceModel, diags *diagsink, create bool) map[string]any {
+func (r *uhttpdInstanceResource) body(ctx context.Context, m uhttpdInstanceModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "cert", m.Cert)
 	putStr(out, "cgi_prefix", m.CgiPrefix)
@@ -140,7 +140,7 @@ func (r *uhttpdInstanceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -183,7 +183,7 @@ func (r *uhttpdInstanceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

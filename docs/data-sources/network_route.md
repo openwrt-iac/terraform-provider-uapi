@@ -3,12 +3,12 @@
 page_title: "uapi_network_route Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a network route.
+  Look up the network route.
 ---
 
 # uapi_network_route (Data Source)
 
-Look up a network route.
+Look up the network route.
 
 ## Example Usage
 

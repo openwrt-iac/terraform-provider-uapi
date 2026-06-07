@@ -3,12 +3,12 @@
 page_title: "uapi_uhttpd_cert Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a uhttpd cert.
+  Look up the uhttpd cert.
 ---
 
 # uapi_uhttpd_cert (Data Source)
 
-Look up a uhttpd cert.
+Look up the uhttpd cert.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_network_rule Resource - uapi"
 subcategory: ""
 description: |-
-  A network rule.
+  Network rule.
 ---
 
 # uapi_network_rule (Resource)
 
-A network rule.
+Network rule.
 
 ## Example Usage
 

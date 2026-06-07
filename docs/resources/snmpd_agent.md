@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_agent Resource - uapi"
 subcategory: ""
 description: |-
-  A snmpd agent.
+  Snmpd agent.
 ---
 
 # uapi_snmpd_agent (Resource)
 
-A snmpd agent.
+Snmpd agent.
 
 ## Example Usage
 

@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const firewallZoneCollection = "firewall/zones"
@@ -46,7 +46,7 @@ func (r *firewallZoneResource) Configure(_ context.Context, req resource.Configu
 
 func (r *firewallZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A firewall zone.",
+		Description: "Firewall zone.",
 		Attributes: map[string]schema.Attribute{
 			"id":            computedIDAttribute(),
 			"managed":       managedAttribute(),
@@ -63,7 +63,7 @@ func (r *firewallZoneResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *firewallZoneResource) body(ctx context.Context, m firewallZoneModel, diags *diagsink, create bool) map[string]any {
+func (r *firewallZoneResource) body(ctx context.Context, m firewallZoneModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "family", m.Family)
 	putStr(out, "forward", m.Forward)
@@ -96,7 +96,7 @@ func (r *firewallZoneResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +139,7 @@ func (r *firewallZoneResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

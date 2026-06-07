@@ -3,12 +3,12 @@
 page_title: "uapi_network_device Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a network device.
+  Look up the network device.
 ---
 
 # uapi_network_device (Data Source)
 
-Look up a network device.
+Look up the network device.
 
 ## Example Usage
 

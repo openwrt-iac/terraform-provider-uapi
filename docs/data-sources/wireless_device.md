@@ -3,12 +3,12 @@
 page_title: "uapi_wireless_device Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a wireless device.
+  Look up the wireless device.
 ---
 
 # uapi_wireless_device (Data Source)
 
-Look up a wireless device.
+Look up the wireless device.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_host Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a dhcp host.
+  Look up the dhcp host.
 ---
 
 # uapi_dhcp_host (Data Source)
 
-Look up a dhcp host.
+Look up the dhcp host.
 
 ## Example Usage
 

@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const mwan3RuleCollection = "mwan3/rules"
@@ -49,7 +49,7 @@ func (r *mwan3RuleResource) Configure(_ context.Context, req resource.ConfigureR
 
 func (r *mwan3RuleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A mwan3 rule.",
+		Description: "Mwan3 rule.",
 		Attributes: map[string]schema.Attribute{
 			"id":         computedIDAttribute(),
 			"managed":    managedAttribute(),
@@ -69,7 +69,7 @@ func (r *mwan3RuleResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	}
 }
 
-func (r *mwan3RuleResource) body(ctx context.Context, m mwan3RuleModel, diags *diagsink, create bool) map[string]any {
+func (r *mwan3RuleResource) body(ctx context.Context, m mwan3RuleModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "dest_ip", m.DestIp)
 	putStr(out, "dest_port", m.DestPort)
@@ -108,7 +108,7 @@ func (r *mwan3RuleResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -151,7 +151,7 @@ func (r *mwan3RuleResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

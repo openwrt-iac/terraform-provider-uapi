@@ -125,7 +125,7 @@ func renderResource(r resModel) string {
 		p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier")
 	}
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/types")
-	p("\t%q", "github.com/raspbeguy/terraform-provider-uapi/internal/client")
+	p("\t%q", "github.com/openwrt-iac/terraform-provider-uapi/internal/client")
 	p(")\n")
 
 	if r.Kind == "collection" {
@@ -172,7 +172,7 @@ func renderResource(r resModel) string {
 	// schema
 	p("func (r *%sResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {", r.Camel)
 	p("\tresp.Schema = schema.Schema{")
-	p("\t\tDescription: %q,", "A "+r.Label+".")
+	p("\t\tDescription: %q,", titleFirst(r.Label)+".")
 	p("\t\tAttributes: map[string]schema.Attribute{")
 	p("\t\t\t\"id\": computedIDAttribute(),")
 	p("\t\t\t\"managed\": managedAttribute(),")
@@ -195,8 +195,13 @@ func renderResource(r resModel) string {
 	p("\t}")
 	p("}\n")
 
-	// body
-	p("func (r *%sResource) body(ctx context.Context, m %sModel, diags *diagsink, create bool) map[string]any {", r.Camel, r.Camel)
+	// body. The create flag is only emitted for resources that have a create-only
+	// field to gate (see bodyCreateArgs); without one it would be unused.
+	createParam := ""
+	if r.hasCreateOnly() {
+		createParam = ", create bool"
+	}
+	p("func (r *%sResource) body(ctx context.Context, m %sModel, diags *diagsink%s) map[string]any {", r.Camel, r.Camel, createParam)
 	p("\tout := map[string]any{}")
 	for _, f := range r.Fields {
 		s := bodyStmt(f, "m", "out")
@@ -255,16 +260,27 @@ func renderResource(r resModel) string {
 	return b.String()
 }
 
+// bodyCreateArgs returns the trailing argument passed to body() at the Create
+// and Update call sites. body() takes a create flag only when the resource has a
+// create-only field; otherwise both calls (and the signature) omit it.
+func bodyCreateArgs(r resModel) (create, update string) {
+	if r.hasCreateOnly() {
+		return ", true", ", false"
+	}
+	return "", ""
+}
+
 func crudCollection(r resModel) string {
 	c := r.Camel
 	coll := c + "Collection"
+	createArg, updateArg := bodyCreateArgs(r)
 	return fmt.Sprintf(`
 func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan %[1]sModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds%[4]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Post(ctx, "/"+%[2]s, body, "")
 	if err != nil { writeErr(&resp.Diagnostics, "creating", %[3]q, err); return }
@@ -292,7 +308,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Put(ctx, "/"+%[2]s+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
 	if err != nil { writeErr(&resp.Diagnostics, "updating", %[3]q, err); return }
@@ -313,19 +329,20 @@ func (r *%[1]sResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 func (r *%[1]sResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importByID(ctx, r.client, %[2]s, %[3]q, req, resp)
 }
-`, c, coll, r.Label)
+`, c, coll, r.Label, createArg, updateArg)
 }
 
 func crudSingleton(r resModel) string {
 	c := r.Camel
 	path := c + "Path"
+	createArg, updateArg := bodyCreateArgs(r)
 	return fmt.Sprintf(`
 func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan %[1]sModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds%[4]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, "")
 	if err != nil { writeErr(&resp.Diagnostics, "configuring", %[3]q, err); return }
@@ -353,7 +370,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, state.ETag.ValueString())
 	if err != nil { writeErr(&resp.Diagnostics, "updating", %[3]q, err); return }
@@ -368,7 +385,7 @@ func (r *%[1]sResource) Delete(_ context.Context, _ resource.DeleteRequest, _ *r
 func (r *%[1]sResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
-`, c, path, r.Label)
+`, c, path, r.Label, createArg, updateArg)
 }
 
 var runtimeBits = map[string]struct{ model, attr, parse string }{
@@ -391,7 +408,7 @@ func renderRuntimeDataSource(r resModel) string {
 	p("\tdsschema %q", "github.com/hashicorp/terraform-plugin-framework/datasource/schema")
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/path")
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/types")
-	p("\t%q", "github.com/raspbeguy/terraform-provider-uapi/internal/client")
+	p("\t%q", "github.com/openwrt-iac/terraform-provider-uapi/internal/client")
 	p(")\n")
 	// DS model: resource fields + runtime
 	p("type %sDSModel struct {", r.Camel)
@@ -417,7 +434,7 @@ func renderRuntimeDataSource(r resModel) string {
 	p("}\n")
 	p("func (d *%sDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {", r.Camel)
 	p("\tresp.Schema = dsschema.Schema{")
-	p("\t\tDescription: %q,", "Look up a "+r.Label+".")
+	p("\t\tDescription: %q,", "Look up the "+r.Label+".")
 	p("\t\tAttributes: map[string]dsschema.Attribute{")
 	p("\t\t\t\"id\": dsIDAttribute(),")
 	p("\t\t\t\"managed\": dsManagedAttribute(),")
@@ -465,7 +482,7 @@ func renderDataSource(r resModel) string {
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/datasource")
 	p("\tdsschema %q", "github.com/hashicorp/terraform-plugin-framework/datasource/schema")
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/types")
-	p("\t%q", "github.com/raspbeguy/terraform-provider-uapi/internal/client")
+	p("\t%q", "github.com/openwrt-iac/terraform-provider-uapi/internal/client")
 	p(")\n")
 	p("var (")
 	p("\t_ datasource.DataSource = &%sDataSource{}", r.Camel)
@@ -481,7 +498,7 @@ func renderDataSource(r resModel) string {
 	p("}\n")
 	p("func (d *%sDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {", r.Camel)
 	p("\tresp.Schema = dsschema.Schema{")
-	p("\t\tDescription: %q,", "Look up a "+r.Label+".")
+	p("\t\tDescription: %q,", "Look up the "+r.Label+".")
 	p("\t\tAttributes: map[string]dsschema.Attribute{")
 	if r.Kind == "collection" {
 		p("\t\t\t\"id\": dsIDAttribute(),")

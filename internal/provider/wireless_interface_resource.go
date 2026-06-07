@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const wirelessInterfaceCollection = "wireless/interfaces"
@@ -48,7 +48,7 @@ func (r *wirelessInterfaceResource) Configure(_ context.Context, req resource.Co
 
 func (r *wirelessInterfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A wireless interface.",
+		Description: "Wireless interface.",
 		Attributes: map[string]schema.Attribute{
 			"id":         computedIDAttribute(),
 			"managed":    managedAttribute(),
@@ -67,7 +67,7 @@ func (r *wirelessInterfaceResource) Schema(_ context.Context, _ resource.SchemaR
 	}
 }
 
-func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfaceModel, diags *diagsink, create bool) map[string]any {
+func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfaceModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "device", m.Device)
 	putBool(out, "disabled", m.Disabled)
@@ -103,7 +103,7 @@ func (r *wirelessInterfaceResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -146,7 +146,7 @@ func (r *wirelessInterfaceResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -3,12 +3,12 @@
 page_title: "uapi_wireless_device Resource - uapi"
 subcategory: ""
 description: |-
-  A wireless device.
+  Wireless device.
 ---
 
 # uapi_wireless_device (Resource)
 
-A wireless device.
+Wireless device.
 
 ## Example Usage
 

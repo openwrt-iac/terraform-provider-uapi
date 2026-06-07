@@ -219,6 +219,17 @@ func camel(snake string) string {
 	return strings.ToLower(p[:1]) + p[1:]
 }
 
+// titleFirst upper-cases only the first letter, leaving the rest of a
+// multi-word label untouched (e.g. "unbound srv options" -> "Unbound srv
+// options"). Used for the schema description; an article like "A" would read
+// wrong against the plural/uncountable singleton labels.
+func titleFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 func writeGo(path, body string) {
 	src, err := format.Source([]byte(body))
 	if err != nil {

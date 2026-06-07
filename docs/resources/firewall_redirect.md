@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_redirect Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall redirect.
+  Firewall redirect.
 ---
 
 # uapi_firewall_redirect (Resource)
 
-A firewall redirect.
+Firewall redirect.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_network_bridge_vlan Resource - uapi"
 subcategory: ""
 description: |-
-  A network bridge VLAN.
+  Network bridge VLAN.
 ---
 
 # uapi_network_bridge_vlan (Resource)
 
-A network bridge VLAN.
+Network bridge VLAN.
 
 ## Example Usage
 

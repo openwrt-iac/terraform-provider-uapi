@@ -3,12 +3,12 @@
 page_title: "uapi_unbound_server Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a unbound server.
+  Look up the unbound server.
 ---
 
 # uapi_unbound_server (Data Source)
 
-Look up a unbound server.
+Look up the unbound server.
 
 ## Example Usage
 

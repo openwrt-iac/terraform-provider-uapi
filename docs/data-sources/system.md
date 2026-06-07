@@ -3,12 +3,12 @@
 page_title: "uapi_system Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a system settings.
+  Look up the system settings.
 ---
 
 # uapi_system (Data Source)
 
-Look up a system settings.
+Look up the system settings.
 
 ## Example Usage
 

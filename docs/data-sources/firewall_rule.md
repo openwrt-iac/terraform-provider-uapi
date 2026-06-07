@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_rule Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall rule.
+  Look up the firewall rule.
 ---
 
 # uapi_firewall_rule (Data Source)
 
-Look up a firewall rule.
+Look up the firewall rule.
 
 ## Example Usage
 

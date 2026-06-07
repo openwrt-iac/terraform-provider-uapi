@@ -3,12 +3,12 @@
 page_title: "uapi_prometheus_node_exporter_lua_config Resource - uapi"
 subcategory: ""
 description: |-
-  A prometheus node_exporter config.
+  Prometheus node_exporter config.
 ---
 
 # uapi_prometheus_node_exporter_lua_config (Resource)
 
-A prometheus node_exporter config.
+Prometheus node_exporter config.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_vnstat_interface Resource - uapi"
 subcategory: ""
 description: |-
-  A vnstat interface.
+  Vnstat interface.
 ---
 
 # uapi_vnstat_interface (Resource)
 
-A vnstat interface.
+Vnstat interface.
 
 ## Example Usage
 

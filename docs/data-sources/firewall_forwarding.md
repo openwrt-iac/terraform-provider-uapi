@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_forwarding Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall forwarding.
+  Look up the firewall forwarding.
 ---
 
 # uapi_firewall_forwarding (Data Source)
 
-Look up a firewall forwarding.
+Look up the firewall forwarding.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_com2sec Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a snmpd com2sec.
+  Look up the snmpd com2sec.
 ---
 
 # uapi_snmpd_com2sec (Data Source)
 
-Look up a snmpd com2sec.
+Look up the snmpd com2sec.
 
 ## Example Usage
 

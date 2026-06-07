@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const labSinglePath = "/lab/single"
@@ -47,7 +47,7 @@ func (r *labSingleResource) Configure(_ context.Context, req resource.ConfigureR
 
 func (r *labSingleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A lab single.",
+		Description: "Lab single.",
 		Attributes: map[string]schema.Attribute{
 			"id":         computedIDAttribute(),
 			"managed":    managedAttribute(),
@@ -64,7 +64,7 @@ func (r *labSingleResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	}
 }
 
-func (r *labSingleResource) body(ctx context.Context, m labSingleModel, diags *diagsink, create bool) map[string]any {
+func (r *labSingleResource) body(ctx context.Context, m labSingleModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putBool(out, "flag", m.Flag)
 	putStr(out, "name", m.Name)
@@ -95,7 +95,7 @@ func (r *labSingleResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -138,7 +138,7 @@ func (r *labSingleResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

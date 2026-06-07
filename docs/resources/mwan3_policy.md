@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_policy Resource - uapi"
 subcategory: ""
 description: |-
-  A mwan3 policy.
+  Mwan3 policy.
 ---
 
 # uapi_mwan3_policy (Resource)
 
-A mwan3 policy.
+Mwan3 policy.
 
 ## Example Usage
 

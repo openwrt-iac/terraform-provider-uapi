@@ -3,12 +3,12 @@
 page_title: "uapi_network_interface Resource - uapi"
 subcategory: ""
 description: |-
-  A network interface.
+  Network interface.
 ---
 
 # uapi_network_interface (Resource)
 
-A network interface.
+Network interface.
 
 ## Example Usage
 

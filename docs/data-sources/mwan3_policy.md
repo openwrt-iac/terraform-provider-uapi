@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_policy Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a mwan3 policy.
+  Look up the mwan3 policy.
 ---
 
 # uapi_mwan3_policy (Data Source)
 
-Look up a mwan3 policy.
+Look up the mwan3 policy.
 
 ## Example Usage
 

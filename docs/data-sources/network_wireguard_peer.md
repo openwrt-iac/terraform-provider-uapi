@@ -3,12 +3,12 @@
 page_title: "uapi_network_wireguard_peer Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a network WireGuard peer.
+  Look up the network WireGuard peer.
 ---
 
 # uapi_network_wireguard_peer (Data Source)
 
-Look up a network WireGuard peer.
+Look up the network WireGuard peer.
 
 ## Example Usage
 

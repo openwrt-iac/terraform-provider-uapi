@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const dhcpDnsmasqPath = "/dhcp/dnsmasq"
@@ -56,7 +56,7 @@ func (r *dhcpDnsmasqResource) Configure(_ context.Context, req resource.Configur
 
 func (r *dhcpDnsmasqResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A dnsmasq settings.",
+		Description: "Dnsmasq settings.",
 		Attributes: map[string]schema.Attribute{
 			"id":                computedIDAttribute(),
 			"managed":           managedAttribute(),
@@ -82,7 +82,7 @@ func (r *dhcpDnsmasqResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
-func (r *dhcpDnsmasqResource) body(ctx context.Context, m dhcpDnsmasqModel, diags *diagsink, create bool) map[string]any {
+func (r *dhcpDnsmasqResource) body(ctx context.Context, m dhcpDnsmasqModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putList(ctx, out, "address", m.Address, diags.d)
 	putBool(out, "authoritative", m.Authoritative)
@@ -133,7 +133,7 @@ func (r *dhcpDnsmasqResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -176,7 +176,7 @@ func (r *dhcpDnsmasqResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

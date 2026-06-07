@@ -1,6 +1,6 @@
 # terraform-provider-uapi
 
-Terraform / OpenTofu provider for [uapi](https://github.com/raspbeguy/uapi), the native HTTP REST API for OpenWrt. It manages OpenWrt configuration through uapi's curated endpoints.
+Terraform / OpenTofu provider for [uapi](https://github.com/openwrt-iac/uapi), the native HTTP REST API for OpenWrt. It manages OpenWrt configuration through uapi's curated endpoints.
 
 ## Code and documentation style
 
@@ -19,7 +19,7 @@ Terraform / OpenTofu provider for [uapi](https://github.com/raspbeguy/uapi), the
 ## Architecture
 
 ```
-main.go                       providerserver entry; address registry.terraform.io/raspbeguy/uapi
+main.go                       providerserver entry; address registry.terraform.io/openwrt-iac/uapi
 internal/client/client.go     transport: bearer auth, 423/429 retry, idempotency key, cursor pagination, error envelope -> *APIError
 internal/gen/                  code generator: openapi.json + descriptors.go overlay -> the <type>_*.go files below
 internal/provider/

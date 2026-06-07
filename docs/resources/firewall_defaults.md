@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_defaults Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall defaults.
+  Firewall defaults.
 ---
 
 # uapi_firewall_defaults (Resource)
 
-A firewall defaults.
+Firewall defaults.
 
 ## Example Usage
 

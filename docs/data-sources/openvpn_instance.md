@@ -3,12 +3,12 @@
 page_title: "uapi_openvpn_instance Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a openvpn instance.
+  Look up the openvpn instance.
 ---
 
 # uapi_openvpn_instance (Data Source)
 
-Look up a openvpn instance.
+Look up the openvpn instance.
 
 ## Example Usage
 

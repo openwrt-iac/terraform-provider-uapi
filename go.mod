@@ -1,4 +1,4 @@
-module github.com/raspbeguy/terraform-provider-uapi
+module github.com/openwrt-iac/terraform-provider-uapi
 
 go 1.26.2
 

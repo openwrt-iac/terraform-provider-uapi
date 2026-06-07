@@ -167,6 +167,35 @@ resource "uapi_system" "this" {
 	})
 }
 
+func TestAccUnboundSrv_singletonLists(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_unbound_srv" "this" {
+  interface_bind = ["127.0.0.1@5353"]
+  srv_line       = ["do-ip6: no"]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_unbound_srv.this", "interface_bind.0", "127.0.0.1@5353"),
+					resource.TestCheckResourceAttr("uapi_unbound_srv.this", "srv_line.0", "do-ip6: no"),
+				),
+			},
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_unbound_srv" "this" {
+  interface_bind = ["127.0.0.1@5353", "::1@5353"]
+  srv_line       = ["do-ip6: no"]
+}`,
+				Check: resource.TestCheckResourceAttr("uapi_unbound_srv.this", "interface_bind.1", "::1@5353"),
+			},
+		},
+	})
+}
+
 func TestAccFirewallZone_importAdopt(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

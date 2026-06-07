@@ -3,12 +3,12 @@
 page_title: "uapi_system_timeserver Resource - uapi"
 subcategory: ""
 description: |-
-  A system timeserver.
+  System timeserver.
 ---
 
 # uapi_system_timeserver (Resource)
 
-A system timeserver.
+System timeserver.
 
 ## Example Usage
 

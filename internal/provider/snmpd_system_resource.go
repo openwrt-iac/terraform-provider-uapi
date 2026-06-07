@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const snmpdSystemPath = "/snmpd/system"
@@ -45,7 +45,7 @@ func (r *snmpdSystemResource) Configure(_ context.Context, req resource.Configur
 
 func (r *snmpdSystemResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A snmpd system.",
+		Description: "Snmpd system.",
 		Attributes: map[string]schema.Attribute{
 			"id":            computedIDAttribute(),
 			"managed":       managedAttribute(),
@@ -60,7 +60,7 @@ func (r *snmpdSystemResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
-func (r *snmpdSystemResource) body(ctx context.Context, m snmpdSystemModel, diags *diagsink, create bool) map[string]any {
+func (r *snmpdSystemResource) body(ctx context.Context, m snmpdSystemModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "sys_contact", m.SysContact)
 	putStr(out, "sys_descr", m.SysDescr)
@@ -89,7 +89,7 @@ func (r *snmpdSystemResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -132,7 +132,7 @@ func (r *snmpdSystemResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

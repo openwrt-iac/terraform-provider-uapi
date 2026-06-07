@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const systemPath = "/system"
@@ -49,7 +49,7 @@ func (r *systemResource) Configure(_ context.Context, req resource.ConfigureRequ
 
 func (r *systemResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A system settings.",
+		Description: "System settings.",
 		Attributes: map[string]schema.Attribute{
 			"id":           computedIDAttribute(),
 			"managed":      managedAttribute(),
@@ -68,7 +68,7 @@ func (r *systemResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 	}
 }
 
-func (r *systemResource) body(ctx context.Context, m systemModel, diags *diagsink, create bool) map[string]any {
+func (r *systemResource) body(ctx context.Context, m systemModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "description", m.Description)
 	putStr(out, "hostname", m.Hostname)
@@ -105,7 +105,7 @@ func (r *systemResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -148,7 +148,7 @@ func (r *systemResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

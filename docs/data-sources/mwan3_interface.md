@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_interface Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a mwan3 interface.
+  Look up the mwan3 interface.
 ---
 
 # uapi_mwan3_interface (Data Source)
 
-Look up a mwan3 interface.
+Look up the mwan3 interface.
 
 ## Example Usage
 

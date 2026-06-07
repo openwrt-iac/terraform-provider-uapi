@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_globals Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a mwan3 globals.
+  Look up the mwan3 globals.
 ---
 
 # uapi_mwan3_globals (Data Source)
 
-Look up a mwan3 globals.
+Look up the mwan3 globals.
 
 ## Example Usage
 

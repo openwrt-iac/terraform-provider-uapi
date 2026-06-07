@@ -3,12 +3,12 @@
 page_title: "uapi_wireless_interface Resource - uapi"
 subcategory: ""
 description: |-
-  A wireless interface.
+  Wireless interface.
 ---
 
 # uapi_wireless_interface (Resource)
 
-A wireless interface.
+Wireless interface.
 
 ## Example Usage
 

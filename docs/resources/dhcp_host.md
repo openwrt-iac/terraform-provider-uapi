@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_host Resource - uapi"
 subcategory: ""
 description: |-
-  A dhcp host.
+  Dhcp host.
 ---
 
 # uapi_dhcp_host (Resource)
 
-A dhcp host.
+Dhcp host.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_prometheus_node_exporter_lua_config Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a prometheus node_exporter config.
+  Look up the prometheus node_exporter config.
 ---
 
 # uapi_prometheus_node_exporter_lua_config (Data Source)
 
-Look up a prometheus node_exporter config.
+Look up the prometheus node_exporter config.
 
 ## Example Usage
 

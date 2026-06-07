@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_server Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a dhcp server.
+  Look up the dhcp server.
 ---
 
 # uapi_dhcp_server (Data Source)
 
-Look up a dhcp server.
+Look up the dhcp server.
 
 ## Example Usage
 

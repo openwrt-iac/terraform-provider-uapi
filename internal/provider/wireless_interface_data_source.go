@@ -8,7 +8,7 @@ import (
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 type wirelessInterfaceDSModel struct {
@@ -47,7 +47,7 @@ func (d *wirelessInterfaceDataSource) Configure(_ context.Context, req datasourc
 
 func (d *wirelessInterfaceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dsschema.Schema{
-		Description: "Look up a wireless interface.",
+		Description: "Look up the wireless interface.",
 		Attributes: map[string]dsschema.Attribute{
 			"id":         dsIDAttribute(),
 			"managed":    dsManagedAttribute(),

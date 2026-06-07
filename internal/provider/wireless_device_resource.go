@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const wirelessDeviceCollection = "wireless/devices"
@@ -45,7 +45,7 @@ func (r *wirelessDeviceResource) Configure(_ context.Context, req resource.Confi
 
 func (r *wirelessDeviceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A wireless device.",
+		Description: "Wireless device.",
 		Attributes: map[string]schema.Attribute{
 			"id":       computedIDAttribute(),
 			"managed":  managedAttribute(),
@@ -61,7 +61,7 @@ func (r *wirelessDeviceResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
-func (r *wirelessDeviceResource) body(ctx context.Context, m wirelessDeviceModel, diags *diagsink, create bool) map[string]any {
+func (r *wirelessDeviceResource) body(ctx context.Context, m wirelessDeviceModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "band", m.Band)
 	putInt64(out, "channel", m.Channel)
@@ -92,7 +92,7 @@ func (r *wirelessDeviceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -135,7 +135,7 @@ func (r *wirelessDeviceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

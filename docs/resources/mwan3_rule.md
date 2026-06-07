@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_rule Resource - uapi"
 subcategory: ""
 description: |-
-  A mwan3 rule.
+  Mwan3 rule.
 ---
 
 # uapi_mwan3_rule (Resource)
 
-A mwan3 rule.
+Mwan3 rule.
 
 ## Example Usage
 

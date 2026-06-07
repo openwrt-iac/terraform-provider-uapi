@@ -3,12 +3,12 @@
 page_title: "uapi_uhttpd_instance Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a uhttpd instance.
+  Look up the uhttpd instance.
 ---
 
 # uapi_uhttpd_instance (Data Source)
 
-Look up a uhttpd instance.
+Look up the uhttpd instance.
 
 ## Example Usage
 

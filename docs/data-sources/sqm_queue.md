@@ -3,12 +3,12 @@
 page_title: "uapi_sqm_queue Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a sqm queue.
+  Look up the sqm queue.
 ---
 
 # uapi_sqm_queue (Data Source)
 
-Look up a sqm queue.
+Look up the sqm queue.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_defaults Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall defaults.
+  Look up the firewall defaults.
 ---
 
 # uapi_firewall_defaults (Data Source)
 
-Look up a firewall defaults.
+Look up the firewall defaults.
 
 ## Example Usage
 

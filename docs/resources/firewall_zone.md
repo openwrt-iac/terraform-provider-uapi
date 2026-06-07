@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_zone Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall zone.
+  Firewall zone.
 ---
 
 # uapi_firewall_zone (Resource)
 
-A firewall zone.
+Firewall zone.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_member Resource - uapi"
 subcategory: ""
 description: |-
-  A mwan3 member.
+  Mwan3 member.
 ---
 
 # uapi_mwan3_member (Resource)
 
-A mwan3 member.
+Mwan3 member.
 
 ## Example Usage
 

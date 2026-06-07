@@ -3,12 +3,12 @@
 page_title: "uapi_unbound_server Resource - uapi"
 subcategory: ""
 description: |-
-  A unbound server.
+  Unbound server.
 ---
 
 # uapi_unbound_server (Resource)
 
-A unbound server.
+Unbound server.
 
 ## Example Usage
 

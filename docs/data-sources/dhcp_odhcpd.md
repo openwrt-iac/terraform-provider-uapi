@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_odhcpd Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a odhcpd settings.
+  Look up the odhcpd settings.
 ---
 
 # uapi_dhcp_odhcpd (Data Source)
 
-Look up a odhcpd settings.
+Look up the odhcpd settings.
 
 ## Example Usage
 

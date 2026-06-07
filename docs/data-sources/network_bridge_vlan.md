@@ -3,12 +3,12 @@
 page_title: "uapi_network_bridge_vlan Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a network bridge VLAN.
+  Look up the network bridge VLAN.
 ---
 
 # uapi_network_bridge_vlan (Data Source)
 
-Look up a network bridge VLAN.
+Look up the network bridge VLAN.
 
 ## Example Usage
 

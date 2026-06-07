@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_interface Resource - uapi"
 subcategory: ""
 description: |-
-  A mwan3 interface.
+  Mwan3 interface.
 ---
 
 # uapi_mwan3_interface (Resource)
 
-A mwan3 interface.
+Mwan3 interface.
 
 ## Example Usage
 

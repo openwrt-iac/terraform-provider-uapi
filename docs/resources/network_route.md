@@ -3,12 +3,12 @@
 page_title: "uapi_network_route Resource - uapi"
 subcategory: ""
 description: |-
-  A network route.
+  Network route.
 ---
 
 # uapi_network_route (Resource)
 
-A network route.
+Network route.
 
 ## Example Usage
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"github.com/raspbeguy/terraform-provider-uapi/internal/provider"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/provider"
 )
 
 //go:generate go run ./internal/gen
@@ -21,7 +21,7 @@ func main() {
 	flag.Parse()
 
 	err := providerserver.Serve(context.Background(), provider.New(version), providerserver.ServeOpts{
-		Address: "registry.terraform.io/raspbeguy/uapi",
+		Address: "registry.terraform.io/openwrt-iac/uapi",
 		Debug:   debug,
 	})
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 var (
@@ -31,7 +31,7 @@ func (d *prometheusNodeExporterLuaConfigDataSource) Configure(_ context.Context,
 
 func (d *prometheusNodeExporterLuaConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dsschema.Schema{
-		Description: "Look up a prometheus node_exporter config.",
+		Description: "Look up the prometheus node_exporter config.",
 		Attributes: map[string]dsschema.Attribute{
 			"id":               dsComputedString("Stable id."),
 			"managed":          dsManagedAttribute(),

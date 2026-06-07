@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const openvpnInstanceCollection = "openvpn/instances"
@@ -93,7 +93,7 @@ func (r *openvpnInstanceResource) Configure(_ context.Context, req resource.Conf
 
 func (r *openvpnInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A openvpn instance.",
+		Description: "Openvpn instance.",
 		Attributes: map[string]schema.Attribute{
 			"id":               computedIDAttribute(),
 			"managed":          managedAttribute(),
@@ -157,7 +157,7 @@ func (r *openvpnInstanceResource) Schema(_ context.Context, _ resource.SchemaReq
 	}
 }
 
-func (r *openvpnInstanceResource) body(ctx context.Context, m openvpnInstanceModel, diags *diagsink, create bool) map[string]any {
+func (r *openvpnInstanceResource) body(ctx context.Context, m openvpnInstanceModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "auth", m.Auth)
 	putStr(out, "ca", m.Ca)
@@ -281,7 +281,7 @@ func (r *openvpnInstanceResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -324,7 +324,7 @@ func (r *openvpnInstanceResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -3,12 +3,12 @@
 page_title: "uapi_usteer_config Resource - uapi"
 subcategory: ""
 description: |-
-  A usteer config.
+  Usteer config.
 ---
 
 # uapi_usteer_config (Resource)
 
-A usteer config.
+Usteer config.
 
 ## Example Usage
 

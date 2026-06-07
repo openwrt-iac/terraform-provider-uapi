@@ -40,7 +40,7 @@ func TestFirewallRuleBody(t *testing.T) {
 		},
 	}
 	var diags diag.Diagnostics
-	body := (&firewallRuleResource{}).body(ctx, m, newDiagsink(&diags), true)
+	body := (&firewallRuleResource{}).body(ctx, m, newDiagsink(&diags))
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}

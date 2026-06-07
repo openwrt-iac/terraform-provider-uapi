@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_system Resource - uapi"
 subcategory: ""
 description: |-
-  A snmpd system.
+  Snmpd system.
 ---
 
 # uapi_snmpd_system (Resource)
 
-A snmpd system.
+Snmpd system.
 
 ## Example Usage
 

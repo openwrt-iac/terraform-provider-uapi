@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_group Resource - uapi"
 subcategory: ""
 description: |-
-  A snmpd group.
+  Snmpd group.
 ---
 
 # uapi_snmpd_group (Resource)
 
-A snmpd group.
+Snmpd group.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_lldpd_config Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a lldpd config.
+  Look up the lldpd config.
 ---
 
 # uapi_lldpd_config (Data Source)
 
-Look up a lldpd config.
+Look up the lldpd config.
 
 ## Example Usage
 

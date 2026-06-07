@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 func TestResolveImportIDManaged(t *testing.T) {

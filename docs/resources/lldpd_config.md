@@ -3,12 +3,12 @@
 page_title: "uapi_lldpd_config Resource - uapi"
 subcategory: ""
 description: |-
-  A lldpd config.
+  Lldpd config.
 ---
 
 # uapi_lldpd_config (Resource)
 
-A lldpd config.
+Lldpd config.
 
 ## Example Usage
 

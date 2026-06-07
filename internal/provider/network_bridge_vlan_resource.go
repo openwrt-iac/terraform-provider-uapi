@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const networkBridgeVlanCollection = "network/bridge_vlans"
@@ -41,7 +41,7 @@ func (r *networkBridgeVlanResource) Configure(_ context.Context, req resource.Co
 
 func (r *networkBridgeVlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A network bridge VLAN.",
+		Description: "Network bridge VLAN.",
 		Attributes: map[string]schema.Attribute{
 			"id":      computedIDAttribute(),
 			"managed": managedAttribute(),
@@ -53,7 +53,7 @@ func (r *networkBridgeVlanResource) Schema(_ context.Context, _ resource.SchemaR
 	}
 }
 
-func (r *networkBridgeVlanResource) body(ctx context.Context, m networkBridgeVlanModel, diags *diagsink, create bool) map[string]any {
+func (r *networkBridgeVlanResource) body(ctx context.Context, m networkBridgeVlanModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "device", m.Device)
 	putList(ctx, out, "ports", m.Ports, diags.d)
@@ -76,7 +76,7 @@ func (r *networkBridgeVlanResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -119,7 +119,7 @@ func (r *networkBridgeVlanResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

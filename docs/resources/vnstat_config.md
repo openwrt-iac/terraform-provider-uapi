@@ -3,12 +3,12 @@
 page_title: "uapi_vnstat_config Resource - uapi"
 subcategory: ""
 description: |-
-  A vnstat config.
+  Vnstat config.
 ---
 
 # uapi_vnstat_config (Resource)
 
-A vnstat config.
+Vnstat config.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_redirect Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall redirect.
+  Look up the firewall redirect.
 ---
 
 # uapi_firewall_redirect (Data Source)
 
-Look up a firewall redirect.
+Look up the firewall redirect.
 
 ## Example Usage
 

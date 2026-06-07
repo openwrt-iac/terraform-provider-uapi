@@ -3,12 +3,12 @@
 page_title: "uapi_dropbear_instance Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a dropbear instance.
+  Look up the dropbear instance.
 ---
 
 # uapi_dropbear_instance (Data Source)
 
-Look up a dropbear instance.
+Look up the dropbear instance.
 
 ## Example Usage
 

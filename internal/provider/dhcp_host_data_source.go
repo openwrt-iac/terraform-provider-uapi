@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 var (
@@ -29,7 +29,7 @@ func (d *dhcpHostDataSource) Configure(_ context.Context, req datasource.Configu
 
 func (d *dhcpHostDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dsschema.Schema{
-		Description: "Look up a dhcp host.",
+		Description: "Look up the dhcp host.",
 		Attributes: map[string]dsschema.Attribute{
 			"id":          dsIDAttribute(),
 			"managed":     dsManagedAttribute(),

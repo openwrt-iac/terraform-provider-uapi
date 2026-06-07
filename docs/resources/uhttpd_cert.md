@@ -3,12 +3,12 @@
 page_title: "uapi_uhttpd_cert Resource - uapi"
 subcategory: ""
 description: |-
-  A uhttpd cert.
+  Uhttpd cert.
 ---
 
 # uapi_uhttpd_cert (Resource)
 
-A uhttpd cert.
+Uhttpd cert.
 
 ## Example Usage
 

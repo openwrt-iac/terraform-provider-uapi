@@ -3,12 +3,12 @@
 page_title: "uapi_network_device Resource - uapi"
 subcategory: ""
 description: |-
-  A network device.
+  Network device.
 ---
 
 # uapi_network_device (Resource)
 
-A network device.
+Network device.
 
 ## Example Usage
 

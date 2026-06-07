@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_system Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a snmpd system.
+  Look up the snmpd system.
 ---
 
 # uapi_snmpd_system (Data Source)
 
-Look up a snmpd system.
+Look up the snmpd system.
 
 ## Example Usage
 

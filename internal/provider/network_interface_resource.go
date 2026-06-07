@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const networkInterfaceCollection = "network/interfaces"
@@ -68,7 +68,7 @@ func (r *networkInterfaceResource) Configure(_ context.Context, req resource.Con
 
 func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A network interface.",
+		Description: "Network interface.",
 		Attributes: map[string]schema.Attribute{
 			"id":              computedIDAttribute(),
 			"managed":         managedAttribute(),

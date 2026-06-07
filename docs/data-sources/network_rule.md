@@ -3,12 +3,12 @@
 page_title: "uapi_network_rule Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a network rule.
+  Look up the network rule.
 ---
 
 # uapi_network_rule (Data Source)
 
-Look up a network rule.
+Look up the network rule.
 
 ## Example Usage
 

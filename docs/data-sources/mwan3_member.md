@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_member Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a mwan3 member.
+  Look up the mwan3 member.
 ---
 
 # uapi_mwan3_member (Data Source)
 
-Look up a mwan3 member.
+Look up the mwan3 member.
 
 ## Example Usage
 

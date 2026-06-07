@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_rule Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall rule.
+  Firewall rule.
 ---
 
 # uapi_firewall_rule (Resource)
 
-A firewall rule.
+Firewall rule.
 
 ## Example Usage
 

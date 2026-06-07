@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_dnsmasq Resource - uapi"
 subcategory: ""
 description: |-
-  A dnsmasq settings.
+  Dnsmasq settings.
 ---
 
 # uapi_dhcp_dnsmasq (Resource)
 
-A dnsmasq settings.
+Dnsmasq settings.
 
 ## Example Usage
 

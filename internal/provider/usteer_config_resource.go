@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const usteerConfigPath = "/usteer/config"
@@ -71,7 +71,7 @@ func (r *usteerConfigResource) Configure(_ context.Context, req resource.Configu
 
 func (r *usteerConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A usteer config.",
+		Description: "Usteer config.",
 		Attributes: map[string]schema.Attribute{
 			"id":                         computedIDAttribute(),
 			"managed":                    managedAttribute(),
@@ -112,7 +112,7 @@ func (r *usteerConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *usteerConfigResource) body(ctx context.Context, m usteerConfigModel, diags *diagsink, create bool) map[string]any {
+func (r *usteerConfigResource) body(ctx context.Context, m usteerConfigModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putBool(out, "assoc_steering", m.AssocSteering)
 	putInt64(out, "band_steering_threshold", m.BandSteeringThreshold)
@@ -193,7 +193,7 @@ func (r *usteerConfigResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -236,7 +236,7 @@ func (r *usteerConfigResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

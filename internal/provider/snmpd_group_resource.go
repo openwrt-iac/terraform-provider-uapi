@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const snmpdGroupCollection = "snmpd/groups"
@@ -41,7 +41,7 @@ func (r *snmpdGroupResource) Configure(_ context.Context, req resource.Configure
 
 func (r *snmpdGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A snmpd group.",
+		Description: "Snmpd group.",
 		Attributes: map[string]schema.Attribute{
 			"id":      computedIDAttribute(),
 			"managed": managedAttribute(),
@@ -53,7 +53,7 @@ func (r *snmpdGroupResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
-func (r *snmpdGroupResource) body(ctx context.Context, m snmpdGroupModel, diags *diagsink, create bool) map[string]any {
+func (r *snmpdGroupResource) body(ctx context.Context, m snmpdGroupModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "group", m.Group)
 	putStr(out, "secname", m.Secname)
@@ -76,7 +76,7 @@ func (r *snmpdGroupResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -119,7 +119,7 @@ func (r *snmpdGroupResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_dnsmasq Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a dnsmasq settings.
+  Look up the dnsmasq settings.
 ---
 
 # uapi_dhcp_dnsmasq (Data Source)
 
-Look up a dnsmasq settings.
+Look up the dnsmasq settings.
 
 ## Example Usage
 

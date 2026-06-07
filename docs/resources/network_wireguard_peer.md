@@ -3,12 +3,12 @@
 page_title: "uapi_network_wireguard_peer Resource - uapi"
 subcategory: ""
 description: |-
-  A network WireGuard peer.
+  Network WireGuard peer.
 ---
 
 # uapi_network_wireguard_peer (Resource)
 
-A network WireGuard peer.
+Network WireGuard peer.
 
 ## Example Usage
 

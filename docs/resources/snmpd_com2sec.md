@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_com2sec Resource - uapi"
 subcategory: ""
 description: |-
-  A snmpd com2sec.
+  Snmpd com2sec.
 ---
 
 # uapi_snmpd_com2sec (Resource)
 
-A snmpd com2sec.
+Snmpd com2sec.
 
 ## Example Usage
 

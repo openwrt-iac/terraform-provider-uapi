@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const networkRouteCollection = "network/routes"
@@ -47,7 +47,7 @@ func (r *networkRouteResource) Configure(_ context.Context, req resource.Configu
 
 func (r *networkRouteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A network route.",
+		Description: "Network route.",
 		Attributes: map[string]schema.Attribute{
 			"id":        computedIDAttribute(),
 			"managed":   managedAttribute(),
@@ -65,7 +65,7 @@ func (r *networkRouteResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *networkRouteResource) body(ctx context.Context, m networkRouteModel, diags *diagsink, create bool) map[string]any {
+func (r *networkRouteResource) body(ctx context.Context, m networkRouteModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "gateway", m.Gateway)
 	putStr(out, "interface", m.Interface)
@@ -100,7 +100,7 @@ func (r *networkRouteResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -143,7 +143,7 @@ func (r *networkRouteResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

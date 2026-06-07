@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     uapi = {
-      source = "raspbeguy/uapi"
+      source = "openwrt-iac/uapi"
     }
   }
 }

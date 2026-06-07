@@ -3,12 +3,12 @@
 page_title: "uapi_openvpn_instance Resource - uapi"
 subcategory: ""
 description: |-
-  A openvpn instance.
+  Openvpn instance.
 ---
 
 # uapi_openvpn_instance (Resource)
 
-A openvpn instance.
+Openvpn instance.
 
 ## Example Usage
 

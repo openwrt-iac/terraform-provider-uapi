@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const dhcpServerCollection = "dhcp/servers"
@@ -50,7 +50,7 @@ func (r *dhcpServerResource) Configure(_ context.Context, req resource.Configure
 
 func (r *dhcpServerResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A dhcp server.",
+		Description: "Dhcp server.",
 		Attributes: map[string]schema.Attribute{
 			"id":          computedIDAttribute(),
 			"managed":     managedAttribute(),
@@ -71,7 +71,7 @@ func (r *dhcpServerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
-func (r *dhcpServerResource) body(ctx context.Context, m dhcpServerModel, diags *diagsink, create bool) map[string]any {
+func (r *dhcpServerResource) body(ctx context.Context, m dhcpServerModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putList(ctx, out, "dhcp_option", m.DhcpOption, diags.d)
 	putStr(out, "dhcpv6", m.Dhcpv6)
@@ -112,7 +112,7 @@ func (r *dhcpServerResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -155,7 +155,7 @@ func (r *dhcpServerResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

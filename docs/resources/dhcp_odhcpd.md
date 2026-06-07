@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_odhcpd Resource - uapi"
 subcategory: ""
 description: |-
-  A odhcpd settings.
+  Odhcpd settings.
 ---
 
 # uapi_dhcp_odhcpd (Resource)
 
-A odhcpd settings.
+Odhcpd settings.
 
 ## Example Usage
 

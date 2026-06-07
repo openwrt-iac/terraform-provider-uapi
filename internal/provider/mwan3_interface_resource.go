@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const mwan3InterfaceCollection = "mwan3/interfaces"
@@ -59,7 +59,7 @@ func (r *mwan3InterfaceResource) Configure(_ context.Context, req resource.Confi
 
 func (r *mwan3InterfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A mwan3 interface.",
+		Description: "Mwan3 interface.",
 		Attributes: map[string]schema.Attribute{
 			"id":                    computedIDAttribute(),
 			"managed":               managedAttribute(),
@@ -89,7 +89,7 @@ func (r *mwan3InterfaceResource) Schema(_ context.Context, _ resource.SchemaRequ
 	}
 }
 
-func (r *mwan3InterfaceResource) body(ctx context.Context, m mwan3InterfaceModel, diags *diagsink, create bool) map[string]any {
+func (r *mwan3InterfaceResource) body(ctx context.Context, m mwan3InterfaceModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putBool(out, "check_quality", m.CheckQuality)
 	putInt64(out, "down", m.Down)
@@ -148,7 +148,7 @@ func (r *mwan3InterfaceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -191,7 +191,7 @@ func (r *mwan3InterfaceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

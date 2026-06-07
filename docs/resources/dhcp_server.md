@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_server Resource - uapi"
 subcategory: ""
 description: |-
-  A dhcp server.
+  Dhcp server.
 ---
 
 # uapi_dhcp_server (Resource)
 
-A dhcp server.
+Dhcp server.
 
 ## Example Usage
 

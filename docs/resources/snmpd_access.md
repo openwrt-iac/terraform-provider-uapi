@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_access Resource - uapi"
 subcategory: ""
 description: |-
-  A snmpd access.
+  Snmpd access.
 ---
 
 # uapi_snmpd_access (Resource)
 
-A snmpd access.
+Snmpd access.
 
 ## Example Usage
 

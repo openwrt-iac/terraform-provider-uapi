@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_forwarding Resource - uapi"
 subcategory: ""
 description: |-
-  A firewall forwarding.
+  Firewall forwarding.
 ---
 
 # uapi_firewall_forwarding (Resource)
 
-A firewall forwarding.
+Firewall forwarding.
 
 ## Example Usage
 

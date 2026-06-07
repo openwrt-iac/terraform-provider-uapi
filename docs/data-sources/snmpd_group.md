@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_group Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a snmpd group.
+  Look up the snmpd group.
 ---
 
 # uapi_snmpd_group (Data Source)
 
-Look up a snmpd group.
+Look up the snmpd group.
 
 ## Example Usage
 

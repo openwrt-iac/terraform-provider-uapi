@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_globals Resource - uapi"
 subcategory: ""
 description: |-
-  A mwan3 globals.
+  Mwan3 globals.
 ---
 
 # uapi_mwan3_globals (Resource)
 
-A mwan3 globals.
+Mwan3 globals.
 
 ## Example Usage
 

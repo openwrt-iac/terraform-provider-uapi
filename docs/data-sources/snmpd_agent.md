@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_agent Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a snmpd agent.
+  Look up the snmpd agent.
 ---
 
 # uapi_snmpd_agent (Data Source)
 
-Look up a snmpd agent.
+Look up the snmpd agent.
 
 ## Example Usage
 

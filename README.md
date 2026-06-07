@@ -1,6 +1,6 @@
 # terraform-provider-uapi
 
-A Terraform / OpenTofu provider for [uapi](https://github.com/raspbeguy/uapi), the native HTTP REST API for OpenWrt.
+A Terraform / OpenTofu provider for [uapi](https://github.com/openwrt-iac/uapi), the native HTTP REST API for OpenWrt.
 It manages OpenWrt configuration (firewall, network, wireless, DHCP, system) through uapi's
 curated endpoints, which expose stable resource IDs and atomic, transactional writes.
 
@@ -12,13 +12,13 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 
 ## Requirements
 
-- An OpenWrt router running **uapi >= 2.0.2** (OpenWrt 25.12+), reachable over HTTP(S).
+- An OpenWrt router running **uapi >= 2.1.0** (OpenWrt 25.12+), reachable over HTTP(S).
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
 - Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
 
-> **OpenTofu users:** the provider is published on `registry.terraform.io`. Until it is also on
-> the OpenTofu registry, set a `dev_overrides` / mirror so `tofu init` resolves
-> `raspbeguy/uapi` (see `examples/dev.tfrc`).
+> **OpenTofu users:** the provider is published on `registry.terraform.io` as `openwrt-iac/uapi`.
+> Until it is also on the OpenTofu registry, set a `dev_overrides` / mirror so `tofu init` resolves
+> `openwrt-iac/uapi` (see `examples/dev.tfrc`).
 
 > **Daemon packages first.** Resources whose daemon ships as a separate OpenWrt package
 > (`uapi_unbound_server`, `uapi_sqm_queue`, `uapi_snmpd_*`, `uapi_openvpn_instance`,
@@ -58,7 +58,9 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
   `uapi_network_wireguard_peer` (write-only `preshared_key`).
 - **Wireless:** `uapi_wireless_device`, `uapi_wireless_interface` (write-only `key`).
 - **DHCP/DNS:** `uapi_dhcp_host`, `uapi_dhcp_server`, `uapi_dhcp_dnsmasq` (singleton),
-  `uapi_dhcp_odhcpd` (singleton), `uapi_unbound_server` (singleton).
+  `uapi_dhcp_odhcpd` (singleton), `uapi_unbound_server` (singleton), `uapi_unbound_srv`
+  (singleton: bind/outgoing addresses + raw `server:` lines), `uapi_unbound_ext`
+  (singleton: raw extra-config lines).
 - **System:** `uapi_system` (singleton), `uapi_system_timeserver`, `uapi_dropbear_instance`,
   `uapi_uhttpd_instance`, `uapi_uhttpd_cert`, `uapi_lldpd_config` (singleton),
   `uapi_authorized_key` (root SSH keys), `uapi_system_password` (write-only password set).
@@ -122,6 +124,31 @@ resource "uapi_snmpd_access" "ro" {
   version = "v2c"
   level   = "noauth"
   read    = "all"
+}
+```
+
+Running unbound as a loopback-only recursive backend (the common dnsmasq + unbound split,
+with dnsmasq forwarding to unbound on `127.0.0.1#5353`) uses `uapi_unbound_srv` for the bind
+address and `uapi_unbound_ext` for whole verbatim clauses unbound has no structured field for:
+
+```hcl
+resource "uapi_unbound_srv" "backend" {
+  interface_bind = ["127.0.0.1@5353"] # loopback only
+  srv_line       = ["do-ip6: no"]     # verbatim line inside the server: clause
+}
+
+# Set the main unbound interface_auto = false so the bind is exclusive.
+resource "uapi_unbound_server" "main" {
+  interface_auto = false
+}
+
+resource "uapi_unbound_ext" "forwards" {
+  # one entry per rendered line; build a whole forward-zone: clause in order
+  ext_line = [
+    "forward-zone:",
+    "  name: \"int.example.org\"",
+    "  forward-addr: 192.0.2.53",
+  ]
 }
 ```
 

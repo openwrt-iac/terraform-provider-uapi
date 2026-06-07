@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const mwan3GlobalsPath = "/mwan3/globals"
@@ -44,7 +44,7 @@ func (r *mwan3GlobalsResource) Configure(_ context.Context, req resource.Configu
 
 func (r *mwan3GlobalsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A mwan3 globals.",
+		Description: "Mwan3 globals.",
 		Attributes: map[string]schema.Attribute{
 			"id":             computedIDAttribute(),
 			"managed":        managedAttribute(),
@@ -58,7 +58,7 @@ func (r *mwan3GlobalsResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *mwan3GlobalsResource) body(ctx context.Context, m mwan3GlobalsModel, diags *diagsink, create bool) map[string]any {
+func (r *mwan3GlobalsResource) body(ctx context.Context, m mwan3GlobalsModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "local_source", m.LocalSource)
 	putBool(out, "logging", m.Logging)
@@ -85,7 +85,7 @@ func (r *mwan3GlobalsResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -128,7 +128,7 @@ func (r *mwan3GlobalsResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

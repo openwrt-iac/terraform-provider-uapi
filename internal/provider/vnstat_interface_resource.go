@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const vnstatInterfaceCollection = "vnstat/interfaces"
@@ -40,7 +40,7 @@ func (r *vnstatInterfaceResource) Configure(_ context.Context, req resource.Conf
 
 func (r *vnstatInterfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A vnstat interface.",
+		Description: "Vnstat interface.",
 		Attributes: map[string]schema.Attribute{
 			"id":        computedIDAttribute(),
 			"managed":   managedAttribute(),
@@ -51,7 +51,7 @@ func (r *vnstatInterfaceResource) Schema(_ context.Context, _ resource.SchemaReq
 	}
 }
 
-func (r *vnstatInterfaceResource) body(ctx context.Context, m vnstatInterfaceModel, diags *diagsink, create bool) map[string]any {
+func (r *vnstatInterfaceResource) body(ctx context.Context, m vnstatInterfaceModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putBool(out, "enabled", m.Enabled)
 	putStr(out, "interface", m.Interface)
@@ -72,7 +72,7 @@ func (r *vnstatInterfaceResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -115,7 +115,7 @@ func (r *vnstatInterfaceResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

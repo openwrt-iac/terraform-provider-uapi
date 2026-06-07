@@ -3,12 +3,12 @@
 page_title: "uapi_system Resource - uapi"
 subcategory: ""
 description: |-
-  A system settings.
+  System settings.
 ---
 
 # uapi_system (Resource)
 
-A system settings.
+System settings.
 
 ## Example Usage
 

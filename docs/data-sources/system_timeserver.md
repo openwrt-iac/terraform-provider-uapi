@@ -3,12 +3,12 @@
 page_title: "uapi_system_timeserver Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a system timeserver.
+  Look up the system timeserver.
 ---
 
 # uapi_system_timeserver (Data Source)
 
-Look up a system timeserver.
+Look up the system timeserver.
 
 ## Example Usage
 

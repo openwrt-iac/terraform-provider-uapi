@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const snmpdAgentCollection = "snmpd/agents"
@@ -39,7 +39,7 @@ func (r *snmpdAgentResource) Configure(_ context.Context, req resource.Configure
 
 func (r *snmpdAgentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A snmpd agent.",
+		Description: "Snmpd agent.",
 		Attributes: map[string]schema.Attribute{
 			"id":           computedIDAttribute(),
 			"managed":      managedAttribute(),
@@ -49,7 +49,7 @@ func (r *snmpdAgentResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
-func (r *snmpdAgentResource) body(ctx context.Context, m snmpdAgentModel, diags *diagsink, create bool) map[string]any {
+func (r *snmpdAgentResource) body(ctx context.Context, m snmpdAgentModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putList(ctx, out, "agentaddress", m.Agentaddress, diags.d)
 	return out
@@ -68,7 +68,7 @@ func (r *snmpdAgentResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -111,7 +111,7 @@ func (r *snmpdAgentResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

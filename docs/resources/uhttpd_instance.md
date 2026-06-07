@@ -3,12 +3,12 @@
 page_title: "uapi_uhttpd_instance Resource - uapi"
 subcategory: ""
 description: |-
-  A uhttpd instance.
+  Uhttpd instance.
 ---
 
 # uapi_uhttpd_instance (Resource)
 
-A uhttpd instance.
+Uhttpd instance.
 
 ## Example Usage
 

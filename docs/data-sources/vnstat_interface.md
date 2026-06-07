@@ -3,12 +3,12 @@
 page_title: "uapi_vnstat_interface Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a vnstat interface.
+  Look up the vnstat interface.
 ---
 
 # uapi_vnstat_interface (Data Source)
 
-Look up a vnstat interface.
+Look up the vnstat interface.
 
 ## Example Usage
 

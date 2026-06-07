@@ -3,12 +3,12 @@
 page_title: "uapi_snmpd_access Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a snmpd access.
+  Look up the snmpd access.
 ---
 
 # uapi_snmpd_access (Data Source)
 
-Look up a snmpd access.
+Look up the snmpd access.
 
 ## Example Usage
 

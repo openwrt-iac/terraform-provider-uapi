@@ -3,12 +3,12 @@
 page_title: "uapi_wireless_interface Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a wireless interface.
+  Look up the wireless interface.
 ---
 
 # uapi_wireless_interface (Data Source)
 
-Look up a wireless interface.
+Look up the wireless interface.
 
 ## Example Usage
 

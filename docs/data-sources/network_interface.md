@@ -3,12 +3,12 @@
 page_title: "uapi_network_interface Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a network interface.
+  Look up the network interface.
 ---
 
 # uapi_network_interface (Data Source)
 
-Look up a network interface.
+Look up the network interface.
 
 ## Example Usage
 

@@ -3,12 +3,12 @@
 page_title: "uapi_mwan3_rule Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a mwan3 rule.
+  Look up the mwan3 rule.
 ---
 
 # uapi_mwan3_rule (Data Source)
 
-Look up a mwan3 rule.
+Look up the mwan3 rule.
 
 ## Example Usage
 

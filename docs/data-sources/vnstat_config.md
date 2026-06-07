@@ -3,12 +3,12 @@
 page_title: "uapi_vnstat_config Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a vnstat config.
+  Look up the vnstat config.
 ---
 
 # uapi_vnstat_config (Data Source)
 
-Look up a vnstat config.
+Look up the vnstat config.
 
 ## Example Usage
 

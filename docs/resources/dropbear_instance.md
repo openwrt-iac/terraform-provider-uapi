@@ -3,12 +3,12 @@
 page_title: "uapi_dropbear_instance Resource - uapi"
 subcategory: ""
 description: |-
-  A dropbear instance.
+  Dropbear instance.
 ---
 
 # uapi_dropbear_instance (Resource)
 
-A dropbear instance.
+Dropbear instance.
 
 ## Example Usage
 

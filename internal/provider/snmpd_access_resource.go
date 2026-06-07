@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 const snmpdAccessCollection = "snmpd/accesses"
@@ -46,7 +46,7 @@ func (r *snmpdAccessResource) Configure(_ context.Context, req resource.Configur
 
 func (r *snmpdAccessResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A snmpd access.",
+		Description: "Snmpd access.",
 		Attributes: map[string]schema.Attribute{
 			"id":      computedIDAttribute(),
 			"managed": managedAttribute(),
@@ -63,7 +63,7 @@ func (r *snmpdAccessResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
-func (r *snmpdAccessResource) body(ctx context.Context, m snmpdAccessModel, diags *diagsink, create bool) map[string]any {
+func (r *snmpdAccessResource) body(ctx context.Context, m snmpdAccessModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
 	putStr(out, "context", m.Context)
 	putStr(out, "group", m.Group)
@@ -96,7 +96,7 @@ func (r *snmpdAccessResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, true)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -139,7 +139,7 @@ func (r *snmpdAccessResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
-	body := r.body(ctx, plan, ds, false)
+	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
 	}

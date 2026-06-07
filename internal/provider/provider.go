@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 var (
@@ -45,7 +45,7 @@ func (p *uapiProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 	resp.Schema = schema.Schema{
 		Description: "Manage OpenWrt configuration through the uapi REST API. " +
 			"Only curated endpoints are exposed; the /raw passthrough is intentionally not supported. " +
-			"See the [uapi project](https://github.com/raspbeguy/uapi) for the API this provider wraps.",
+			"See the [uapi project](https://github.com/openwrt-iac/uapi) for the API this provider wraps.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				Optional: true,

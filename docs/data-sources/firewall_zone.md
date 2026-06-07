@@ -3,12 +3,12 @@
 page_title: "uapi_firewall_zone Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a firewall zone.
+  Look up the firewall zone.
 ---
 
 # uapi_firewall_zone (Data Source)
 
-Look up a firewall zone.
+Look up the firewall zone.
 
 ## Example Usage
 

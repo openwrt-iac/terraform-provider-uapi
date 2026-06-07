@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/raspbeguy/terraform-provider-uapi/internal/client"
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 var (
@@ -29,7 +29,7 @@ func (d *snmpdSystemDataSource) Configure(_ context.Context, req datasource.Conf
 
 func (d *snmpdSystemDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dsschema.Schema{
-		Description: "Look up a snmpd system.",
+		Description: "Look up the snmpd system.",
 		Attributes: map[string]dsschema.Attribute{
 			"id":            dsComputedString("Stable id."),
 			"managed":       dsManagedAttribute(),

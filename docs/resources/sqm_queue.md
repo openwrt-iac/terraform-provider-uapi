@@ -3,12 +3,12 @@
 page_title: "uapi_sqm_queue Resource - uapi"
 subcategory: ""
 description: |-
-  A sqm queue.
+  Sqm queue.
 ---
 
 # uapi_sqm_queue (Resource)
 
-A sqm queue.
+Sqm queue.
 
 ## Example Usage
 

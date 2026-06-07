@@ -3,12 +3,12 @@
 page_title: "uapi_usteer_config Data Source - uapi"
 subcategory: ""
 description: |-
-  Look up a usteer config.
+  Look up the usteer config.
 ---
 
 # uapi_usteer_config (Data Source)
 
-Look up a usteer config.
+Look up the usteer config.
 
 ## Example Usage
 
