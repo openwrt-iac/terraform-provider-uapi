@@ -238,9 +238,20 @@ func IsNotFound(err error) bool { return statusIs(err, http.StatusNotFound) }
 // IsPreconditionFailed reports whether err is an API 412 (stale If-Match).
 func IsPreconditionFailed(err error) bool { return statusIs(err, http.StatusPreconditionFailed) }
 
-// IsConflict reports whether err is an API 409 (e.g. creating a section whose id
-// already exists).
-func IsConflict(err error) bool { return statusIs(err, http.StatusConflict) }
+// IsFieldConflict reports whether err is a 422 validation failure carrying a
+// "conflict" field error: a create whose chosen id or name collides with an
+// existing uci section. uapi returns these as validation_failed (422), not 409.
+func IsFieldConflict(err error) bool {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnprocessableEntity {
+		for _, fe := range apiErr.Errors {
+			if fe.Code == "conflict" {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // GetObject fetches a single resource and its ETag. found is false on 404.
 func (c *Client) GetObject(ctx context.Context, path string) (obj map[string]any, etag string, found bool, err error) {

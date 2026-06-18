@@ -31,10 +31,10 @@ resource "uapi_network_interface" "wg0" {
 }
 ```
 
-Note this **forces one replacement**: both `name` and `id` are create-only, so
-dropping `name` is a create-only change and Terraform plans a destroy + create
-(`terraform plan` shows the resource must be replaced). The new section keeps the
-same name (`id` equals the old `name`), so references to it by `id` are unaffected
-afterwards, but the section itself is recreated. For an interface that backs your
-management connection, do this in a maintenance window (or leave `name` in place
-until then, since it remains valid through v2).
+Since provider 2.2.1 this is a **non-destructive in-place update**, not a
+replacement: dropping `name` clears it from state while `id` carries the same
+section name, so `terraform plan` shows an in-place update (not "must be
+replaced") and the interface is never torn down. It is safe to do on the
+interface that backs your management connection. Only a real rename replaces:
+changing `id` to a new value, or changing `name` to a *different* value (provider
+< 2.2.1 replaced on any `name` removal too).

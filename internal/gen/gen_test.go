@@ -24,6 +24,7 @@ func fixtureProps() map[string]specProp {
 		"has_secret": {Type: "boolean", ReadOnly: true},
 		"note":       {Type: "string", ReadOnly: true},
 		"wgname":     {Type: "string", Description: "Create-only kernel name.", Deprecated: true},
+		"lockedname": {Type: "string", Description: "Strict create-only name."},
 	}
 }
 
@@ -38,12 +39,12 @@ func goldenCases() map[string]string {
 	collection := descriptor{
 		Type: "lab_thing", Schema: "LabThings", Collection: "lab/things",
 		Kind: "collection", Label: "lab thing", GenDataSource: true, Nested: fixtureNested(),
-		CreateOnly: []string{"wgname"},
+		CreateOnly: []string{"wgname", "lockedname"},
 	}
 	singleton := descriptor{
 		Type: "lab_single", Schema: "LabSingle", Collection: "lab/single",
 		Kind: "singleton", Label: "lab single", GenDataSource: true,
-		CreateOnly: []string{"wgname"},
+		CreateOnly: []string{"wgname", "lockedname"},
 	}
 	cr := buildResource(collection, fixtureProps(), []string{"name"})
 	sr := buildResource(singleton, fixtureProps(), nil)

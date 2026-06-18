@@ -27,8 +27,9 @@ section), and it is never sent on update.
 
 ## Adopting the box's own lan / wan
 
-You cannot *create* a section whose name already exists - that returns `409`
-(the provider hints to import it). Instead, **import** it. Since uapi 2.2.0, a
+You cannot *create* a section whose name already exists - that returns `422`
+(a `validation_failed` with a `conflict` field error; the provider hints to import
+it). Instead, **import** it. Since uapi 2.2.0, a
 named section is adopted **in place**: its name is kept (no rename to a ULID),
 the import does not mutate the router, and config with the same `id` reconciles
 with no replacement.
@@ -53,6 +54,21 @@ recreate it - avoid managing your own `lan`/`wan` against pre-2.2.0 uapi.)
 Anonymous sections (uci `cfgXXXXXX`, e.g. a zone created in LuCI without a name)
 are still adopted by renaming to a stable id; the import emits a warning naming
 the old and new id, because that case does mutate the router.
+
+## Not just interfaces: zones, dhcp servers, sqm queues
+
+A stock box also ships named `firewall_zone` (`lan`/`wan`), `dhcp_server`
+(`lan`/`wan`), and `sqm_queue` sections. Manage these the same way: **import the
+default first**, do not create a second one with the same name. On uapi >= 2.2.1 a
+create whose name collides with an existing section is rejected (`422`, a
+`validation_failed` whose field error code is `conflict`), rather than silently
+producing a duplicate the firewall/dnsmasq can't disambiguate, and the provider's
+error points you to import it. (Earlier uapi created the duplicate.)
+
+```console
+$ terraform import uapi_firewall_zone.lan lan
+$ terraform import uapi_dhcp_server.lan lan
+```
 
 ## Referencing an adopted section
 

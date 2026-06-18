@@ -201,10 +201,10 @@ func writeErr(diags *diag.Diagnostics, action, label string, err error) {
 		)
 		return
 	}
-	if client.IsConflict(err) {
+	if client.IsFieldConflict(err) {
 		diags.AddError(
 			"Error "+action+" "+label,
-			"A uci section with this id already exists on the router. To manage it, "+
+			"A uci section with this id or name already exists on the router. To manage it, "+
 				"`terraform import` it (an unmanaged named section is adopted in place, "+
 				"keeping its name), or choose a different `id`.\n\n"+err.Error(),
 		)

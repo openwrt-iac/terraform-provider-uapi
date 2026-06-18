@@ -41,11 +41,18 @@ func resAttr(f field) string {
 	case "writeonly":
 		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
 	case "createonly":
+		// A deprecated create-only field is assumed to alias the section id (the
+		// only one today is network_interface.name): relax replacement so dropping
+		// it to migrate to id is non-destructive (deprecatedAliasRequiresReplace).
+		// A future deprecated create-only field that does NOT alias the id must not
+		// reuse this path. A non-deprecated create-only field stays strictly immutable.
+		mod := "stringplanmodifier.RequiresReplace()"
 		dep := ""
 		if f.Deprecated {
+			mod = "deprecatedAliasRequiresReplace()"
 			dep = fmt.Sprintf(" DeprecationMessage: %q,", f.Desc)
 		}
-		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: %q,%s},", f.Name, f.Desc, dep)
+		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{%s}, Description: %q,%s},", f.Name, mod, f.Desc, dep)
 	case "computedbool":
 		return fmt.Sprintf("%q: schema.BoolAttribute{Computed: true, Description: %q},", f.Name, f.Desc)
 	default: // computedstring
@@ -126,7 +133,12 @@ func renderResource(r resModel) string {
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema")
 	if r.hasCreateOnly() {
 		p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier")
-		p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier")
+		// stringplanmodifier is only referenced by a strict (non-deprecated)
+		// create-only field's RequiresReplace(); a deprecated alias uses the
+		// provider-package deprecatedAliasRequiresReplace() instead.
+		if r.hasStrictCreateOnly() {
+			p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier")
+		}
 	}
 	p("\t%q", "github.com/hashicorp/terraform-plugin-framework/types")
 	p("\t%q", "github.com/openwrt-iac/terraform-provider-uapi/internal/client")

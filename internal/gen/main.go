@@ -99,6 +99,18 @@ func (r resModel) hasCreateOnly() bool {
 	return false
 }
 
+// hasStrictCreateOnly reports whether any create-only field is NOT a deprecated
+// alias, i.e. emits stringplanmodifier.RequiresReplace() (deprecated aliases use
+// the provider-package deprecatedAliasRequiresReplace() instead).
+func (r resModel) hasStrictCreateOnly() bool {
+	for _, f := range r.Fields {
+		if f.Kind == "createonly" && !f.Deprecated {
+			return true
+		}
+	}
+	return false
+}
+
 // needsCreateFlag reports whether body() takes a `create bool` parameter: true
 // when the resource has a create-only input to gate. Every collection has one
 // now (the settable id, uapi >= 2.2.0); singletons only if they carry a

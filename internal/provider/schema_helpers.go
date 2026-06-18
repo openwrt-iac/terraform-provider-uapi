@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"context"
+
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -35,6 +37,25 @@ func optionalComputedIDAttribute() schema.StringAttribute {
 			stringplanmodifier.UseStateForUnknown(),
 		},
 	}
+}
+
+// deprecatedAliasRequiresReplace is the plan modifier for a deprecated create-only
+// alias of `id` (currently `name` on network interfaces). It forces replacement
+// only when the alias is set to a *different* non-null value (a real section
+// rename). Dropping the alias to migrate to `id` (config goes null) or leaving it
+// unchanged is not a replace, so `name = "x"` -> `id = "x"` is a no-op rather than
+// a destroy+recreate. `id` keeps its own RequiresReplace, so renaming the section
+// still replaces.
+func deprecatedAliasRequiresReplace() planmodifier.String {
+	return stringplanmodifier.RequiresReplaceIf(
+		func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !req.ConfigValue.IsNull() &&
+				!req.ConfigValue.IsUnknown() &&
+				!req.ConfigValue.Equal(req.StateValue)
+		},
+		"Replaced only when changed to a different non-null value (a section rename); removing it to use `id` is not a replace.",
+		"Replaced only when changed to a different non-null value (a section rename); removing it to use `id` is not a replace.",
+	)
 }
 
 func managedAttribute() schema.BoolAttribute {

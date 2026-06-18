@@ -188,9 +188,21 @@ func (m *mockUAPI) handleCollectionCreate(w http.ResponseWriter, r *http.Request
 	// Caller-supplied section name (settable id, uapi >= 2.2.0): use it and 409
 	// if it collides; otherwise assign a synthetic id.
 	id, _ := body["id"].(string)
+	if id == "" && coll == "/network/interfaces" {
+		// uapi aliases a network interface's create-only `name` to the section id.
+		if n, ok := body["name"].(string); ok && n != "" {
+			id = n
+		}
+	}
 	if id != "" {
 		if m.store[coll][id] != nil {
-			apiErr(w, http.StatusConflict, "conflict")
+			// uapi reports an id/name collision as a 422 validation_failed with a
+			// "conflict" field error, not a 409.
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+				"code":    "validation_failed",
+				"message": "Request body failed validation",
+				"errors":  []any{map[string]any{"field": "id", "code": "conflict", "message": "section already exists"}},
+			}, "")
 			return
 		}
 	} else {

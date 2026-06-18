@@ -50,6 +50,14 @@ resource "uapi_firewall_redirect" "https" {
 }
 ```
 
+## `target` is case-sensitive
+
+`target` values are upper-case: `ACCEPT` / `REJECT` / `DROP` / `NOTRACK` / `MARK`
+for rules, `DNAT` / `SNAT` for redirects. A lower-case value (`"dnat"`) is rejected
+server-side with `422 not_in_enum`. The provider does not normalize case or
+validate the set (enums are validated by uapi so new values work without a provider
+release), so write them as shown.
+
 ## Zone forwarding (flat)
 
 Allow traffic from `lan` to a `guest` zone. Note: **no `match` block** here, the

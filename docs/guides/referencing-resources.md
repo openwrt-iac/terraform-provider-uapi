@@ -79,11 +79,28 @@ resource "uapi_network_bridge_vlan" "v" {
 }
 ```
 
-The same holds for any field that names a kernel object directly rather than a uapi
-section: a network interface's `device`, and `uapi_sqm_queue.interface` /
-`uapi_vnstat_interface.interface` (a device/interface name). Rule of thumb: if the
-field is a *section* reference, use `.id`; if it names a kernel device, use the
-device's `name` (or the literal kernel name for pre-existing devices).
+The same holds for a network interface's `device` (the kernel device it binds).
+Rule of thumb: if the field is a *section* reference, use `.id`; if it names a
+kernel device, use the device's `name` (or the literal kernel name for pre-existing
+devices).
+
+## `sqm_queue` / `vnstat_interface` take a network *interface* name
+
+`uapi_sqm_queue.interface` and `uapi_vnstat_interface.interface` take a **network
+interface name** (a `network/interfaces` reference), not a kernel device. Passing a
+kernel device like `br-lan.32` or `eth0` returns `422 ... does not exist`. Reference
+a managed interface by its `.id`, or a pre-existing one by its name:
+
+```hcl
+resource "uapi_sqm_queue" "wan" {
+  interface = uapi_network_interface.wan.id # an interface name, e.g. "wan"
+  download  = 50000
+  upload    = 10000
+}
+```
+
+This is the opposite of OpenWrt's own sqm/vnstat UCI, which key on devices, so it is
+an easy trap.
 
 ## Destroy semantics
 

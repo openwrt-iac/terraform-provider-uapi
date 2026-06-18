@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
@@ -93,7 +92,7 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"listen_port":     optionalComputedInt64("uci option listen_port."),
 			"metric":          optionalComputedInt64("uci option metric."),
 			"mtu":             optionalComputedInt64("uci option mtu."),
-			"name":            schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "DEPRECATED in 2.2.0: use `id` instead (the universal section-name input across every resource). Both are accepted during the deprecation window; if both are supplied they must match. `name` is scheduled for removal in v3. See docs/deprecations.md.", DeprecationMessage: "DEPRECATED in 2.2.0: use `id` instead (the universal section-name input across every resource). Both are accepted during the deprecation window; if both are supplied they must match. `name` is scheduled for removal in v3. See docs/deprecations.md."},
+			"name":            schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{deprecatedAliasRequiresReplace()}, Description: "DEPRECATED in 2.2.0: use `id` instead (the universal section-name input across every resource). Both are accepted during the deprecation window; if both are supplied they must match. `name` is scheduled for removal in v3. See docs/deprecations.md.", DeprecationMessage: "DEPRECATED in 2.2.0: use `id` instead (the universal section-name input across every resource). Both are accepted during the deprecation window; if both are supplied they must match. `name` is scheduled for removal in v3. See docs/deprecations.md."},
 			"netmask":         optionalComputedString("uci option netmask."),
 			"nohostroute":     optionalComputedBool("uci option nohostroute."),
 			"peerdns":         optionalComputedBool("uci option peerdns."),

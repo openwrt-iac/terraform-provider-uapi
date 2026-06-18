@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -225,6 +226,94 @@ resource "uapi_dhcp_host" "h" {
 					},
 				},
 				Check: resource.TestCheckResourceAttr("uapi_dhcp_host.h", "id", "myhost2"),
+			},
+		},
+	})
+}
+
+// TestAccNameToIDMigration covers the 2.2.1 N3 fix: the deprecated create-only
+// `name` is an alias of `id`, so switching `name = "x"` to `id = "x"` no longer
+// forces a destroy+recreate. It is a non-destructive in-place update (the `name`
+// attribute clears from state); changing name to a different value still replaces
+// (TestAccNameRenameReplaces).
+func TestAccNameToIDMigration(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "wg" {
+  name  = "wg0"
+  proto = "wireguard"
+}`,
+				Check: resource.TestCheckResourceAttr("uapi_network_interface.wg", "id", "wg0"),
+			},
+			{
+				// Migrate to id with the same value: in-place update (name clears), not a replacement.
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "wg" {
+  id    = "wg0"
+  proto = "wireguard"
+}`,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						// In-place update (name clears), NOT a replacement.
+						plancheck.ExpectResourceAction("uapi_network_interface.wg", plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCreateCollisionHint covers the N2 UX: a create whose id collides with an
+// existing section returns 422 (validation_failed + conflict field), and writeErr
+// surfaces an actionable "terraform import" hint rather than a bare error.
+func TestAccCreateCollisionHint(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/network/interfaces", "collide0", map[string]any{"proto": "static"})
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "dup" {
+  id    = "collide0"
+  proto = "static"
+}`,
+			ExpectError: regexp.MustCompile("terraform import"),
+		}},
+	})
+}
+
+// TestAccNameRenameReplaces guards the other half of N3: changing the deprecated
+// `name` to a different non-null value is still a real rename and forces replace.
+func TestAccNameRenameReplaces(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "wg" {
+  name  = "wga"
+  proto = "wireguard"
+}`,
+			},
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "wg" {
+  name  = "wgb"
+  proto = "wireguard"
+}`,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("uapi_network_interface.wg", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
 			},
 		},
 	})

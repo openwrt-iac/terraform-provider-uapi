@@ -25,18 +25,19 @@ type labThingResource struct{ client *client.Client }
 func NewLabThingResource() resource.Resource { return &labThingResource{} }
 
 type labThingModel struct {
-	ID        types.String   `tfsdk:"id"`
-	Managed   types.Bool     `tfsdk:"managed"`
-	ETag      types.String   `tfsdk:"etag"`
-	Flag      types.Bool     `tfsdk:"flag"`
-	HasSecret types.Bool     `tfsdk:"has_secret"`
-	Name      types.String   `tfsdk:"name"`
-	Note      types.String   `tfsdk:"note"`
-	Secret    types.String   `tfsdk:"secret"`
-	Tags      types.List     `tfsdk:"tags"`
-	Weight    types.Int64    `tfsdk:"weight"`
-	Wgname    types.String   `tfsdk:"wgname"`
-	Match     *labThingMatch `tfsdk:"match"`
+	ID         types.String   `tfsdk:"id"`
+	Managed    types.Bool     `tfsdk:"managed"`
+	ETag       types.String   `tfsdk:"etag"`
+	Flag       types.Bool     `tfsdk:"flag"`
+	HasSecret  types.Bool     `tfsdk:"has_secret"`
+	Lockedname types.String   `tfsdk:"lockedname"`
+	Name       types.String   `tfsdk:"name"`
+	Note       types.String   `tfsdk:"note"`
+	Secret     types.String   `tfsdk:"secret"`
+	Tags       types.List     `tfsdk:"tags"`
+	Weight     types.Int64    `tfsdk:"weight"`
+	Wgname     types.String   `tfsdk:"wgname"`
+	Match      *labThingMatch `tfsdk:"match"`
 }
 
 type labThingMatch struct {
@@ -61,12 +62,13 @@ func (r *labThingResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"etag":       etagAttribute(),
 			"flag":       optionalComputedBool("uci option flag."),
 			"has_secret": schema.BoolAttribute{Computed: true, Description: "uci option has_secret."},
+			"lockedname": schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Strict create-only name."},
 			"name":       schema.StringAttribute{Required: true, Description: "Optional section name."},
 			"note":       schema.StringAttribute{Computed: true, Description: "uci option note."},
 			"secret":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "uci option secret."},
 			"tags":       optionalComputedStringList("uci option tags."),
 			"weight":     optionalComputedInt64("uci option weight."),
-			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Create-only kernel name.", DeprecationMessage: "Create-only kernel name."},
+			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{deprecatedAliasRequiresReplace()}, Description: "Create-only kernel name.", DeprecationMessage: "Create-only kernel name."},
 			"match": schema.SingleNestedAttribute{
 				Required:    true,
 				Description: "Match conditions.",
@@ -85,6 +87,9 @@ func (r *labThingResource) body(ctx context.Context, m labThingModel, diags *dia
 		putStr(out, "id", m.ID)
 	}
 	putBool(out, "flag", m.Flag)
+	if create {
+		putStr(out, "lockedname", m.Lockedname)
+	}
 	putStr(out, "name", m.Name)
 	putStr(out, "secret", m.Secret)
 	putList(ctx, out, "tags", m.Tags, diags.d)
@@ -106,6 +111,7 @@ func (r *labThingResource) read(ctx context.Context, obj map[string]any, m *labT
 	m.Managed = boolVal(obj, "managed")
 	m.Flag = boolVal(obj, "flag")
 	m.HasSecret = boolValDefault(obj, "has_secret")
+	// lockedname is create-only: preserve the planned value (the API never returns it).
 	m.Name = strVal(obj, "name")
 	m.Note = strVal(obj, "note")
 	// secret is write-only: preserve the planned value (the API never returns it).
