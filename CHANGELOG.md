@@ -6,6 +6,106 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-06-18
+
+Tracks uapi 2.2.1 (a validate-only patch; no schema change versus 2.2.0) and
+resolves the provider-side follow-ups from a full 125-resource production apply.
+
+### Fixed
+- `uapi_network_interface` migration from the deprecated `name = "x"` to
+  `id = "x"` is now a non-destructive in-place update (the `name` attribute
+  clears from state), not a destroy + recreate. A real rename (changing `id`, or
+  setting `name` to a different value) still replaces.
+- A create whose `id`/`name` collides with an existing section (uapi returns
+  `422 validation_failed` with a `conflict` field error) now surfaces a hint to
+  `terraform import` the section or choose a different `id`, instead of a bare
+  validation error.
+
+### Changed
+- Docs: `uapi_sqm_queue.interface` / `uapi_vnstat_interface.interface` are
+  documented as a network interface name (not a kernel device); firewall `target`
+  values are noted as case-sensitive upper-case (`ACCEPT`/`REJECT`/`DROP`/
+  `NOTRACK`/`MARK`; `DNAT`/`SNAT`); `uapi_firewall_zone`/`uapi_dhcp_server`/
+  `uapi_sqm_queue` also ship as box defaults and should be `terraform import`ed.
+
+## [2.2.0] - 2026-06-12
+
+Tracks uapi 2.2.0. Fixes a design dead-end where a pre-existing named section
+(`lan`/`wan`/`br-lan`) had no safe management path. Requires uapi >= 2.2.0.
+
+### Added
+- Settable `id` on every collection resource: set it to choose the uci section
+  name (e.g. `id = "lan"`), or omit it for a server-assigned ULID. Create-only
+  (changing it forces replacement), never sent on update.
+- Adopt-keep-name: `terraform import` of a named section keeps its name (no rename
+  to a ULID) and does not mutate the router, so config with the same `id`
+  reconciles with no replacement. Anonymous `cfgXXXX` sections still adopt by
+  renaming (with a warning).
+- `uapi_dhcp_host.ip` is now optional: omit it for a `mac`+`name` DNS-only
+  reservation (no static lease).
+- `uapi_network_device` of `type = "bridge"` no longer requires `ports`.
+- Actionable hint on a create conflict, pointing at `terraform import`.
+
+### Deprecated
+- `uapi_network_interface.name` in favour of the universal `id` (both accepted
+  through v2; removal targeted v3).
+
+## [2.1.0] - 2026-06-07
+
+Tracks uapi 2.1.0. Requires uapi >= 2.1.0.
+
+### Added
+- `uapi_unbound_srv` and `uapi_unbound_ext` singletons (`interface_bind`,
+  `interface_outgoing`, `srv_line`, `ext_line`) for loopback-only recursive
+  setups, multi-WAN egress, and verbatim unbound config.
+
+### Changed
+- BREAKING: the provider moved to the `openwrt-iac` namespace; its source address
+  is now `openwrt-iac/uapi` (was `raspbeguy/uapi`). Schema, resource set, and
+  ULID `id`s are unchanged. To upgrade: update `source`, run
+  `terraform init -upgrade`, then
+  `terraform state replace-provider registry.terraform.io/raspbeguy/uapi registry.terraform.io/openwrt-iac/uapi`.
+
+## [2.0.1] - 2026-06-06
+
+Tracks uapi 2.0.2 and follows up on field feedback from a real migration.
+Requires uapi >= 2.0.2.
+
+### Added
+- Create-time `name` on `uapi_network_interface`: picks the uci section name,
+  fixing WireGuard interfaces (the ULID section name exceeded `IFNAMSIZ` so
+  tunnels never came up). When omitted, the server emits a short `wg_<rand>` for
+  `proto=wireguard` or a ULID otherwise.
+- `uapi_package.pre_existed`: `terraform destroy` no longer uninstalls a package
+  that was already installed before Terraform managed it.
+
+### Changed
+- The 423/429 lock retry is time-bounded (with backoff + jitter) rather than
+  attempt-bounded, so the default Terraform parallelism drains through the
+  per-package lock instead of exhausting a small retry count.
+- Docs: firewall-rules and referencing-resources guides, SQM units, a minimal
+  SNMP v2c example, and a daemon-package-ordering note.
+
+## [2.0.0] - 2026-06-05
+
+Tracks the uapi 2.0 `/api/v2` surface. Requires uapi >= 2.0.1.
+
+### Added
+- The curated CRUD/singleton resources and lookup data sources are now generated
+  from the vendored uapi OpenAPI spec (spec-driven codegen), with strict integer
+  and snake_case field handling.
+- `uapi_token` ephemeral resource (mint on open, revoke on close); `whoami` /
+  `healthz` / `diagnostics` operational data sources; mwan3, usteer, and openvpn
+  resources.
+- Client handling for 429 rate limiting, cursor pagination, and an
+  `Idempotency-Key` on every create.
+
+### Changed
+- BREAKING: a new major tracking uapi 2.0. The provider talks to `/api/v2` (the
+  major version lives in the user-supplied `endpoint` path).
+
+## [1.2.0] - 2026-06-03
+
 Targets the uapi 1.2.x curated surface. Purely additive over 1.1.
 
 ### Added
@@ -32,7 +132,7 @@ Targets the uapi 1.2.x curated surface. Purely additive over 1.1.
   uapi (no router needed), wired into CI; `tflog` request/response tracing in
   the client (never logs secrets).
 
-## [1.1.0]
+## [1.1.0] - 2026-05-31
 
 ### Added
 - Full uapi 1.1 curated surface: 16 CRUD resources (network routes/rules/
@@ -42,7 +142,7 @@ Targets the uapi 1.2.x curated surface. Purely additive over 1.1.
   (apk install + feeds). WireGuard support on `network_interface`. One lookup
   data source per type.
 
-## [1.0.0]
+## [1.0.0] - 2026-05-30
 
 ### Added
 - Initial release covering the uapi 1.0 curated surface: firewall
