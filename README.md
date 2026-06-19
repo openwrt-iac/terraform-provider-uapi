@@ -14,7 +14,7 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 
 ## Requirements
 
-- An OpenWrt router running **uapi >= 2.2.1** (OpenWrt 25.12+), reachable over HTTP(S).
+- An OpenWrt router running **uapi >= 2.2.3** (OpenWrt 25.12+), reachable over HTTP(S).
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
 - Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
 

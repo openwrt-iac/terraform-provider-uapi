@@ -70,6 +70,16 @@ $ terraform import uapi_firewall_zone.lan lan
 $ terraform import uapi_dhcp_server.lan lan
 ```
 
+## Clearing leftover fields after adoption
+
+An adopted interface can carry options from a prior life, e.g. a `wan` switched
+from `proto=static` to `proto=dhcp` still has a stale `netmask`/`gateway` in uci.
+Since uapi >= 2.2.3 those two fields are clear-on-omit: leave them out of config and
+`terraform plan` shows them dropping to null (an in-place update, not a replace),
+and apply clears the uci options. Fields uapi defaults or synthesizes are not
+clear-on-omit, so they stay as last applied. (`ipaddr`/`ipaddrs`/`dns` are a known
+gap, tracked upstream; only `netmask`/`gateway` clear by omission today.)
+
 ## Referencing an adopted section
 
 A managed section's name is its `id`, so reference it by `.id` (see the

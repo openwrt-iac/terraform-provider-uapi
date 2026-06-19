@@ -98,6 +98,21 @@ func optionalComputedString(desc string) schema.StringAttribute {
 	}
 }
 
+// optionalString is a plain Optional string (no Computed, no UseStateForUnknown):
+// clear-on-omit. Removing it from config plans the value to null, which clears the
+// uci option on the collection PUT (full replace drops the omitted field; the
+// generator forbids this kind on singletons, whose PATCH merge would not clear).
+// Used for fields uapi marks
+// `x-uapi-clear-on-omit` (caller-owned, reads back null when absent), so omission
+// does not stay sticky. Not for server-defaulted fields, which keep
+// optionalComputed* to avoid perpetual diffs.
+func optionalString(desc string) schema.StringAttribute {
+	return schema.StringAttribute{
+		Optional:    true,
+		Description: desc,
+	}
+}
+
 func optionalComputedBool(desc string) schema.BoolAttribute {
 	return schema.BoolAttribute{
 		Optional:      true,

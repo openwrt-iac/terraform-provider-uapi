@@ -28,6 +28,7 @@ type labThingModel struct {
 	ID         types.String   `tfsdk:"id"`
 	Managed    types.Bool     `tfsdk:"managed"`
 	ETag       types.String   `tfsdk:"etag"`
+	Clearable  types.String   `tfsdk:"clearable"`
 	Flag       types.Bool     `tfsdk:"flag"`
 	HasSecret  types.Bool     `tfsdk:"has_secret"`
 	Lockedname types.String   `tfsdk:"lockedname"`
@@ -60,6 +61,7 @@ func (r *labThingResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"id":         optionalComputedIDAttribute(),
 			"managed":    managedAttribute(),
 			"etag":       etagAttribute(),
+			"clearable":  optionalString("uci option clearable."),
 			"flag":       optionalComputedBool("uci option flag."),
 			"has_secret": schema.BoolAttribute{Computed: true, Description: "uci option has_secret."},
 			"lockedname": schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Strict create-only name."},
@@ -86,6 +88,7 @@ func (r *labThingResource) body(ctx context.Context, m labThingModel, diags *dia
 	if create {
 		putStr(out, "id", m.ID)
 	}
+	putStr(out, "clearable", m.Clearable)
 	putBool(out, "flag", m.Flag)
 	if create {
 		putStr(out, "lockedname", m.Lockedname)
@@ -109,6 +112,7 @@ func (r *labThingResource) body(ctx context.Context, m labThingModel, diags *dia
 func (r *labThingResource) read(ctx context.Context, obj map[string]any, m *labThingModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
+	m.Clearable = strVal(obj, "clearable")
 	m.Flag = boolVal(obj, "flag")
 	m.HasSecret = boolValDefault(obj, "has_secret")
 	// lockedname is create-only: preserve the planned value (the API never returns it).

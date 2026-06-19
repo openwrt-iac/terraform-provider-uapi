@@ -38,6 +38,14 @@ func resAttr(f field) string {
 		default:
 			return fmt.Sprintf("%q: optionalComputedString(%q),", f.Name, f.Desc)
 		}
+	case "optclear":
+		// Plain Optional (clear-on-omit). Only strings are flaggable today; the spec
+		// criterion (`section.X ?? null` + nullable type) precludes lists, so fail
+		// loudly rather than emit a wrong shape if a non-string field gets flagged.
+		if f.GoType != "types.String" {
+			fail("optclear field %q has type %q; only types.String is supported (add a helper)", f.Name, f.GoType)
+		}
+		return fmt.Sprintf("%q: optionalString(%q),", f.Name, f.Desc)
 	case "writeonly":
 		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
 	case "createonly":

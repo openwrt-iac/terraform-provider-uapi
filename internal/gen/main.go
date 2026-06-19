@@ -21,11 +21,12 @@ import (
 )
 
 type specProp struct {
-	Type        any    `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
-	WriteOnly   bool   `json:"writeOnly"`
-	ReadOnly    bool   `json:"readOnly"`
-	Description string `json:"description"`
-	Deprecated  bool   `json:"deprecated"`
+	Type         any    `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
+	WriteOnly    bool   `json:"writeOnly"`
+	ReadOnly     bool   `json:"readOnly"`
+	Description  string `json:"description"`
+	Deprecated   bool   `json:"deprecated"`
+	XClearOnOmit bool   `json:"x-uapi-clear-on-omit"`
 }
 
 func main() {
@@ -66,7 +67,7 @@ type field struct {
 	Name       string // tfsdk + wire name
 	GoName     string
 	GoType     string // "types.String" | "types.Int64" | "types.Bool" | "types.List"
-	Kind       string // "required" | "optcomp" | "writeonly" | "createonly" | "computedbool" | "computedstring"
+	Kind       string // "required" | "optcomp" | "optclear" | "writeonly" | "createonly" | "computedbool" | "computedstring"
 	Desc       string
 	Deprecated bool // spec `deprecated: true`: emit a DeprecationMessage
 }
@@ -188,6 +189,12 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 			f.GoType = goType(p)
 			if req[n] {
 				f.Kind = "required"
+			} else if p.XClearOnOmit {
+				// uapi marks a caller-owned field whose fromUci reads back null when
+				// absent: model it plain Optional (not Optional+Computed) so omitting
+				// it from config clears it instead of being sticky. The spec lint
+				// guarantees the safe `section.X ?? null` shape and a nullable type.
+				f.Kind = "optclear"
 			} else {
 				f.Kind = "optcomp"
 			}
@@ -197,6 +204,15 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 		// silently dropping a deprecation if a future spec deprecates another kind.
 		if f.Deprecated && f.Kind != "createonly" {
 			fail("deprecated field %q has kind %q with no DeprecationMessage path; add one in resAttr", n, f.Kind)
+		}
+		// optclear clears by omission only because collections use PUT (full
+		// replace) so an absent field is dropped. A singleton's PATCH merge keeps
+		// absent fields, so a plain-Optional optclear field there would never clear
+		// and would plan a perpetual diff. No singleton is flagged today; fail loudly
+		// rather than silently mis-generate if one ever is (it would need a
+		// clearable-null body instead).
+		if f.Kind == "optclear" && d.Kind == "singleton" {
+			fail("clear-on-omit field %q on singleton %q: PATCH merge cannot clear by omission", n, d.Type)
 		}
 		r.Fields = append(r.Fields, f)
 	}

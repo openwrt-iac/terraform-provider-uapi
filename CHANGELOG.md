@@ -6,6 +6,26 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-06-19
+
+Tracks uapi 2.2.3. Consumes the new `x-uapi-clear-on-omit` spec annotation so
+caller-owned, non-defaulted fields can be cleared by removing them from config.
+
+### Changed
+- `uapi_network_interface.netmask` and `gateway` are now plain `Optional` (were
+  `Optional + Computed`). Removing one from config plans it to null (an in-place
+  update, not a replacement) and clears the uci option, which is how you drop a
+  leftover static field on an interface adopted into `proto=dhcp`. Other optional
+  fields are unchanged, and server-defaulted fields stay sticky (no perpetual
+  diffs).
+
+### Upgrade note
+- Run `terraform plan` after upgrading. A managed or adopted `uapi_network_interface`
+  with `netmask` or `gateway` in state but not in config will plan those to null on
+  the first plan, then converge on apply. Interfaces that set them in config see no
+  change. (`ipaddr`/`ipaddrs`/`dns` are not yet clearable this way; tracked
+  upstream at openwrt-iac/uapi#3.)
+
 ## [2.2.1] - 2026-06-18
 
 Tracks uapi 2.2.1 (a validate-only patch; no schema change versus 2.2.0) and

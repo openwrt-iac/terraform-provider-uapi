@@ -34,6 +34,7 @@ func (d *labThingDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"id":         dsIDAttribute(),
 			"managed":    dsManagedAttribute(),
 			"etag":       dsComputedString("Opaque ETag of the resource's current state."),
+			"clearable":  dsComputedString("uci option clearable."),
 			"flag":       dsComputedBool("uci option flag."),
 			"has_secret": dsComputedBool("uci option has_secret."),
 			"lockedname": dsComputedString("Strict create-only name."),

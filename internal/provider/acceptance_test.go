@@ -231,6 +231,53 @@ resource "uapi_dhcp_host" "h" {
 	})
 }
 
+// TestAccClearOnOmit covers the 2.2.3 spec-driven clear-on-omit: netmask/gateway
+// are plain Optional, so removing them from config clears them (an in-place update
+// that converges), instead of Optional+Computed stickiness hiding the omission.
+func TestAccClearOnOmit(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "clr" {
+  id      = "clearif"
+  proto   = "static"
+  ipaddr  = "192.168.50.1"
+  netmask = "255.255.255.0"
+  gateway = "192.168.50.254"
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.clr", "netmask", "255.255.255.0"),
+					resource.TestCheckResourceAttr("uapi_network_interface.clr", "gateway", "192.168.50.254"),
+				),
+			},
+			{
+				// Drop netmask + gateway: in-place update that clears them, NOT sticky.
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "clr" {
+  id     = "clearif"
+  proto  = "static"
+  ipaddr = "192.168.50.1"
+}`,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("uapi_network_interface.clr", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("uapi_network_interface.clr", "netmask"),
+					resource.TestCheckNoResourceAttr("uapi_network_interface.clr", "gateway"),
+					// ipaddr is not clear-on-omit (not flagged): it must survive.
+					resource.TestCheckResourceAttr("uapi_network_interface.clr", "ipaddr", "192.168.50.1"),
+				),
+			},
+		},
+	})
+}
+
 // TestAccNameToIDMigration covers the 2.2.1 N3 fix: the deprecated create-only
 // `name` is an alias of `id`, so switching `name = "x"` to `id = "x"` no longer
 // forces a destroy+recreate. It is a non-destructive in-place update (the `name`
