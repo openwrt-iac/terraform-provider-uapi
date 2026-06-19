@@ -10,6 +10,10 @@ Terraform / OpenTofu provider for [uapi](https://github.com/openwrt-iac/uapi), t
 - **When a comment is necessary, explain why, not what.** The non-obvious constraint or gotcha, not a restatement of the code.
 - **Commit messages are one line.**
 
+### Branch + PR workflow
+
+All code changes land via a PR, never via direct push to `main`. Cut a branch (`release/v<version>` for releases, `feat/<topic>` or `fix/<topic>` otherwise), push the branch, open the PR with `gh pr create --base main`, wait for CI to pass on the branch, then merge only when explicitly told. The PR is the reviewable diff; direct-pushing bypasses that gate even when CI passes locally. Force-with-lease is permitted on the branch, never on `main`. Tag-creation discipline is unchanged: signed annotated tag after merge, only when explicitly told to tag. Applies to every repo under the `openwrt-iac` org.
+
 ## Non-negotiable design decisions
 
 1. **No `/raw`.** The provider only wraps uapi's curated endpoints. The `/raw/<package>/<id>` passthrough follows uci field names with no cross-release stability promise, which does not belong in managed Terraform state. Do not add resources or data sources backed by `/raw`.
