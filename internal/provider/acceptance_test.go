@@ -589,6 +589,8 @@ func TestAccTokenEphemeral(t *testing.T) {
 ephemeral "uapi_token" "t" {
   name   = "ci"
   scopes = ["network:write"]
+  rate   = 50
+  burst  = 100
 }
 
 provider "echo" {
@@ -602,4 +604,12 @@ resource "echo" "minted" {}
 			),
 		}},
 	})
+	// rate/burst are write-only inputs the API never returns, so assert they
+	// reached the wire via the captured create body rather than via state.
+	if got := m.lastTokenCreate["rate"]; got != float64(50) {
+		t.Errorf("rate not sent on mint: got %v, want 50", got)
+	}
+	if got := m.lastTokenCreate["burst"]; got != float64(100) {
+		t.Errorf("burst not sent on mint: got %v, want 100", got)
+	}
 }

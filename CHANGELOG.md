@@ -6,6 +6,32 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-06-24
+
+Tracks uapi 2.3.0.
+
+### Added
+- `uapi_token` ephemeral resource gains optional `rate` and `burst`. They set the
+  minted token's per-token rate limit (requests per second) and token-bucket
+  capacity; omitting them inherits the server's global limits.
+
+### Changed
+- `uapi_network_device.type` is now `Optional` (was `Required`). uapi 2.3.0 no longer
+  requires `type` on a `config device` section, so a stock options-override section
+  (name + macaddr, no type, as `config_generate` emits on some targets) round-trips.
+
+### Notes
+- uapi 2.3.0's PATCH change (it no longer drops uci options a resource does not model)
+  and its relaxed validation (empty/`00` wireless country, `owe` encryption,
+  type-less network devices) need no provider change: the provider reads full
+  responses back into state and does no client-side enum validation. The PATCH fix
+  also stops `uapi_system` (the only PATCH resource) from clobbering unmodeled options.
+- Commit-confirmed apply is not included. uapi has postponed its apply-confirm
+  integration to a future release (2.4.0 at the earliest, contingent on the
+  apply-confirm package maturing), so there is nothing for the provider to consume.
+  When it returns, the per-write form does not fit Terraform's apply model; the
+  provider would track the standalone arm endpoint instead.
+
 ## [2.2.3] - 2026-06-19
 
 Tracks uapi 2.2.3. Consumes the new `x-uapi-clear-on-omit` spec annotation so

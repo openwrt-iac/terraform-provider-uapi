@@ -39,7 +39,9 @@ provider "uapi" {
 ### Optional
 
 - `allowed_cidrs` (List of String) Source CIDRs the token is restricted to (empty = any).
+- `burst` (Number) Per-token burst: token-bucket capacity. Overrides the global burst (default 200). Absent inherits the global.
 - `expires_in_seconds` (Number) Token lifetime in seconds.
+- `rate` (Number) Per-token rate limit: requests per second. Overrides the global rate (default 100). Absent inherits the global.
 
 ### Read-Only
 

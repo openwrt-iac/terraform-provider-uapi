@@ -29,6 +29,8 @@ type tokenEphemeralModel struct {
 	Scopes           types.List   `tfsdk:"scopes"`
 	ExpiresInSeconds types.Int64  `tfsdk:"expires_in_seconds"`
 	AllowedCIDRs     types.List   `tfsdk:"allowed_cidrs"`
+	Rate             types.Int64  `tfsdk:"rate"`
+	Burst            types.Int64  `tfsdk:"burst"`
 	ID               types.String `tfsdk:"id"`
 	Token            types.String `tfsdk:"token"`
 }
@@ -69,6 +71,14 @@ func (e *tokenEphemeral) Schema(_ context.Context, _ ephemeral.SchemaRequest, re
 				Optional:    true,
 				Description: "Source CIDRs the token is restricted to (empty = any).",
 			},
+			"rate": ephschema.Int64Attribute{
+				Optional:    true,
+				Description: "Per-token rate limit: requests per second. Overrides the global rate (default 100). Absent inherits the global.",
+			},
+			"burst": ephschema.Int64Attribute{
+				Optional:    true,
+				Description: "Per-token burst: token-bucket capacity. Overrides the global burst (default 200). Absent inherits the global.",
+			},
 			"id": ephschema.StringAttribute{
 				Computed:    true,
 				Description: "Token id (equal to name; used to revoke on close).",
@@ -94,6 +104,8 @@ func (e *tokenEphemeral) Open(ctx context.Context, req ephemeral.OpenRequest, re
 	putList(ctx, body, "scopes", m.Scopes, ds.d)
 	putInt64(body, "expires_in_seconds", m.ExpiresInSeconds)
 	putList(ctx, body, "allowed_cidrs", m.AllowedCIDRs, ds.d)
+	putInt64(body, "rate", m.Rate)
+	putInt64(body, "burst", m.Burst)
 	if resp.Diagnostics.HasError() {
 		return
 	}
