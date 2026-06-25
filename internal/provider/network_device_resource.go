@@ -57,7 +57,7 @@ func (r *networkDeviceResource) Schema(_ context.Context, _ resource.SchemaReque
 			"mtu":     optionalComputedInt64("uci option mtu."),
 			"name":    schema.StringAttribute{Required: true, Description: "Optional section name."},
 			"ports":   optionalComputedStringList("uci option ports."),
-			"type":    schema.StringAttribute{Required: true, Description: "uci option type."},
+			"type":    optionalComputedString("uci option type."),
 			"vid":     optionalComputedInt64("uci option vid."),
 		},
 	}

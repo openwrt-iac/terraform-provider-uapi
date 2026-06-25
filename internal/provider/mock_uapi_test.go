@@ -23,6 +23,8 @@ type mockUAPI struct {
 	counter int
 	// runtime injected on GET for these collections
 	runtime map[string]map[string]any
+	// lastTokenCreate is the decoded body of the most recent POST /tokens.
+	lastTokenCreate map[string]any
 }
 
 func newMockUAPI() *mockUAPI {
@@ -109,6 +111,7 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	case path == "/tokens" && r.Method == http.MethodPost:
 		body := m.decode(r)
+		m.lastTokenCreate = body
 		name, _ := body["name"].(string)
 		writeJSON(w, http.StatusCreated, map[string]any{"name": name, "bearer": "deadbeefdeadbeefdeadbeefdeadbeef"}, "")
 		return

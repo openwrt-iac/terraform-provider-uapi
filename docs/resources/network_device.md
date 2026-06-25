@@ -15,7 +15,6 @@ Network device.
 ```terraform
 resource "uapi_network_device" "example" {
   name = "example"
-  type = "example"
 }
 ```
 
@@ -25,7 +24,6 @@ resource "uapi_network_device" "example" {
 ### Required
 
 - `name` (String) Optional section name.
-- `type` (String) uci option type.
 
 ### Optional
 
@@ -35,6 +33,7 @@ resource "uapi_network_device" "example" {
 - `macaddr` (String) uci option macaddr.
 - `mtu` (Number) uci option mtu.
 - `ports` (List of String) uci option ports.
+- `type` (String) uci option type.
 - `vid` (Number) uci option vid.
 
 ### Read-Only
