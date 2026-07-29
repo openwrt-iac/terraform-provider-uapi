@@ -6,6 +6,13 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+- The provider `endpoint` documentation example now shows `/api/v2` instead of the
+  stale `/api/v1`, matching the major this provider line covers. Docs only, no
+  behavior change: the version prefix comes from the user-supplied endpoint.
+- `make install` writes to the `openwrt-iac` plugin namespace instead of the
+  pre-rename `raspbeguy` one, so a dev override built from source resolves.
+
 ## [2.3.0] - 2026-06-24
 
 Tracks uapi 2.3.0.
