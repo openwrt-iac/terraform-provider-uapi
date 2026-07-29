@@ -32,6 +32,9 @@ data "uapi_firewall_rule" "example" {
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `match` (Attributes) Match conditions. (see [below for nested schema](#nestedatt--match))
 - `name` (String) Optional section name.
+- `set_dscp` (String) DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or value 0-63 to set. Required by target DSCP.
+- `set_mark` (String) fwmark to set, as a value or value/mask (decimal or `0x` hex). Target MARK requires this or `set_xmark`.
+- `set_xmark` (String) fwmark to set with XOR semantics, as a value or value/mask. The alternative to `set_mark` for target MARK.
 - `target` (String) Target / action.
 
 <a id="nestedatt--match"></a>
@@ -42,8 +45,10 @@ Read-Only:
 - `dest_ip` (List of String) Destination IP addresses or CIDRs.
 - `dest_port` (List of String) Destination ports.
 - `dest_zone` (String) Destination firewall zone name.
+- `dscp` (String) Match a DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or a value 0-63. Prefix with `!` to negate.
 - `family` (String) Address family: any, ipv4, or ipv6.
-- `proto` (List of String) Protocols.
+- `mark` (String) Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate.
+- `proto` (List of String) Protocols to match, by name or number (`tcp`, `udp`, `gre`, `sctp`, `47`) or a wildcard (`all`, `any`, `tcpudp`). Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those.
 - `src_ip` (List of String) Source IP addresses or CIDRs.
 - `src_port` (List of String) Source ports.
-- `src_zone` (String) Source firewall zone name.
+- `src_zone` (String) Source firewall zone name. Omit it for an output-chain rule; target NOTRACK requires a real zone name here (not the `*` wildcard).

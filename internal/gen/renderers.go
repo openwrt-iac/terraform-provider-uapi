@@ -210,6 +210,13 @@ func renderResource(r resModel) string {
 	}
 	if r.Nested != nil {
 		p("\t\t\t%q: schema.SingleNestedAttribute{", r.Nested.Name)
+		// Always Required, even though as of uapi 2.4.0 only firewall/redirects
+		// still lists `match` in the spec's required set (rules and nat both accept
+		// a match-less section). The model types the block as *nestedStruct, and an
+		// Optional+Computed object plans as unknown, which cannot unmarshal into a
+		// pointer. Making it optional means retyping every match block as
+		// types.Object and hand-rolling body()/read() around it, to save writing
+		// `match = {}` on the rare section that matches everything.
 		p("\t\t\t\tRequired: true,")
 		p("\t\t\t\tDescription: %q,", "Match conditions.")
 		p("\t\t\t\tAttributes: map[string]schema.Attribute{")

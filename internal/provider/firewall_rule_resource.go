@@ -23,13 +23,16 @@ type firewallRuleResource struct{ client *client.Client }
 func NewFirewallRuleResource() resource.Resource { return &firewallRuleResource{} }
 
 type firewallRuleModel struct {
-	ID      types.String       `tfsdk:"id"`
-	Managed types.Bool         `tfsdk:"managed"`
-	ETag    types.String       `tfsdk:"etag"`
-	Enabled types.Bool         `tfsdk:"enabled"`
-	Name    types.String       `tfsdk:"name"`
-	Target  types.String       `tfsdk:"target"`
-	Match   *firewallRuleMatch `tfsdk:"match"`
+	ID       types.String       `tfsdk:"id"`
+	Managed  types.Bool         `tfsdk:"managed"`
+	ETag     types.String       `tfsdk:"etag"`
+	Enabled  types.Bool         `tfsdk:"enabled"`
+	Name     types.String       `tfsdk:"name"`
+	SetDscp  types.String       `tfsdk:"set_dscp"`
+	SetMark  types.String       `tfsdk:"set_mark"`
+	SetXmark types.String       `tfsdk:"set_xmark"`
+	Target   types.String       `tfsdk:"target"`
+	Match    *firewallRuleMatch `tfsdk:"match"`
 }
 
 type firewallRuleMatch struct {
@@ -41,6 +44,8 @@ type firewallRuleMatch struct {
 	DestPort types.List   `tfsdk:"dest_port"`
 	Proto    types.List   `tfsdk:"proto"`
 	Family   types.String `tfsdk:"family"`
+	Mark     types.String `tfsdk:"mark"`
+	Dscp     types.String `tfsdk:"dscp"`
 }
 
 func (r *firewallRuleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -55,24 +60,29 @@ func (r *firewallRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 	resp.Schema = schema.Schema{
 		Description: "Firewall rule.",
 		Attributes: map[string]schema.Attribute{
-			"id":      optionalComputedIDAttribute(),
-			"managed": managedAttribute(),
-			"etag":    etagAttribute(),
-			"enabled": optionalComputedBool("Whether the entry is active."),
-			"name":    optionalComputedString("Optional section name."),
-			"target":  schema.StringAttribute{Required: true, Description: "Target / action."},
+			"id":        optionalComputedIDAttribute(),
+			"managed":   managedAttribute(),
+			"etag":      etagAttribute(),
+			"enabled":   optionalComputedBool("Whether the entry is active."),
+			"name":      optionalComputedString("Optional section name."),
+			"set_dscp":  optionalComputedString("DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or value 0-63 to set. Required by target DSCP."),
+			"set_mark":  optionalComputedString("fwmark to set, as a value or value/mask (decimal or `0x` hex). Target MARK requires this or `set_xmark`."),
+			"set_xmark": optionalComputedString("fwmark to set with XOR semantics, as a value or value/mask. The alternative to `set_mark` for target MARK."),
+			"target":    schema.StringAttribute{Required: true, Description: "Target / action."},
 			"match": schema.SingleNestedAttribute{
 				Required:    true,
 				Description: "Match conditions.",
 				Attributes: map[string]schema.Attribute{
-					"src_zone":  schema.StringAttribute{Required: true, Description: "Source firewall zone name."},
+					"src_zone":  optionalComputedString("Source firewall zone name. Omit it for an output-chain rule; target NOTRACK requires a real zone name here (not the `*` wildcard)."),
 					"dest_zone": optionalComputedString("Destination firewall zone name."),
 					"src_ip":    optionalComputedStringList("Source IP addresses or CIDRs."),
 					"src_port":  optionalComputedStringList("Source ports."),
 					"dest_ip":   optionalComputedStringList("Destination IP addresses or CIDRs."),
 					"dest_port": optionalComputedStringList("Destination ports."),
-					"proto":     optionalComputedStringList("Protocols."),
+					"proto":     optionalComputedStringList("Protocols to match, by name or number (`tcp`, `udp`, `gre`, `sctp`, `47`) or a wildcard (`all`, `any`, `tcpudp`). Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those."),
 					"family":    optionalComputedString("Address family: any, ipv4, or ipv6."),
+					"mark":      optionalComputedString("Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate."),
+					"dscp":      optionalComputedString("Match a DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or a value 0-63. Prefix with `!` to negate."),
 				},
 			},
 		},
@@ -86,6 +96,9 @@ func (r *firewallRuleResource) body(ctx context.Context, m firewallRuleModel, di
 	}
 	putBool(out, "enabled", m.Enabled)
 	putStr(out, "name", m.Name)
+	putStr(out, "set_dscp", m.SetDscp)
+	putStr(out, "set_mark", m.SetMark)
+	putStr(out, "set_xmark", m.SetXmark)
 	putStr(out, "target", m.Target)
 	match := map[string]any{}
 	if m.Match != nil {
@@ -97,6 +110,8 @@ func (r *firewallRuleResource) body(ctx context.Context, m firewallRuleModel, di
 		putList(ctx, match, "dest_port", m.Match.DestPort, diags.d)
 		putList(ctx, match, "proto", m.Match.Proto, diags.d)
 		putStr(match, "family", m.Match.Family)
+		putStr(match, "mark", m.Match.Mark)
+		putStr(match, "dscp", m.Match.Dscp)
 	}
 	out["match"] = match
 	return out
@@ -107,6 +122,9 @@ func (r *firewallRuleResource) read(ctx context.Context, obj map[string]any, m *
 	m.Managed = boolVal(obj, "managed")
 	m.Enabled = boolVal(obj, "enabled")
 	m.Name = strVal(obj, "name")
+	m.SetDscp = strVal(obj, "set_dscp")
+	m.SetMark = strVal(obj, "set_mark")
+	m.SetXmark = strVal(obj, "set_xmark")
 	m.Target = strVal(obj, "target")
 	nested, _ := obj["match"].(map[string]any)
 	if nested == nil {
@@ -121,6 +139,8 @@ func (r *firewallRuleResource) read(ctx context.Context, obj map[string]any, m *
 	nm.DestPort = diags.list(listVal(ctx, nested, "dest_port"))
 	nm.Proto = diags.list(listVal(ctx, nested, "proto"))
 	nm.Family = strVal(nested, "family")
+	nm.Mark = strVal(nested, "mark")
+	nm.Dscp = strVal(nested, "dscp")
 	m.Match = nm
 }
 

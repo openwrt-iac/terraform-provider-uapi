@@ -115,6 +115,86 @@ resource "uapi_firewall_rule" "r" {
 	})
 }
 
+// firewall/nat's match block is the third match shape: nested like a rule, but
+// with scalar addresses and ports rather than lists, because firewall4 parses a
+// `config nat` section's options as scalars. Only `proto` stays a list.
+func TestAccFirewallNat_scalarMatch(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_firewall_nat" "n" {
+  target = "SNAT"
+  snat_ip = "203.0.113.7"
+  match = {
+    src_zone = "wan"
+    src_ip   = "192.168.9.0/24"
+    proto    = ["tcp"]
+  }
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("uapi_firewall_nat.n", "id"),
+					resource.TestCheckResourceAttrSet("uapi_firewall_nat.n", "etag"),
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "managed", "true"),
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "target", "SNAT"),
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "snat_ip", "203.0.113.7"),
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "match.src_zone", "wan"),
+					// scalar, not match.src_ip.0
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "match.src_ip", "192.168.9.0/24"),
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "match.proto.0", "tcp"),
+				),
+			},
+			{
+				// update in place, including a scalar match field
+				Config: providerHCL(m.URL) + `
+resource "uapi_firewall_nat" "n" {
+  target = "MASQUERADE"
+  match = {
+    src_zone  = "wan"
+    src_ip    = "192.168.10.0/24"
+    dest_port = "443"
+    proto     = ["tcp"]
+  }
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "target", "MASQUERADE"),
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "match.src_ip", "192.168.10.0/24"),
+					resource.TestCheckResourceAttr("uapi_firewall_nat.n", "match.dest_port", "443"),
+				),
+			},
+			{
+				ResourceName:      "uapi_firewall_nat.n",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// A nat section that matches all egress carries an empty match block rather than
+// no match block: the schema requires it (see the note in renderers.go).
+func TestAccFirewallNat_emptyMatch(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+resource "uapi_firewall_nat" "all" {
+  target = "MASQUERADE"
+  match  = {}
+}`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttrSet("uapi_firewall_nat.all", "id"),
+				resource.TestCheckResourceAttr("uapi_firewall_nat.all", "target", "MASQUERADE"),
+			),
+		}},
+	})
+}
+
 func TestAccWirelessInterface_writeOnlyKey(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

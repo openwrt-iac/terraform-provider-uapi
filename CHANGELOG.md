@@ -6,12 +6,68 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-07-31
+
+Tracks uapi 2.4.0, which closes the gap between what the firewall resources
+advertise and what firewall4 actually applies. Requires uapi >= 2.4.0 for the new
+resource and fields.
+
+### Added
+- `uapi_firewall_nat` resource and data source, wrapping `config nat`: the way to
+  express MASQUERADE or an exemption from source NAT. `target` is `SNAT` (with
+  `snat_ip` / `snat_port`), `MASQUERADE`, or `ACCEPT`. Its nested `match` is a third
+  match shape: nested like a rule, but with **scalar** addresses and ports, because
+  firewall4 parses a `config nat` section's options as scalars. Only `proto` is a
+  list.
+- `uapi_firewall_rule` gains `set_mark`, `set_xmark`, and `set_dscp`, plus the `DSCP`
+  target. A `MARK` or `DSCP` target with no value to set is now a `422` instead of a
+  rule the router silently discards.
+- `uapi_firewall_rule` gains `match.mark` and `match.dscp`; `uapi_firewall_redirect`
+  gains `match.mark`. Each accepts a leading `!` to negate.
+- `uapi_firewall_redirect` gains `match.src_dip`, the address firewall4 rewrites the
+  source to on an SNAT redirect and matches the external destination against on a
+  DNAT one. It was the only mandatory option of an SNAT redirect that was not
+  modelled, and because updates are a full-replace PUT, its absence was destructive:
+  a plain read-modify-write of a working section dropped it. SNAT redirects are
+  writable for the first time.
+- `runtime.effective_proto` on the `uapi_network_interface` data source: the protocol
+  netifd is actually running. It differs from the configured `proto` when the handler
+  package is missing (`wwan` is the case that arises in practice), where the write
+  succeeds, uci keeps the value, and the interface is inert. Comparing the two fields
+  is the only way to detect that.
+
+### Changed
+- `uapi_firewall_rule.match.src_zone` is now `Optional` (was `Required`). firewall4
+  needs a source zone only for `NOTRACK`; a rule without one is valid and lands in
+  the `output` chain. `uapi_firewall_redirect.match.src_zone` stays required.
+
 ### Fixed
 - The provider `endpoint` documentation example now shows `/api/v2` instead of the
   stale `/api/v1`, matching the major this provider line covers. Docs only, no
   behavior change: the version prefix comes from the user-supplied endpoint.
 - `make install` writes to the `openwrt-iac` plugin namespace instead of the
   pre-rename `raspbeguy` one, so a dev override built from source resolves.
+
+### Notes
+- uapi 2.4.0 tightens firewall validation, and configurations that previously
+  returned 200 while the router discarded the section are now rejected with a `422`.
+  The provider adds no client-side validation for any of it (enums and grammars are
+  validated server-side so uapi can widen them without a provider release), so these
+  surface as apply-time errors. Run `terraform plan` and expect the firewall guide's
+  new sections to explain them. The one to know about is a port matched alongside a
+  protocol that cannot carry one: that was a silent **widening**, not a no-op, and
+  `proto = ["all"]` with a `dest_port` rendered a rule matching everything.
+- A redirect's `match` fields stay lists on the wire but now accept at most one value
+  each; a second is a `422`. No provider type change.
+- uapi 2.4.0 leaves the `match` block itself optional on `firewall/rules` and
+  `firewall/nat` (only `firewall/redirects` still requires it), but the provider
+  requires it on all three. Write `match = {}` for a section that matches
+  everything. Terraform's type system is the reason: the block is modelled as a
+  nested struct, and making it optional would plan it as unknown, which that
+  representation cannot hold.
+- The repaired `openvpn` `dev_type` / `proto` enums and the `readOnly` flag now set on
+  the `runtime` blocks need no provider change: the provider does no client-side enum
+  validation and the generator never modelled `runtime` as writable.
 
 ## [2.3.0] - 2026-06-24
 

@@ -54,7 +54,8 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
 (and on the Terraform Registry) document every attribute; the groups below are a map.
 
 - **Firewall:** `uapi_firewall_rule`, `uapi_firewall_zone`, `uapi_firewall_redirect`,
-  `uapi_firewall_forwarding`, `uapi_firewall_defaults` (singleton).
+  `uapi_firewall_nat` (source NAT / MASQUERADE), `uapi_firewall_forwarding`,
+  `uapi_firewall_defaults` (singleton).
 - **Network:** `uapi_network_interface` (incl. WireGuard: write-only `private_key`),
   `uapi_network_device`, `uapi_network_route`, `uapi_network_rule`, `uapi_network_bridge_vlan`,
   `uapi_network_wireguard_peer` (write-only `preshared_key`).
