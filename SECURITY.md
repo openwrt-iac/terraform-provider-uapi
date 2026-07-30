@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Open a private security advisory on the GitHub repository
-(`raspbeguy/terraform-provider-uapi`) or contact the maintainer directly. Please
+(`openwrt-iac/terraform-provider-uapi`) or contact the maintainer directly. Please
 do not file public issues for vulnerabilities.
 
 ## Secrets in Terraform state

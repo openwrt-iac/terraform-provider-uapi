@@ -2,7 +2,7 @@ BINARY  := terraform-provider-uapi
 VERSION ?= 0.1.0
 # Dev override install location (see dev.tfrc).
 HOSTNAME := registry.terraform.io
-NAMESPACE := raspbeguy
+NAMESPACE := openwrt-iac
 NAME := uapi
 OS_ARCH := $(shell go env GOOS)_$(shell go env GOARCH)
 INSTALL_DIR := $(HOME)/.terraform.d/plugins/$(HOSTNAME)/$(NAMESPACE)/$(NAME)/$(VERSION)/$(OS_ARCH)
