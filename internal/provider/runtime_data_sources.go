@@ -21,15 +21,16 @@ type ifaceRouteModel struct {
 }
 
 type networkInterfaceRuntimeModel struct {
-	Up          types.Bool        `tfsdk:"up"`
-	Pending     types.Bool        `tfsdk:"pending"`
-	Available   types.Bool        `tfsdk:"available"`
-	L3Device    types.String      `tfsdk:"l3_device"`
-	Uptime      types.Int64       `tfsdk:"uptime"`
-	IPv4Address []ifaceAddrModel  `tfsdk:"ipv4_address"`
-	IPv6Address []ifaceAddrModel  `tfsdk:"ipv6_address"`
-	IPv6Prefix  []ifaceAddrModel  `tfsdk:"ipv6_prefix"`
-	Route       []ifaceRouteModel `tfsdk:"route"`
+	Up             types.Bool        `tfsdk:"up"`
+	Pending        types.Bool        `tfsdk:"pending"`
+	Available      types.Bool        `tfsdk:"available"`
+	EffectiveProto types.String      `tfsdk:"effective_proto"`
+	L3Device       types.String      `tfsdk:"l3_device"`
+	Uptime         types.Int64       `tfsdk:"uptime"`
+	IPv4Address    []ifaceAddrModel  `tfsdk:"ipv4_address"`
+	IPv6Address    []ifaceAddrModel  `tfsdk:"ipv6_address"`
+	IPv6Prefix     []ifaceAddrModel  `tfsdk:"ipv6_prefix"`
+	Route          []ifaceRouteModel `tfsdk:"route"`
 }
 
 type wirelessInterfaceRuntimeModel struct {
@@ -65,14 +66,15 @@ func parseNetworkInterfaceRuntime(obj map[string]any) *networkInterfaceRuntimeMo
 		rt = map[string]any{}
 	}
 	rm := &networkInterfaceRuntimeModel{
-		Up:          boolVal(rt, "up"),
-		Pending:     boolVal(rt, "pending"),
-		Available:   boolVal(rt, "available"),
-		L3Device:    strVal(rt, "l3_device"),
-		Uptime:      int64Val(rt, "uptime"),
-		IPv4Address: addrList(rt["ipv4_address"]),
-		IPv6Address: addrList(rt["ipv6_address"]),
-		IPv6Prefix:  addrList(rt["ipv6_prefix"]),
+		Up:             boolVal(rt, "up"),
+		Pending:        boolVal(rt, "pending"),
+		Available:      boolVal(rt, "available"),
+		EffectiveProto: strVal(rt, "effective_proto"),
+		L3Device:       strVal(rt, "l3_device"),
+		Uptime:         int64Val(rt, "uptime"),
+		IPv4Address:    addrList(rt["ipv4_address"]),
+		IPv6Address:    addrList(rt["ipv6_address"]),
+		IPv6Prefix:     addrList(rt["ipv6_prefix"]),
 	}
 	if arr, ok := rt["route"].([]any); ok {
 		for _, e := range arr {
@@ -117,14 +119,15 @@ func networkInterfaceRuntimeAttribute() dsschema.SingleNestedAttribute {
 		Computed:    true,
 		Description: "Live ubus-derived runtime state (read-only; reflects actual operation, not config).",
 		Attributes: map[string]dsschema.Attribute{
-			"up":           dsschema.BoolAttribute{Computed: true, Description: "Whether the interface is up."},
-			"pending":      dsschema.BoolAttribute{Computed: true, Description: "Whether the interface is mid-setup."},
-			"available":    dsschema.BoolAttribute{Computed: true, Description: "Whether the interface is available."},
-			"l3_device":    dsschema.StringAttribute{Computed: true, Description: "Actual L3 kernel device."},
-			"uptime":       dsschema.Int64Attribute{Computed: true, Description: "Seconds since the interface came up."},
-			"ipv4_address": dsschema.ListNestedAttribute{Computed: true, Description: "Assigned IPv4 addresses.", NestedObject: addr},
-			"ipv6_address": dsschema.ListNestedAttribute{Computed: true, Description: "Assigned IPv6 addresses.", NestedObject: addr},
-			"ipv6_prefix":  dsschema.ListNestedAttribute{Computed: true, Description: "Delegated IPv6 prefixes.", NestedObject: addr},
+			"up":              dsschema.BoolAttribute{Computed: true, Description: "Whether the interface is up."},
+			"pending":         dsschema.BoolAttribute{Computed: true, Description: "Whether the interface is mid-setup."},
+			"available":       dsschema.BoolAttribute{Computed: true, Description: "Whether the interface is available."},
+			"effective_proto": dsschema.StringAttribute{Computed: true, Description: "Protocol netifd is actually running. It differs from the configured `proto` when no handler is registered for that protocol (the handler package is missing): netifd discards the value, reports `none`, and the interface is inert even though the write succeeded and a read-back returns the configured value. Comparing the two is the only way to detect that."},
+			"l3_device":       dsschema.StringAttribute{Computed: true, Description: "Actual L3 kernel device."},
+			"uptime":          dsschema.Int64Attribute{Computed: true, Description: "Seconds since the interface came up."},
+			"ipv4_address":    dsschema.ListNestedAttribute{Computed: true, Description: "Assigned IPv4 addresses.", NestedObject: addr},
+			"ipv6_address":    dsschema.ListNestedAttribute{Computed: true, Description: "Assigned IPv6 addresses.", NestedObject: addr},
+			"ipv6_prefix":     dsschema.ListNestedAttribute{Computed: true, Description: "Delegated IPv6 prefixes.", NestedObject: addr},
 			"route": dsschema.ListNestedAttribute{Computed: true, Description: "Active routes.", NestedObject: dsschema.NestedAttributeObject{Attributes: map[string]dsschema.Attribute{
 				"target":  dsschema.StringAttribute{Computed: true, Description: "Destination network."},
 				"mask":    dsschema.Int64Attribute{Computed: true, Description: "Destination prefix length."},

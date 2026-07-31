@@ -32,6 +32,10 @@ func TestAccAllResources(t *testing.T) {
   src  = "lan"
   dest = "wan"
 }`},
+		{typ: "uapi_firewall_nat", hcl: `resource "uapi_firewall_nat" "t" {
+  target = "MASQUERADE"
+  match  = { src_zone = "wan" }
+}`},
 		{typ: "uapi_firewall_defaults", singleton: true, hcl: `resource "uapi_firewall_defaults" "t" {
   input = "ACCEPT"
 }`},

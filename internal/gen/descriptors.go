@@ -14,15 +14,27 @@ type descriptor struct {
 	Nested        *nested
 	Runtime       string   // "" | "interface" | "wireless": adds a computed runtime block to the data source
 	CreateOnly    []string // fields that are create-time only and immutable (Optional + RequiresReplace, sent only on create, never returned), e.g. an interface `name`
+	Descs         map[string]string
 }
 
-// Desc returns a human description for a field (best-effort; docs only).
+// Desc returns a human description for a field (best-effort; docs only). The
+// per-resource Descs win over commonDesc, which is keyed by field name alone and
+// so cannot describe a field whose meaning differs per resource (`target`).
 func (d descriptor) Desc(field string) string {
+	if s, ok := d.Descs[field]; ok {
+		return s
+	}
 	if s, ok := commonDesc[field]; ok {
 		return s
 	}
 	return "uci option " + field + "."
 }
+
+// Shared by the three firewall match shapes, which validate these identically.
+const (
+	protoDesc = "Protocols to match, by name or number (`tcp`, `udp`, `gre`, `sctp`, `47`) or a wildcard (`all`, `any`, `tcpudp`). Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those."
+	markDesc  = "Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate."
+)
 
 var commonDesc = map[string]string{
 	"name":               "Optional section name.",
@@ -40,6 +52,11 @@ var commonDesc = map[string]string{
 	"src_port":           "Source ports.",
 	"dest_port":          "Destination ports.",
 	"src_dport":          "Incoming (destination) ports to redirect.",
+	"set_mark":           "fwmark to set, as a value or value/mask (decimal or `0x` hex). Target MARK requires this or `set_xmark`.",
+	"set_xmark":          "fwmark to set with XOR semantics, as a value or value/mask. The alternative to `set_mark` for target MARK.",
+	"set_dscp":           "DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or value 0-63 to set. Required by target DSCP.",
+	"snat_ip":            "IPv4 address to rewrite the source to. Requires target SNAT.",
+	"snat_port":          "Port or port range to rewrite the source port to. Requires target SNAT.",
 	"key":                "Encryption passphrase. Write-only: never returned by the API.",
 	"private_key":        "WireGuard private key. Write-only: never returned by the API.",
 	"preshared_key":      "WireGuard preshared key. Write-only: never returned by the API.",
@@ -60,30 +77,60 @@ var commonDesc = map[string]string{
 	"ext_line":           "Verbatim lines rendered into unbound_ext.conf, outside the `server:` clause. One entry per line; build whole `forward-zone:`/`view:`/`stub:` clauses by listing them in order.",
 }
 
+// A rule needs no source zone (fw4 puts it in the output chain), but a redirect
+// always does, so src_zone is required on one and not the other.
 func matchFields(redirect bool) *nested {
+	srcZone := field{Name: "src_zone", GoName: "SrcZone", GoType: "types.String", Kind: "optcomp",
+		Desc: "Source firewall zone name. Omit it for an output-chain rule; target NOTRACK requires a real zone name here (not the `*` wildcard)."}
+	if redirect {
+		srcZone.Kind = "required"
+		srcZone.Desc = "Source firewall zone name."
+	}
 	f := []field{
-		{Name: "src_zone", GoName: "SrcZone", GoType: "types.String", Kind: "required", Desc: "Source firewall zone name."},
+		srcZone,
 		{Name: "dest_zone", GoName: "DestZone", GoType: "types.String", Kind: "optcomp", Desc: "Destination firewall zone name."},
 		{Name: "src_ip", GoName: "SrcIP", GoType: "types.List", Kind: "optcomp", Desc: "Source IP addresses or CIDRs."},
 		{Name: "src_port", GoName: "SrcPort", GoType: "types.List", Kind: "optcomp", Desc: "Source ports."},
 	}
 	if redirect {
-		f = append(f, field{Name: "src_dport", GoName: "SrcDport", GoType: "types.List", Kind: "optcomp", Desc: "Incoming (destination) ports to redirect."})
-		f = append(f, field{Name: "dest_ip", GoName: "DestIP", GoType: "types.List", Kind: "optcomp", Desc: "Internal destination IP addresses."})
-		f = append(f, field{Name: "dest_port", GoName: "DestPort", GoType: "types.List", Kind: "optcomp", Desc: "Internal destination ports."})
+		f = append(f, field{Name: "src_dport", GoName: "SrcDport", GoType: "types.List", Kind: "optcomp", Desc: "With target DNAT, the incoming (destination) port or range to redirect. With target SNAT, the source port to rewrite to. One value only."})
+		f = append(f, field{Name: "src_dip", GoName: "SrcDip", GoType: "types.List", Kind: "optcomp", Desc: "With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the address to rewrite the source to, and required. One value only."})
+		f = append(f, field{Name: "dest_ip", GoName: "DestIP", GoType: "types.List", Kind: "optcomp", Desc: "Internal destination address to rewrite to. One value only."})
+		f = append(f, field{Name: "dest_port", GoName: "DestPort", GoType: "types.List", Kind: "optcomp", Desc: "Internal destination port or range to rewrite to. One value only."})
 	} else {
 		f = append(f, field{Name: "dest_ip", GoName: "DestIP", GoType: "types.List", Kind: "optcomp", Desc: "Destination IP addresses or CIDRs."})
 		f = append(f, field{Name: "dest_port", GoName: "DestPort", GoType: "types.List", Kind: "optcomp", Desc: "Destination ports."})
 	}
 	f = append(f,
-		field{Name: "proto", GoName: "Proto", GoType: "types.List", Kind: "optcomp", Desc: "Protocols."},
+		field{Name: "proto", GoName: "Proto", GoType: "types.List", Kind: "optcomp", Desc: protoDesc},
 		field{Name: "family", GoName: "Family", GoType: "types.String", Kind: "optcomp", Desc: "Address family: any, ipv4, or ipv6."},
+		field{Name: "mark", GoName: "Mark", GoType: "types.String", Kind: "optcomp", Desc: markDesc},
 	)
+	if !redirect {
+		f = append(f, field{Name: "dscp", GoName: "Dscp", GoType: "types.String", Kind: "optcomp", Desc: "Match a DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or a value 0-63. Prefix with `!` to negate."})
+	}
 	gt := "firewallRuleMatch"
 	if redirect {
 		gt = "firewallRedirectMatch"
 	}
 	return &nested{Name: "match", GoType: gt, Fields: f}
+}
+
+// firewall/nat is a third match shape: firewall4 parses the addresses and ports
+// of a `config nat` section as scalars, so these are strings where the rule and
+// redirect equivalents are lists.
+func natMatchFields() *nested {
+	return &nested{Name: "match", GoType: "firewallNatMatch", Fields: []field{
+		{Name: "src_zone", GoName: "SrcZone", GoType: "types.String", Kind: "optcomp", Desc: "Outbound (postrouting) zone this rule applies to. Unset matches all egress traffic."},
+		{Name: "device", GoName: "Device", GoType: "types.String", Kind: "optcomp", Desc: "Outbound interface name to match."},
+		{Name: "src_ip", GoName: "SrcIP", GoType: "types.String", Kind: "optcomp", Desc: "Source address to match: an address, a prefix in either family, or a uci network name. Prefix with `!` to negate."},
+		{Name: "src_port", GoName: "SrcPort", GoType: "types.String", Kind: "optcomp", Desc: "Source port or range to match. Prefix with `!` to negate."},
+		{Name: "dest_ip", GoName: "DestIP", GoType: "types.String", Kind: "optcomp", Desc: "Destination address to match, in the same forms as `src_ip`."},
+		{Name: "dest_port", GoName: "DestPort", GoType: "types.String", Kind: "optcomp", Desc: "Destination port or range to match. Prefix with `!` to negate."},
+		{Name: "proto", GoName: "Proto", GoType: "types.List", Kind: "optcomp", Desc: protoDesc + " Defaults to all when unset."},
+		{Name: "mark", GoName: "Mark", GoType: "types.String", Kind: "optcomp", Desc: markDesc},
+		{Name: "family", GoName: "Family", GoType: "types.String", Kind: "optcomp", Desc: "Address family: any, ipv4, or ipv6. Unset means IPv4 only, firewall4's backwards-compatible default for NAT; set `any` for dual-stack."},
+	}}
 }
 
 var descriptors = []descriptor{
@@ -92,6 +139,10 @@ var descriptors = []descriptor{
 	{Type: "firewall_rule", Schema: "FirewallRules", Collection: "firewall/rules", Kind: "collection", Label: "firewall rule", GenDataSource: true, Nested: matchFields(false)},
 	{Type: "firewall_redirect", Schema: "FirewallRedirects", Collection: "firewall/redirects", Kind: "collection", Label: "firewall redirect", GenDataSource: true, Nested: matchFields(true)},
 	{Type: "firewall_forwarding", Schema: "FirewallForwardings", Collection: "firewall/forwardings", Kind: "collection", Label: "firewall forwarding", GenDataSource: true},
+	{Type: "firewall_nat", Schema: "FirewallNat", Collection: "firewall/nat", Kind: "collection", Label: "firewall NAT rule", GenDataSource: true, Nested: natMatchFields(), Descs: map[string]string{
+		"target": "What to do with matched traffic: `SNAT` rewrites the source to `snat_ip`/`snat_port`, `MASQUERADE` rewrites it to the outbound interface address, `ACCEPT` exempts it from source NAT. Defaults to `MASQUERADE`.",
+		"name":   "Human-readable label for this NAT rule.",
+	}},
 	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
 	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", CreateOnly: []string{"name"}},

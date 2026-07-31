@@ -64,6 +64,7 @@ data "uapi_network_interface" "example" {
 Read-Only:
 
 - `available` (Boolean) Whether the interface is available.
+- `effective_proto` (String) Protocol netifd is actually running. It differs from the configured `proto` when no handler is registered for that protocol (the handler package is missing): netifd discards the value, reports `none`, and the interface is inert even though the write succeeded and a read-back returns the configured value. Comparing the two is the only way to detect that.
 - `ipv4_address` (Attributes List) Assigned IPv4 addresses. (see [below for nested schema](#nestedatt--runtime--ipv4_address))
 - `ipv6_address` (Attributes List) Assigned IPv6 addresses. (see [below for nested schema](#nestedatt--runtime--ipv6_address))
 - `ipv6_prefix` (Attributes List) Delegated IPv6 prefixes. (see [below for nested schema](#nestedatt--runtime--ipv6_prefix))

@@ -2,7 +2,7 @@
 	"openapi": "3.1.0",
 	"info": {
 		"title": "uapi",
-		"version": "2.3.0",
+		"version": "2.4.0",
 		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v2/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v2/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v2/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}` (computed; clients ignore for drift detection).\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). Conditional GET via `If-None-Match` returns 304 when matching. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.wireguard_peers.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: snapshot, validate, commit, reload, restore-on-failure. `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means the init script's reload action **exited 0**. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - the resource has no reload services\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/raspbeguy/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major. Operators who need an older major keep that package version installed.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/raspbeguy/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/raspbeguy/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/raspbeguy/uapi/tree/main/docs)",
 		"contact": {
 			"name": "uapi",
@@ -30,11 +30,15 @@
 		},
 		{
 			"name": "Firewall / Rules",
-			"description": "Firewall rules (`config rule`): nested `match` block for src/dest zone, IPs, ports, proto, family. Cross-refs `firewall/zones`."
+			"description": "Firewall rules (`config rule`): nested `match` block for src/dest zone, IPs, ports, proto, family, mark, dscp, plus the MARK and DSCP targets and their `set_*` values. Cross-refs `firewall/zones`."
 		},
 		{
 			"name": "Firewall / Redirects",
 			"description": "Port forwards and NAT loopback (`config redirect`). Cross-refs `firewall/zones`."
+		},
+		{
+			"name": "Firewall / Nat",
+			"description": "Source NAT (`config nat`): SNAT, MASQUERADE, or exemption from address rewriting, keyed on the outbound zone. Cross-refs `firewall/zones`."
 		},
 		{
 			"name": "Firewall / Forwardings",
@@ -252,6 +256,7 @@
 				"Firewall / Zones",
 				"Firewall / Rules",
 				"Firewall / Redirects",
+				"Firewall / Nat",
 				"Firewall / Forwardings",
 				"Firewall / Defaults"
 			]
@@ -1892,6 +1897,518 @@
 				},
 				"tags": [
 					"Firewall / Redirects"
+				]
+			}
+		},
+		"/firewall/nat": {
+			"get": {
+				"summary": "List nat",
+				"parameters": [
+					{
+						"name": "managed",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"false"
+							]
+						},
+						"description": "Filter by managed flag"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"headers": {
+							"Link": {
+								"$ref": "#/components/headers/Link"
+							},
+							"X-Next-Cursor": {
+								"$ref": "#/components/headers/XNextCursor"
+							},
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						},
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/FirewallNat"
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					}
+				},
+				"tags": [
+					"Firewall / Nat"
+				]
+			},
+			"post": {
+				"summary": "Create a nat",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/FirewallNat"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FirewallNat"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							},
+							"X-Reload-Status": {
+								"$ref": "#/components/headers/XReloadStatus"
+							},
+							"X-Reload-Services": {
+								"$ref": "#/components/headers/XReloadServices"
+							},
+							"Idempotent-Replayed": {
+								"$ref": "#/components/headers/IdempotentReplayed"
+							},
+							"ETag": {
+								"$ref": "#/components/headers/ETag"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					},
+					"409": {
+						"$ref": "#/components/responses/Conflict"
+					},
+					"412": {
+						"$ref": "#/components/responses/PreconditionFailed"
+					},
+					"422": {
+						"$ref": "#/components/responses/ValidationFailed"
+					},
+					"423": {
+						"$ref": "#/components/responses/Locked"
+					}
+				},
+				"tags": [
+					"Firewall / Nat"
+				]
+			}
+		},
+		"/firewall/nat/{id}": {
+			"parameters": [
+				{
+					"name": "id",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string"
+					},
+					"description": "Section identifier (uapi-generated ULID for managed sections, uci cfg-name for unmanaged)"
+				}
+			],
+			"get": {
+				"summary": "Get one nat",
+				"description": "Supports conditional GET via `If-None-Match` (or `?if_none_match=` query param for clients behind uhttpd's strict CGI env). A matching ETag returns 304 with no body.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FirewallNat"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							},
+							"ETag": {
+								"$ref": "#/components/headers/ETag"
+							}
+						}
+					},
+					"304": {
+						"description": "If-None-Match matched current ETag",
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					}
+				},
+				"tags": [
+					"Firewall / Nat"
+				]
+			},
+			"put": {
+				"summary": "Replace a nat",
+				"description": "Honors `If-Match` (header or `?if_match=`). Stale ETag → 412.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/FirewallNat"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Replaced",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FirewallNat"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							},
+							"X-Reload-Status": {
+								"$ref": "#/components/headers/XReloadStatus"
+							},
+							"X-Reload-Services": {
+								"$ref": "#/components/headers/XReloadServices"
+							},
+							"ETag": {
+								"$ref": "#/components/headers/ETag"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					},
+					"409": {
+						"$ref": "#/components/responses/Conflict"
+					},
+					"412": {
+						"$ref": "#/components/responses/PreconditionFailed"
+					},
+					"422": {
+						"$ref": "#/components/responses/ValidationFailed"
+					},
+					"423": {
+						"$ref": "#/components/responses/Locked"
+					}
+				},
+				"tags": [
+					"Firewall / Nat"
+				]
+			},
+			"patch": {
+				"summary": "Partially update a nat",
+				"description": "Default content-type uses RFC 7396 merge-patch semantics (partial object). `application/json-patch+json` selects RFC 6902 JSON Patch with ops add/remove/replace/move/copy/test (the test op enables atomic compare-and-swap without If-Match).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"description": "merge-patch partial body"
+							}
+						},
+						"application/json-patch+json": {
+							"schema": {
+								"$ref": "#/components/schemas/JsonPatch"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Updated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FirewallNat"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							},
+							"X-Reload-Status": {
+								"$ref": "#/components/headers/XReloadStatus"
+							},
+							"X-Reload-Services": {
+								"$ref": "#/components/headers/XReloadServices"
+							},
+							"ETag": {
+								"$ref": "#/components/headers/ETag"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					},
+					"409": {
+						"$ref": "#/components/responses/Conflict"
+					},
+					"412": {
+						"$ref": "#/components/responses/PreconditionFailed"
+					},
+					"422": {
+						"$ref": "#/components/responses/ValidationFailed"
+					},
+					"423": {
+						"$ref": "#/components/responses/Locked"
+					}
+				},
+				"tags": [
+					"Firewall / Nat"
+				]
+			},
+			"delete": {
+				"summary": "Delete a nat",
+				"responses": {
+					"204": {
+						"description": "Deleted",
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							},
+							"X-Reload-Status": {
+								"$ref": "#/components/headers/XReloadStatus"
+							},
+							"X-Reload-Services": {
+								"$ref": "#/components/headers/XReloadServices"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					},
+					"409": {
+						"$ref": "#/components/responses/Conflict"
+					},
+					"412": {
+						"$ref": "#/components/responses/PreconditionFailed"
+					},
+					"422": {
+						"$ref": "#/components/responses/ValidationFailed"
+					},
+					"423": {
+						"$ref": "#/components/responses/Locked"
+					}
+				},
+				"tags": [
+					"Firewall / Nat"
+				]
+			}
+		},
+		"/firewall/nat/{id}/adopt": {
+			"parameters": [
+				{
+					"name": "id",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string"
+					},
+					"description": "Section identifier (uapi-generated ULID for managed sections, uci cfg-name for unmanaged)"
+				}
+			],
+			"post": {
+				"summary": "Adopt an anonymous firewall NAT rule",
+				"description": "Adopt an anonymous firewall NAT rule into uapi management. The section is renamed to a uapi-generated ULID and `managed` flips to `true`; subsequent writes (PUT, PATCH, DELETE) are then permitted. **The id changes**: the response carries the new ULID; any client state pointing at the original anonymous id (`cfgXXXXXX`) must be updated. Idempotent: adopting an already-managed section returns 409 unmanaged_resource (see error envelope).",
+				"responses": {
+					"200": {
+						"description": "Adopted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FirewallNat"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							},
+							"X-Reload-Status": {
+								"$ref": "#/components/headers/XReloadStatus"
+							},
+							"X-Reload-Services": {
+								"$ref": "#/components/headers/XReloadServices"
+							},
+							"Idempotent-Replayed": {
+								"$ref": "#/components/headers/IdempotentReplayed"
+							},
+							"ETag": {
+								"$ref": "#/components/headers/ETag"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					},
+					"409": {
+						"$ref": "#/components/responses/Conflict"
+					},
+					"412": {
+						"$ref": "#/components/responses/PreconditionFailed"
+					},
+					"422": {
+						"$ref": "#/components/responses/ValidationFailed"
+					},
+					"423": {
+						"$ref": "#/components/responses/Locked"
+					}
+				},
+				"tags": [
+					"Firewall / Nat"
 				]
 			}
 		},
@@ -19323,7 +19840,8 @@
 						"type": "boolean"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -19368,7 +19886,8 @@
 						"type": "string"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -19837,7 +20356,9 @@
 						]
 					},
 					"body": {
-						"description": "Request body for POST/PUT/PATCH; omit for GET/DELETE"
+						"type": "object",
+						"additionalProperties": true,
+						"description": "Request body for POST/PUT/PATCH; shape is the target resource's own schema. Omit for GET/DELETE"
 					},
 					"if_match": {
 						"type": "string",
@@ -19934,18 +20455,40 @@
 							"REJECT",
 							"DROP",
 							"NOTRACK",
-							"MARK"
+							"MARK",
+							"DSCP"
 						]
 					},
 					"enabled": {
 						"type": "boolean",
 						"default": true
 					},
+					"set_mark": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+						"description": "Mark to set, as value or value/mask (decimal or 0x hex, 32-bit). Requires target MARK; mutually exclusive with set_xmark"
+					},
+					"set_xmark": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+						"description": "Mark to XOR, as value or value/mask (decimal or 0x hex, 32-bit). Requires target MARK; mutually exclusive with set_mark"
+					},
+					"set_dscp": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$",
+						"description": "DSCP class to apply: a symbolic name (CS0-CS7, BE, LE, AF11-AF43, EF, case-insensitive) or a number 0-63. Requires target DSCP"
+					},
 					"match": {
 						"type": "object",
-						"required": [
-							"src_zone"
-						],
 						"properties": {
 							"src_zone": {
 								"type": [
@@ -19974,31 +20517,24 @@
 							"src_port": {
 								"type": "array",
 								"items": {
-									"type": "string"
+									"type": "string",
+									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
 								}
 							},
 							"dest_port": {
 								"type": "array",
 								"items": {
-									"type": "string"
+									"type": "string",
+									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
 								}
 							},
 							"proto": {
 								"type": "array",
 								"items": {
 									"type": "string",
-									"enum": [
-										"tcp",
-										"udp",
-										"icmp",
-										"icmpv6",
-										"esp",
-										"ah",
-										"igmp",
-										"any",
-										"all"
-									]
-								}
+									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+								},
+								"description": "Match protocols by name or number, e.g. tcp, udp, gre, sctp, 47, or the wildcards all / any / tcpudp. Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those and would otherwise emit a rule matching the whole protocol. Defaults to tcpudp when unset"
 							},
 							"family": {
 								"type": "string",
@@ -20008,23 +20544,43 @@
 									"ipv6"
 								],
 								"default": "any"
+							},
+							"mark": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
+							},
+							"dscp": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$",
+								"description": "Match DSCP class or value, optionally negated with a leading '!'"
 							}
 						}
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
-					"target",
-					"match"
+					"target"
 				],
 				"allOf": [
 					{
 						"if": {
-							"type": "object",
+							"properties": {
+								"target": {
+									"const": "NOTRACK"
+								}
+							},
 							"required": [
-								"match"
+								"target"
 							]
 						},
 						"then": {
@@ -20035,7 +20591,53 @@
 										"src_zone"
 									]
 								}
-							}
+							},
+							"required": [
+								"match"
+							]
+						}
+					},
+					{
+						"if": {
+							"properties": {
+								"target": {
+									"const": "MARK"
+								}
+							},
+							"required": [
+								"target"
+							]
+						},
+						"then": {
+							"anyOf": [
+								{
+									"required": [
+										"set_mark"
+									]
+								},
+								{
+									"required": [
+										"set_xmark"
+									]
+								}
+							]
+						}
+					},
+					{
+						"if": {
+							"properties": {
+								"target": {
+									"const": "DSCP"
+								}
+							},
+							"required": [
+								"target"
+							]
+						},
+						"then": {
+							"required": [
+								"set_dscp"
+							]
 						}
 					}
 				]
@@ -20114,7 +20716,8 @@
 						"default": "any"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -20146,7 +20749,8 @@
 							"DNAT",
 							"SNAT"
 						],
-						"default": "DNAT"
+						"default": "DNAT",
+						"description": "DNAT forwards an incoming connection onward. SNAT rewrites the source of forwarded traffic and additionally needs match.dest_zone and match.src_dip; it is the legacy spelling, and LuCI migrates such sections to firewall/nat, so prefer that resource for new source NAT"
 					},
 					"enabled": {
 						"type": "boolean",
@@ -20172,50 +20776,62 @@
 							},
 							"src_ip": {
 								"type": "array",
+								"maxItems": 1,
 								"items": {
 									"type": "string"
-								}
+								},
+								"description": "Match source address. firewall4 accepts one value per redirect, resolving an address, a prefix in either family, or a uci network name"
 							},
 							"src_port": {
 								"type": "array",
+								"maxItems": 1,
 								"items": {
-									"type": "string"
-								}
+									"type": "string",
+									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								},
+								"description": "Match source port or range, one value per redirect"
 							},
 							"src_dport": {
 								"type": "array",
+								"maxItems": 1,
+								"items": {
+									"type": "string",
+									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								},
+								"description": "With target DNAT, the incoming destination port or range to match. With target SNAT, the source port to rewrite to. One value per redirect"
+							},
+							"src_dip": {
+								"type": "array",
+								"maxItems": 1,
 								"items": {
 									"type": "string"
-								}
+								},
+								"description": "With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the source address to rewrite to, and required. One value per redirect"
 							},
 							"dest_ip": {
 								"type": "array",
+								"maxItems": 1,
 								"items": {
 									"type": "string"
-								}
+								},
+								"description": "Rewrite destination address, one value per redirect"
 							},
 							"dest_port": {
 								"type": "array",
+								"maxItems": 1,
 								"items": {
-									"type": "string"
-								}
+									"type": "string",
+									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								},
+								"description": "Rewrite destination port or range, one value per redirect"
 							},
 							"proto": {
 								"type": "array",
 								"items": {
 									"type": "string",
-									"enum": [
-										"tcp",
-										"udp",
-										"icmp",
-										"icmpv6",
-										"esp",
-										"ah",
-										"igmp",
-										"any",
-										"all"
-									]
-								}
+									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+								},
+								"description": "Match protocols by name or number, e.g. tcp, udp, gre, sctp, 47, or the wildcards all / any / tcpudp. Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those and would otherwise emit a redirect matching the whole protocol. Defaults to tcpudp when unset"
 							},
 							"family": {
 								"type": "string",
@@ -20225,6 +20841,14 @@
 									"ipv6"
 								],
 								"default": "any"
+							},
+							"mark": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
 							}
 						}
 					},
@@ -20248,7 +20872,8 @@
 						"description": "Zones in which NAT reflection is allowed (uci list reflection_zone)"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -20271,6 +20896,191 @@
 									]
 								}
 							}
+						}
+					},
+					{
+						"if": {
+							"properties": {
+								"target": {
+									"const": "SNAT"
+								}
+							},
+							"required": [
+								"target"
+							]
+						},
+						"then": {
+							"properties": {
+								"match": {
+									"type": "object",
+									"required": [
+										"dest_zone",
+										"src_dip"
+									]
+								}
+							},
+							"required": [
+								"match"
+							]
+						}
+					}
+				]
+			},
+			"FirewallNat": {
+				"type": "object",
+				"description": "uapi resource backed by uci firewall.nat",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
+						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
+					},
+					"managed": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Human-readable label for this NAT rule"
+					},
+					"target": {
+						"type": "string",
+						"enum": [
+							"SNAT",
+							"MASQUERADE",
+							"ACCEPT"
+						],
+						"default": "MASQUERADE",
+						"description": "SNAT rewrites to snat_ip/snat_port, MASQUERADE rewrites to the outbound interface address, ACCEPT exempts matched traffic from source NAT"
+					},
+					"enabled": {
+						"type": "boolean",
+						"default": true
+					},
+					"snat_ip": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "IPv4 address to rewrite the source to. Requires target SNAT"
+					},
+					"snat_port": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Port or port range to rewrite the source port to. Requires target SNAT"
+					},
+					"match": {
+						"type": "object",
+						"properties": {
+							"src_zone": {
+								"type": [
+									"string",
+									"null"
+								],
+								"description": "Outbound (postrouting) zone this rule applies to. Unset matches all egress traffic"
+							},
+							"device": {
+								"type": [
+									"string",
+									"null"
+								],
+								"description": "Outbound interface name to match"
+							},
+							"src_ip": {
+								"type": [
+									"string",
+									"null"
+								],
+								"description": "Match source address. firewall4 resolves an address, a prefix in either family, or a uci network name, optionally negated with a leading '!'"
+							},
+							"src_port": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
+								"description": "Match source port or range, optionally negated with a leading '!'"
+							},
+							"dest_ip": {
+								"type": [
+									"string",
+									"null"
+								],
+								"description": "Match destination address, in the same forms as src_ip"
+							},
+							"dest_port": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
+								"description": "Match destination port or range, optionally negated with a leading '!'"
+							},
+							"proto": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+								},
+								"description": "Match protocols by name or number, e.g. tcp, udp, gre, sctp, 47, or the wildcards all / any. When a port is matched, every protocol must be tcp or udp, or all of them a wildcard that firewall4 rewrites to both. Defaults to all when unset"
+							},
+							"mark": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
+							},
+							"family": {
+								"type": [
+									"string",
+									"null"
+								],
+								"enum": [
+									"any",
+									"ipv4",
+									"ipv6",
+									null
+								],
+								"description": "Restrict to an address family. Unset means IPv4 only, which is firewall4's backwards-compatible default for NAT; set 'any' for dual-stack"
+							}
+						}
+					},
+					"runtime": {
+						"type": "object",
+						"readOnly": true
+					}
+				},
+				"allOf": [
+					{
+						"if": {
+							"properties": {
+								"target": {
+									"const": "SNAT"
+								}
+							},
+							"required": [
+								"target"
+							]
+						},
+						"then": {
+							"anyOf": [
+								{
+									"required": [
+										"snat_ip"
+									]
+								},
+								{
+									"required": [
+										"snat_port"
+									]
+								}
+							]
 						}
 					}
 				]
@@ -20309,7 +21119,8 @@
 						"default": true
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -20391,7 +21202,8 @@
 						"description": "Enable hardware flow offloading (requires NIC support)"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -20426,7 +21238,8 @@
 							"wwan",
 							"wireguard"
 						],
-						"default": "none"
+						"default": "none",
+						"description": "Interface protocol. Several values need a handler package on the device: wwan needs `wwan`, wireguard needs `wireguard-tools`, dhcpv6 needs `odhcp6c`, and ppp/pppoe need `ppp`. When the handler is missing the write still succeeds and the interface is inert; `runtime.effective_proto` is what reveals it"
 					},
 					"ipaddr": {
 						"type": [
@@ -20499,6 +21312,13 @@
 							"available": {
 								"type": "boolean"
 							},
+							"effective_proto": {
+								"type": [
+									"string",
+									"null"
+								],
+								"description": "The protocol netifd is actually running for this interface. Differs from the configured `proto` when no handler is registered for it, in which case netifd reports `none` and the interface is inert; a mismatch means the device needs the handler package and a networking restart."
+							},
 							"l3_device": {
 								"type": [
 									"string",
@@ -20536,7 +21356,8 @@
 									"type": "object"
 								}
 							}
-						}
+						},
+						"readOnly": true
 					},
 					"name": {
 						"type": "string",
@@ -20745,7 +21566,8 @@
 						"description": "Enable IPv6 on this device"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -20847,7 +21669,8 @@
 						"default": "unicast"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -20940,7 +21763,8 @@
 						"description": "Match fwmark (value or value/mask)"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"allOf": [
@@ -21034,7 +21858,8 @@
 						"description": "Bridge ports with optional :t (tagged), :u (untagged), :* (pvid) suffix"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -21107,7 +21932,8 @@
 						"description": "Skip this peer when starting the tunnel"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					},
 					"preshared_key": {
 						"type": "string",
@@ -21190,7 +22016,8 @@
 						"description": "Disable this radio at boot"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -21319,7 +22146,8 @@
 								"type": "integer",
 								"minimum": 0
 							}
-						}
+						},
+						"readOnly": true
 					},
 					"key": {
 						"type": "string",
@@ -21444,7 +22272,8 @@
 						"description": "Pin this reservation to a specific dhcp/dnsmasq instance (section name)"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"allOf": [
@@ -21642,7 +22471,8 @@
 								"minimum": 0,
 								"description": "IPv6 leases issued on this section's interface"
 							}
-						}
+						},
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -21746,7 +22576,8 @@
 						"default": true
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -21789,7 +22620,8 @@
 						"description": "syslog priority (0=emerg .. 7=debug)"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -21869,7 +22701,8 @@
 						"default": false
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -21914,7 +22747,8 @@
 						"description": "Accept NTP servers learned via DHCP option 42"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"allOf": [
@@ -21989,7 +22823,8 @@
 						"description": "Allow remote port forwarding"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22112,7 +22947,8 @@
 						"description": "Reject requests from RFC1918 ranges with non-RFC1918 host header"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22161,7 +22997,8 @@
 						"description": "ISO 3166-1 alpha-2 country code (case-insensitive; normalized to uppercase on write)"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -22319,7 +23156,8 @@
 						"description": "Local-zone type for the configured domain"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22372,7 +23210,8 @@
 						"description": "Verbatim passthrough lines inserted inside unbound's `server:` clause. One uci entry per rendered line; `unbound-checkconf` validates grammar after restart."
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22402,7 +23241,8 @@
 						"description": "Verbatim lines rendered into `/etc/unbound/unbound_ext.conf` (outside the `server:` clause). One uci entry per rendered line; build whole `forward-zone:`, `view:`, `stub:`, or `remote-control:` clauses by listing them in order. `unbound-checkconf` validates grammar after restart."
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22466,7 +23306,8 @@
 						"description": "Per-packet overhead bytes for link-layer accounting"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -22492,7 +23333,8 @@
 						}
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22521,7 +23363,8 @@
 						"description": "SNMP community string"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -22562,7 +23405,8 @@
 						"description": "Security name (community for v1/v2c, USM user for v3)"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -22638,7 +23482,8 @@
 						"description": "View name granted for notifications"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -22685,7 +23530,8 @@
 						"description": "SNMPv2-MIB::sysObjectID OID"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22756,7 +23602,8 @@
 						}
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22789,7 +23636,8 @@
 						"description": "TCP port for the /metrics endpoint"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					},
 					"cpu": {
 						"type": "boolean",
@@ -22907,7 +23755,8 @@
 						"description": "Day of month that monthly counters roll over"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -22933,7 +23782,8 @@
 						"description": "Whether vnstat tracks this interface"
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -23000,7 +23850,8 @@
 						"description": "Seconds between netlink route-monitor polls."
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -23185,7 +24036,8 @@
 						"description": "Events that flush conntrack table."
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -23227,7 +24079,8 @@
 						"description": "Relative load-share weight among equal-metric members."
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -23267,7 +24120,8 @@
 						"description": "Member section names. Equal metric balances; lower metric is preferred."
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -23367,7 +24221,8 @@
 						"default": false
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				},
 				"required": [
@@ -23603,7 +24458,8 @@
 						"description": "Filter usteer's action to these SSIDs (empty = all)."
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					}
 				}
 			},
@@ -23640,14 +24496,32 @@
 							"string",
 							"null"
 						],
-						"enum": "NaN"
+						"enum": [
+							"tun",
+							"tap",
+							null
+						]
 					},
 					"proto": {
 						"type": [
 							"string",
 							"null"
 						],
-						"enum": "NaN"
+						"enum": [
+							"udp",
+							"tcp",
+							"tcp-client",
+							"tcp-server",
+							"udp4",
+							"tcp4",
+							"tcp4-client",
+							"tcp4-server",
+							"udp6",
+							"tcp6",
+							"tcp6-client",
+							"tcp6-server",
+							null
+						]
 					},
 					"port": {
 						"type": [
@@ -23961,7 +24835,8 @@
 						"readOnly": true
 					},
 					"runtime": {
-						"type": "object"
+						"type": "object",
+						"readOnly": true
 					},
 					"key": {
 						"type": "string",

@@ -51,12 +51,14 @@ Required:
 
 Optional:
 
-- `dest_ip` (List of String) Internal destination IP addresses.
-- `dest_port` (List of String) Internal destination ports.
+- `dest_ip` (List of String) Internal destination address to rewrite to. One value only.
+- `dest_port` (List of String) Internal destination port or range to rewrite to. One value only.
 - `dest_zone` (String) Destination firewall zone name.
 - `family` (String) Address family: any, ipv4, or ipv6.
-- `proto` (List of String) Protocols.
-- `src_dport` (List of String) Incoming (destination) ports to redirect.
+- `mark` (String) Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate.
+- `proto` (List of String) Protocols to match, by name or number (`tcp`, `udp`, `gre`, `sctp`, `47`) or a wildcard (`all`, `any`, `tcpudp`). Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those.
+- `src_dip` (List of String) With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the address to rewrite the source to, and required. One value only.
+- `src_dport` (List of String) With target DNAT, the incoming (destination) port or range to redirect. With target SNAT, the source port to rewrite to. One value only.
 - `src_ip` (List of String) Source IP addresses or CIDRs.
 - `src_port` (List of String) Source ports.
 

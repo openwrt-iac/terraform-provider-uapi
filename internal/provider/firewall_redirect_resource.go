@@ -41,10 +41,12 @@ type firewallRedirectMatch struct {
 	SrcIP    types.List   `tfsdk:"src_ip"`
 	SrcPort  types.List   `tfsdk:"src_port"`
 	SrcDport types.List   `tfsdk:"src_dport"`
+	SrcDip   types.List   `tfsdk:"src_dip"`
 	DestIP   types.List   `tfsdk:"dest_ip"`
 	DestPort types.List   `tfsdk:"dest_port"`
 	Proto    types.List   `tfsdk:"proto"`
 	Family   types.String `tfsdk:"family"`
+	Mark     types.String `tfsdk:"mark"`
 }
 
 func (r *firewallRedirectResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -76,11 +78,13 @@ func (r *firewallRedirectResource) Schema(_ context.Context, _ resource.SchemaRe
 					"dest_zone": optionalComputedString("Destination firewall zone name."),
 					"src_ip":    optionalComputedStringList("Source IP addresses or CIDRs."),
 					"src_port":  optionalComputedStringList("Source ports."),
-					"src_dport": optionalComputedStringList("Incoming (destination) ports to redirect."),
-					"dest_ip":   optionalComputedStringList("Internal destination IP addresses."),
-					"dest_port": optionalComputedStringList("Internal destination ports."),
-					"proto":     optionalComputedStringList("Protocols."),
+					"src_dport": optionalComputedStringList("With target DNAT, the incoming (destination) port or range to redirect. With target SNAT, the source port to rewrite to. One value only."),
+					"src_dip":   optionalComputedStringList("With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the address to rewrite the source to, and required. One value only."),
+					"dest_ip":   optionalComputedStringList("Internal destination address to rewrite to. One value only."),
+					"dest_port": optionalComputedStringList("Internal destination port or range to rewrite to. One value only."),
+					"proto":     optionalComputedStringList("Protocols to match, by name or number (`tcp`, `udp`, `gre`, `sctp`, `47`) or a wildcard (`all`, `any`, `tcpudp`). Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those."),
 					"family":    optionalComputedString("Address family: any, ipv4, or ipv6."),
+					"mark":      optionalComputedString("Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate."),
 				},
 			},
 		},
@@ -105,10 +109,12 @@ func (r *firewallRedirectResource) body(ctx context.Context, m firewallRedirectM
 		putList(ctx, match, "src_ip", m.Match.SrcIP, diags.d)
 		putList(ctx, match, "src_port", m.Match.SrcPort, diags.d)
 		putList(ctx, match, "src_dport", m.Match.SrcDport, diags.d)
+		putList(ctx, match, "src_dip", m.Match.SrcDip, diags.d)
 		putList(ctx, match, "dest_ip", m.Match.DestIP, diags.d)
 		putList(ctx, match, "dest_port", m.Match.DestPort, diags.d)
 		putList(ctx, match, "proto", m.Match.Proto, diags.d)
 		putStr(match, "family", m.Match.Family)
+		putStr(match, "mark", m.Match.Mark)
 	}
 	out["match"] = match
 	return out
@@ -133,10 +139,12 @@ func (r *firewallRedirectResource) read(ctx context.Context, obj map[string]any,
 	nm.SrcIP = diags.list(listVal(ctx, nested, "src_ip"))
 	nm.SrcPort = diags.list(listVal(ctx, nested, "src_port"))
 	nm.SrcDport = diags.list(listVal(ctx, nested, "src_dport"))
+	nm.SrcDip = diags.list(listVal(ctx, nested, "src_dip"))
 	nm.DestIP = diags.list(listVal(ctx, nested, "dest_ip"))
 	nm.DestPort = diags.list(listVal(ctx, nested, "dest_port"))
 	nm.Proto = diags.list(listVal(ctx, nested, "proto"))
 	nm.Family = strVal(nested, "family")
+	nm.Mark = strVal(nested, "mark")
 	m.Match = nm
 }
 
