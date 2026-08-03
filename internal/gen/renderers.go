@@ -28,6 +28,19 @@ func resAttr(f field) string {
 			return fmt.Sprintf("%q: schema.StringAttribute{Required: true, Description: %q},", f.Name, f.Desc)
 		}
 	case "optcomp":
+		// A mirrored pair needs the sibling-aware plan modifier instead of a plain
+		// UseStateForUnknown, which would promise a value that changes whenever the
+		// sibling does. Only string and list sides exist today.
+		if f.Mirror != "" {
+			switch f.GoType {
+			case "types.List":
+				return fmt.Sprintf("%q: mirroredStringList(%q, %q),", f.Name, f.Desc, f.Mirror)
+			case "types.String":
+				return fmt.Sprintf("%q: mirroredString(%q, %q),", f.Name, f.Desc, f.Mirror)
+			default:
+				fail("mirrored field %q has unsupported type %s", f.Name, f.GoType)
+			}
+		}
 		switch f.GoType {
 		case "types.List":
 			return fmt.Sprintf("%q: optionalComputedStringList(%q),", f.Name, f.Desc)

@@ -195,6 +195,118 @@ resource "uapi_firewall_nat" "all" {
 	})
 }
 
+// `ipaddr` and `ipaddrs` are one uci option that uapi fills under both names on
+// read, so whichever the config does not set is pinned in state and would be sent
+// back on the full-replace PUT. uapi prefers the list, so a stale pinned list
+// silently overwrote a changed scalar. Both directions have to survive a change.
+func TestAccNetworkInterface_mirroredAddressList(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "i" {
+  id      = "mirlist"
+  proto   = "static"
+  ipaddrs = ["192.168.60.1/24"]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.60.1/24"),
+					// the server mirrors the list's first entry into the scalar
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.60.1/24"),
+				),
+			},
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "i" {
+  id      = "mirlist"
+  proto   = "static"
+  ipaddrs = ["192.168.61.1/24"]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.61.1/24"),
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.61.1/24"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccNetworkInterface_mirroredAddressScalar(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "i" {
+  id     = "mirscalar"
+  proto  = "static"
+  ipaddr = "192.168.70.1/24"
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.70.1/24"),
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.70.1/24"),
+				),
+			},
+			{
+				// The regression: without dropping the pinned ipaddrs, the server's list
+				// preference applies the OLD address and the apply fails as inconsistent.
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "i" {
+  id     = "mirscalar"
+  proto  = "static"
+  ipaddr = "192.168.71.1/24"
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.71.1/24"),
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.71.1/24"),
+				),
+			},
+		},
+	})
+}
+
+// The other half of the mirror contract: when config sets neither side, the pair
+// must still round-trip on an unrelated update. The sibling-aware modifier falls
+// back to prior state there, so the full-replace PUT carries the address instead
+// of dropping the uci option.
+func TestAccNetworkInterface_mirrorPreservedOnUnrelatedUpdate(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "i" {
+  id     = "mirkeep"
+  proto  = "static"
+  ipaddr = "192.168.72.1/24"
+}`,
+				Check: resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.72.1/24"),
+			},
+			{
+				// ipaddr leaves config entirely and an unrelated field changes.
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "i" {
+  id     = "mirkeep"
+  proto  = "static"
+  metric = 42
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "metric", "42"),
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.72.1/24"),
+					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.72.1/24"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccWirelessInterface_writeOnlyKey(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

@@ -43,8 +43,8 @@ data "uapi_network_interface" "example" {
 - `ip6hint` (String) uci option ip6hint.
 - `ip6ifaceid` (String) uci option ip6ifaceid.
 - `ip6table` (String) uci option ip6table.
-- `ipaddr` (String) uci option ipaddr.
-- `ipaddrs` (List of String) uci option ipaddrs.
+- `ipaddr` (String) Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface.
+- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees.
 - `listen_port` (Number) uci option listen_port.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `metric` (Number) uci option metric.

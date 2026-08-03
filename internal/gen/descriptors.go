@@ -15,6 +15,17 @@ type descriptor struct {
 	Runtime       string   // "" | "interface" | "wireless": adds a computed runtime block to the data source
 	CreateOnly    []string // fields that are create-time only and immutable (Optional + RequiresReplace, sent only on create, never returned), e.g. an interface `name`
 	Descs         map[string]string
+	// Mirrors lists pairs of wire names that are two views of ONE uci option, which
+	// uapi fills from that single key on read. Both are Optional+Computed (they are
+	// server-filled), so plain UseStateForUnknown would pin the side the caller does
+	// not set and a full-replace PUT would send it back and clobber the one they do
+	// set. The generator gives both sides the sibling-aware plan modifier instead
+	// (mirroredString / mirroredStringList); see the comment on those.
+	//
+	// Note this does not make either side clearable: with neither in config both
+	// fall back to prior state and are resent, so removing an address from config
+	// does not drop the uci option. That gap is upstream, openwrt-iac/uapi#3.
+	Mirrors [][2]string
 }
 
 // Desc returns a human description for a field (best-effort; docs only). The
@@ -145,7 +156,15 @@ var descriptors = []descriptor{
 	}},
 	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
-	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", CreateOnly: []string{"name"}},
+	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", CreateOnly: []string{"name"},
+		Mirrors: [][2]string{{"ipaddr", "ipaddrs"}},
+		// Phrased to read correctly on the data source too, where "set one or the
+		// other" would be meaningless: these state a fact about the API rather than
+		// instructing the reader.
+		Descs: map[string]string{
+			"ipaddr":  "Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface.",
+			"ipaddrs": "Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees.",
+		}},
 	{Type: "network_device", Schema: "NetworkDevices", Collection: "network/devices", Kind: "collection", Label: "network device", GenDataSource: true},
 	{Type: "network_route", Schema: "NetworkRoutes", Collection: "network/routes", Kind: "collection", Label: "network route", GenDataSource: true},
 	{Type: "network_rule", Schema: "NetworkRules", Collection: "network/rules", Kind: "collection", Label: "network rule", GenDataSource: true},

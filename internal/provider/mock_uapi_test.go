@@ -49,6 +49,32 @@ func etagOf(obj map[string]any) string {
 	return `"` + hex.EncodeToString(sum[:])[:12] + `"`
 }
 
+// mirrorIpaddr reproduces how uapi stores a network interface's address: `ipaddr`
+// and `ipaddrs` are one uci option, toUci prefers the list whenever it is
+// non-empty, and fromUci then fills both names from that single key. Faithful
+// enough to catch a client that sends back a stale pinned mirror, which the list
+// preference would silently apply over the value the caller actually set.
+func mirrorIpaddr(obj map[string]any) {
+	if list, _ := obj["ipaddrs"].([]any); len(list) > 0 {
+		obj["ipaddr"] = list[0]
+		return
+	}
+	if s, ok := obj["ipaddr"].(string); ok && s != "" {
+		obj["ipaddrs"] = []any{s}
+		return
+	}
+	delete(obj, "ipaddr")
+	delete(obj, "ipaddrs")
+}
+
+// normalizeStored applies the per-collection server-side shaping the provider has
+// to round-trip against.
+func normalizeStored(coll string, obj map[string]any) {
+	if coll == "/network/interfaces" {
+		mirrorIpaddr(obj)
+	}
+}
+
 func (m *mockUAPI) ifMatch(r *http.Request) string {
 	if v := r.Header.Get("If-Match"); v != "" {
 		return v
@@ -214,6 +240,7 @@ func (m *mockUAPI) handleCollectionCreate(w http.ResponseWriter, r *http.Request
 	}
 	body["id"] = id
 	body["managed"] = true
+	normalizeStored(coll, body)
 	if m.store[coll] == nil {
 		m.store[coll] = map[string]map[string]any{}
 	}
@@ -243,11 +270,13 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 		if r.Method == http.MethodPut {
 			body["id"] = id
 			body["managed"] = obj["managed"]
+			normalizeStored(coll, body)
 			m.store[coll][id] = body
 		} else {
 			for k, v := range body {
 				obj[k] = v
 			}
+			normalizeStored(coll, obj)
 		}
 		writeJSON(w, http.StatusOK, m.withRuntime(coll, m.store[coll][id]), etagOf(m.store[coll][id]))
 	case http.MethodDelete:
