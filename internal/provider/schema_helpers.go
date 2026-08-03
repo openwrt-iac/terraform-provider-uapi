@@ -3,13 +3,16 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -95,6 +98,89 @@ func optionalComputedString(desc string) schema.StringAttribute {
 		Computed:      true,
 		Description:   desc,
 		PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+	}
+}
+
+// Mirrored attributes: two wire names for ONE server-side value (uapi's `ipaddr`
+// and `ipaddrs` are both filled from the uci `list ipaddr` key). Plain
+// UseStateForUnknown is wrong for them. It pins the side the config does not set
+// to its prior value, which both promises in the plan that the value will not
+// change (false as soon as the sibling changes, so the apply fails as an
+// inconsistent result) and sends the stale value back on the full-replace write,
+// where the server's precedence can apply it over the side the caller did set.
+//
+// So: plan the unset side as unknown whenever the sibling IS set, which lets the
+// server answer with anything and makes body() omit it, sending only the side the
+// caller manages. When neither side is set, fall back to the prior state so an
+// unrelated update still round-trips the address instead of dropping the option.
+type mirrorStringModifier struct{ sibling path.Path }
+
+func (m mirrorStringModifier) Description(context.Context) string {
+	return "Keeps the prior value unless " + m.sibling.String() + " is configured, in which case the server recomputes both."
+}
+
+func (m mirrorStringModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m mirrorStringModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || !req.PlanValue.IsUnknown() {
+		return // creating, or the config set this side explicitly
+	}
+	if siblingConfigured(ctx, req.Config, m.sibling, &resp.Diagnostics) {
+		return // leave unknown: the server derives this side from the sibling
+	}
+	resp.PlanValue = req.StateValue
+}
+
+type mirrorListModifier struct{ sibling path.Path }
+
+func (m mirrorListModifier) Description(context.Context) string {
+	return "Keeps the prior value unless " + m.sibling.String() + " is configured, in which case the server recomputes both."
+}
+
+func (m mirrorListModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m mirrorListModifier) PlanModifyList(ctx context.Context, req planmodifier.ListRequest, resp *planmodifier.ListResponse) {
+	if req.State.Raw.IsNull() || !req.PlanValue.IsUnknown() {
+		return
+	}
+	if siblingConfigured(ctx, req.Config, m.sibling, &resp.Diagnostics) {
+		return
+	}
+	resp.PlanValue = req.StateValue
+}
+
+// siblingConfigured reports whether the paired attribute carries a value in
+// config. An unknown sibling counts as configured: it is being set to something,
+// just not to a value known yet.
+func siblingConfigured(ctx context.Context, cfg tfsdk.Config, p path.Path, diags *diag.Diagnostics) bool {
+	var v attr.Value
+	if d := cfg.GetAttribute(ctx, p, &v); d.HasError() {
+		diags.Append(d...)
+		return false
+	}
+	return v != nil && !v.IsNull()
+}
+
+func mirroredString(desc, sibling string) schema.StringAttribute {
+	return schema.StringAttribute{
+		Optional:      true,
+		Computed:      true,
+		Description:   desc,
+		PlanModifiers: []planmodifier.String{mirrorStringModifier{sibling: path.Root(sibling)}},
+	}
+}
+
+func mirroredStringList(desc, sibling string) schema.ListAttribute {
+	return schema.ListAttribute{
+		ElementType:   types.StringType,
+		Optional:      true,
+		Computed:      true,
+		Description:   desc,
+		PlanModifiers: []planmodifier.List{mirrorListModifier{sibling: path.Root(sibling)}},
 	}
 }
 

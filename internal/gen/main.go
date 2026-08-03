@@ -69,7 +69,8 @@ type field struct {
 	GoType     string // "types.String" | "types.Int64" | "types.Bool" | "types.List"
 	Kind       string // "required" | "optcomp" | "optclear" | "writeonly" | "createonly" | "computedbool" | "computedstring"
 	Desc       string
-	Deprecated bool // spec `deprecated: true`: emit a DeprecationMessage
+	Deprecated bool   // spec `deprecated: true`: emit a DeprecationMessage
+	Mirror     string // wire name of the attribute this one mirrors (see descriptor.Mirrors)
 }
 
 type nested struct {
@@ -89,6 +90,7 @@ type resModel struct {
 	Nested     *nested
 	GenDS      bool
 	Runtime    string
+	Mirrors    [][2]string
 }
 
 func (r resModel) hasCreateOnly() bool {
@@ -217,7 +219,34 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 		r.Fields = append(r.Fields, f)
 	}
 	r.Nested = d.Nested
+	r.Mirrors = d.Mirrors
+	// Point each side of a mirrored pair at the other. The pair must be plain
+	// optcomp: a mirrored field is by definition server-filled, so it cannot be
+	// required, write-only, create-only or clear-on-omit, and emitting the mirror
+	// plan modifier over one of those shapes would silently drop that behaviour.
+	for _, m := range r.Mirrors {
+		for i, name := range m {
+			f := r.fieldByName(name)
+			if f == nil {
+				fail("resource %q mirrors %q, which is not a field on it", d.Type, name)
+			}
+			if f.Kind != "optcomp" {
+				fail("resource %q mirrors %q but its kind is %q; mirrored fields must be optcomp", d.Type, name, f.Kind)
+			}
+			f.Mirror = m[1-i]
+		}
+	}
 	return r
+}
+
+// fieldByName returns a pointer into r.Fields so callers can annotate in place.
+func (r *resModel) fieldByName(name string) *field {
+	for i := range r.Fields {
+		if r.Fields[i].Name == name {
+			return &r.Fields[i]
+		}
+	}
+	return nil
 }
 
 func typeOf(p specProp) string {

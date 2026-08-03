@@ -6,6 +6,38 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-08-03
+
+A provider-side bugfix release. It tracks no new uapi surface and needs no
+particular uapi patch: the provider now sends only one of the two names, so the fix
+does not depend on which one the server prefers and applies against uapi 2.4.0 just
+as well as 2.4.1.
+
+### Fixed
+- Changing `uapi_network_interface.ipaddr` no longer fails or silently applies the
+  previous address. `ipaddr` and `ipaddrs` are two wire names for one uci option
+  (`list ipaddr`) and uapi fills both from that single key on read, so whichever one
+  a config did not set was pinned in state and sent back on the full-replace PUT.
+  Because uapi prefers the list, a stale pinned `ipaddrs` overrode a changed
+  `ipaddr`: the write returned 200, uci kept the old address, and Terraform failed
+  the apply with "Provider produced inconsistent result after apply". Managing
+  `ipaddrs` and changing it hit the mirror image of the same problem, which uapi
+  briefly rejected with a `422` before fixing it upstream
+  (openwrt-iac/uapi#65). Both directions now work, and an update that touches
+  neither still round-trips the address rather than clearing it, which remains
+  gated on openwrt-iac/uapi#3.
+- `uapi_network_interface.ipaddr` and `ipaddrs` documentation now explains that they
+  are one uci option and that you should set one or the other, replacing the
+  placeholder `uci option ipaddr.` rows.
+
+### Notes
+- The pair is modelled with a sibling-aware plan modifier rather than
+  `UseStateForUnknown`: the unset side plans as unknown when the sibling is
+  configured (so the server can recompute it and the request omits the stale value),
+  and falls back to prior state when neither is configured (so an unrelated update
+  preserves the address). New resources do not need this; it applies only where the
+  API exposes one value under two names.
+
 ## [2.4.0] - 2026-07-31
 
 Tracks uapi 2.4.0, which closes the gap between what the firewall resources
