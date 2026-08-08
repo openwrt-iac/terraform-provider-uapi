@@ -49,11 +49,11 @@ func (r *mwan3GlobalsResource) Schema(_ context.Context, _ resource.SchemaReques
 			"id":             computedIDAttribute(),
 			"managed":        managedAttribute(),
 			"etag":           etagAttribute(),
-			"local_source":   optionalComputedString("uci option local_source."),
+			"local_source":   deprecatedOptionalComputedString("uci option local_source.", "Deprecated, removed in v3: nothing reads this. The live knob is `source_routing`, a boolean about route-line parsing, not an interface name, so there is nothing to rename this to."),
 			"logging":        optionalComputedBool("uci option logging."),
 			"loglevel":       optionalComputedString("uci option loglevel."),
 			"mmx_mask":       optionalComputedString("uci option mmx_mask."),
-			"rtmon_interval": optionalComputedInt64("uci option rtmon_interval."),
+			"rtmon_interval": deprecatedOptionalComputedInt64("uci option rtmon_interval.", "Deprecated, removed in v3: nothing reads this. `mwan3rtmon` is driven by `ip monitor route`, so there is no polling interval to set."),
 		},
 	}
 }

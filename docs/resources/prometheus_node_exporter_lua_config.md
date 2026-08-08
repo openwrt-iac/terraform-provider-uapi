@@ -22,26 +22,26 @@ resource "uapi_prometheus_node_exporter_lua_config" "example" {
 
 ### Optional
 
-- `boottime` (Boolean) uci option boottime.
-- `cpu` (Boolean) uci option cpu.
-- `diskstats` (Boolean) uci option diskstats.
-- `edac` (Boolean) uci option edac.
-- `entropy` (Boolean) uci option entropy.
-- `filesystem` (Boolean) uci option filesystem.
-- `hwmon` (Boolean) uci option hwmon.
+- `boottime` (Boolean, Deprecated) uci option boottime.
+- `cpu` (Boolean, Deprecated) uci option cpu.
+- `diskstats` (Boolean, Deprecated) uci option diskstats.
+- `edac` (Boolean, Deprecated) uci option edac.
+- `entropy` (Boolean, Deprecated) uci option entropy.
+- `filesystem` (Boolean, Deprecated) uci option filesystem.
+- `hwmon` (Boolean, Deprecated) uci option hwmon.
 - `listen_interface` (String) uci option listen_interface.
-- `listen_ipv6` (Boolean) uci option listen_ipv6.
+- `listen_ipv6` (Boolean, Deprecated) uci option listen_ipv6.
 - `listen_port` (Number) uci option listen_port.
-- `loadavg` (Boolean) uci option loadavg.
-- `meminfo` (Boolean) uci option meminfo.
-- `netdev` (Boolean) uci option netdev.
-- `netstat` (Boolean) uci option netstat.
-- `stat` (Boolean) uci option stat.
-- `textfile` (Boolean) uci option textfile.
-- `thermal_zone` (Boolean) uci option thermal_zone.
-- `time` (Boolean) uci option time.
-- `uname` (Boolean) uci option uname.
-- `vmstat` (Boolean) uci option vmstat.
+- `loadavg` (Boolean, Deprecated) uci option loadavg.
+- `meminfo` (Boolean, Deprecated) uci option meminfo.
+- `netdev` (Boolean, Deprecated) uci option netdev.
+- `netstat` (Boolean, Deprecated) uci option netstat.
+- `stat` (Boolean, Deprecated) uci option stat.
+- `textfile` (Boolean, Deprecated) uci option textfile.
+- `thermal_zone` (Boolean, Deprecated) uci option thermal_zone.
+- `time` (Boolean, Deprecated) uci option time.
+- `uname` (Boolean, Deprecated) uci option uname.
+- `vmstat` (Boolean, Deprecated) uci option vmstat.
 
 ### Read-Only
 

@@ -101,6 +101,35 @@ func optionalComputedString(desc string) schema.StringAttribute {
 	}
 }
 
+// Deprecated writable attributes keep their normal shape and gain a
+// DeprecationMessage, which Terraform surfaces as a plan-time warning without
+// refusing the value. uapi's 2.5.0 deprecations are fields writing a uci option
+// no OpenWrt component reads, so the value still round-trips; it just never had
+// any effect.
+func deprecatedOptionalComputedString(desc, msg string) schema.StringAttribute {
+	a := optionalComputedString(desc)
+	a.DeprecationMessage = msg
+	return a
+}
+
+func deprecatedOptionalComputedBool(desc, msg string) schema.BoolAttribute {
+	a := optionalComputedBool(desc)
+	a.DeprecationMessage = msg
+	return a
+}
+
+func deprecatedOptionalComputedInt64(desc, msg string) schema.Int64Attribute {
+	a := optionalComputedInt64(desc)
+	a.DeprecationMessage = msg
+	return a
+}
+
+func deprecatedOptionalComputedStringList(desc, msg string) schema.ListAttribute {
+	a := optionalComputedStringList(desc)
+	a.DeprecationMessage = msg
+	return a
+}
+
 // Mirrored attributes: two wire names for ONE server-side value (uapi's `ipaddr`
 // and `ipaddrs` are both filled from the uci `list ipaddr` key). Plain
 // UseStateForUnknown is wrong for them. It pins the side the config does not set

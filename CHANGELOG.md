@@ -6,6 +6,70 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-08-09
+
+Tracks uapi 2.5.0. Requires uapi >= 2.5.0.
+
+### Upgrade note (read this first)
+
+Three attributes change type. All three were modelling mistakes uapi corrected; the
+old shapes never described what the daemon actually reads. **Two of them fail
+quietly**, so grep your configuration rather than relying on `terraform plan` to
+catch them.
+
+- **`uapi_dhcp_host.tag` is now a list** (was a string). uapi always answers with an
+  array, including for a section stored as a space-separated scalar, so the
+  provider has to match the response. Change `tag = "red"` to `tag = ["red"]`, and
+  a space-separated `tag = "red blue"` to `tag = ["red", "blue"]`. This one is
+  loud: an unedited config fails at plan time with "list of string required".
+- **`uapi_lldpd_config.lldp_description` is now a string** (was a boolean), the
+  system description advertised in LLDP frames. Set the text you want:
+  `lldp_description = "edge router"`.
+- **`uapi_system.urandom_seed` is now a string** (was a boolean), the path the
+  entropy seed is saved to, e.g. `urandom_seed = "/etc/urandom.seed"`.
+
+  These two fail quietly. HCL coerces a bare `true` to the string `"true"`, so an
+  unedited config plans and applies without complaint and writes `"true"` as your
+  LLDP description, or as the seed path where the reader only acts on a value
+  starting with `/`. Nothing errors; the setting is simply wrong. Search your
+  configuration for both attributes before upgrading.
+
+### Added
+- `uapi_dhcp_host.macs`, the uci `list mac`, replacing the now-deprecated `mac` and
+  `mac_aliases`. It takes precedence over both when non-empty.
+- `uapi_vnstat_config.interfaces`, the devices vnstat tracks, named as the kernel
+  names them (`br-lan`, `eth0`). uapi reports this is the only vnstat option any
+  shipped code reads, and it was previously unreachable through the API.
+- `uapi_diagnostics` gains an optional `validate` argument that runs uapi's
+  validation sweep, plus `invalid_sections`, `swept_resources` and
+  `skipped_for_scope` to report it. With `validate = true` the router lists every
+  section a write would reject today, managed by Terraform or not, which is how you
+  find configuration broken by a uapi validation change before an apply hits it.
+  It is off by default because the sweep re-validates every section on each read.
+  An empty `invalid_sections` beside a non-empty `skipped_for_scope` means the token
+  was not allowed to look, not that nothing is wrong.
+- `uapi_diagnostics.management_path` reports which interface the request arrived
+  through, so a config that would move that interface can be spotted first.
+- `disabled` on `uapi_network_interface`, `uapi_network_route` and
+  `uapi_network_rule`. uapi did not model it, so a disabled section read back as
+  active and Terraform would have re-enabled it on the next write.
+
+### Deprecated
+- 29 attributes are marked deprecated and now raise a Terraform warning at plan
+  time, carrying uapi's own explanation of why each one is dead. uapi audited every
+  curated field against its reader in the OpenWrt sources and found these write a
+  uci option nothing reads, so setting them has never had any effect. They are
+  scheduled for removal in v3: `uapi_dhcp_host.mac` and `mac_aliases` (use `macs`),
+  18 collector toggles on `uapi_prometheus_node_exporter_lua_config`,
+  `uapi_vnstat_config.database_dir` / `interface_5min_hours` / `month_rotate`,
+  `uapi_mwan3_globals.local_source` / `rtmon_interval`,
+  `uapi_unbound_server.enabled` / `prefetch`, `uapi_lldpd_config.enable_lldpmed`,
+  and `uapi_usteer_config.max_assoc_sta`.
+
+### Notes
+- uapi marks `managed` read-only across every schema in 2.5.0. No provider change:
+  it was already a computed attribute and was never sent on a write.
+
 ## [2.4.1] - 2026-08-03
 
 A provider-side bugfix release. It tracks no new uapi surface and needs no

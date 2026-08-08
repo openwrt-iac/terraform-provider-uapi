@@ -28,6 +28,7 @@ type networkRuleModel struct {
 	ETag     types.String `tfsdk:"etag"`
 	Action   types.String `tfsdk:"action"`
 	Dest     types.String `tfsdk:"dest"`
+	Disabled types.Bool   `tfsdk:"disabled"`
 	Goto     types.Int64  `tfsdk:"goto"`
 	In       types.String `tfsdk:"in"`
 	Invert   types.Bool   `tfsdk:"invert"`
@@ -55,6 +56,7 @@ func (r *networkRuleResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"etag":     etagAttribute(),
 			"action":   optionalComputedString("uci option action."),
 			"dest":     optionalComputedString("uci option dest."),
+			"disabled": optionalComputedBool("Whether the entry is disabled."),
 			"goto":     optionalComputedInt64("uci option goto."),
 			"in":       optionalComputedString("uci option in."),
 			"invert":   optionalComputedBool("uci option invert."),
@@ -74,6 +76,7 @@ func (r *networkRuleResource) body(ctx context.Context, m networkRuleModel, diag
 	}
 	putStr(out, "action", m.Action)
 	putStr(out, "dest", m.Dest)
+	putBool(out, "disabled", m.Disabled)
 	putInt64(out, "goto", m.Goto)
 	putStr(out, "in", m.In)
 	putBool(out, "invert", m.Invert)
@@ -90,6 +93,7 @@ func (r *networkRuleResource) read(ctx context.Context, obj map[string]any, m *n
 	m.Managed = boolVal(obj, "managed")
 	m.Action = strVal(obj, "action")
 	m.Dest = strVal(obj, "dest")
+	m.Disabled = boolVal(obj, "disabled")
 	m.Goto = int64Val(obj, "goto")
 	m.In = strVal(obj, "in")
 	m.Invert = boolVal(obj, "invert")

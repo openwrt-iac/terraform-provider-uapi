@@ -37,6 +37,7 @@ data "uapi_dhcp_host" "example" {
 - `leasetime` (String) uci option leasetime.
 - `mac` (String) uci option mac.
 - `mac_aliases` (List of String) uci option mac_aliases.
+- `macs` (List of String) MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `name` (String) Optional section name.
-- `tag` (String) uci option tag.
+- `tag` (List of String) dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar.

@@ -28,6 +28,23 @@ func resAttr(f field) string {
 			return fmt.Sprintf("%q: schema.StringAttribute{Required: true, Description: %q},", f.Name, f.Desc)
 		}
 	case "optcomp":
+		// Deprecated but still writable: same shape, plus the warning Terraform
+		// raises at plan time. A field cannot be both deprecated and mirrored today.
+		if f.DeprecMsg != "" {
+			if f.Mirror != "" {
+				fail("field %q is both deprecated and mirrored; no emission covers that", f.Name)
+			}
+			switch f.GoType {
+			case "types.List":
+				return fmt.Sprintf("%q: deprecatedOptionalComputedStringList(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
+			case "types.Int64":
+				return fmt.Sprintf("%q: deprecatedOptionalComputedInt64(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
+			case "types.Bool":
+				return fmt.Sprintf("%q: deprecatedOptionalComputedBool(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
+			default:
+				return fmt.Sprintf("%q: deprecatedOptionalComputedString(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
+			}
+		}
 		// A mirrored pair needs the sibling-aware plan modifier instead of a plain
 		// UseStateForUnknown, which would promise a value that changes whenever the
 		// sibling does. Only string and list sides exist today.

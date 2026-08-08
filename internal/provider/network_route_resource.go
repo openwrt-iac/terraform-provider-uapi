@@ -26,6 +26,7 @@ type networkRouteModel struct {
 	ID        types.String `tfsdk:"id"`
 	Managed   types.Bool   `tfsdk:"managed"`
 	ETag      types.String `tfsdk:"etag"`
+	Disabled  types.Bool   `tfsdk:"disabled"`
 	Gateway   types.String `tfsdk:"gateway"`
 	Interface types.String `tfsdk:"interface"`
 	Metric    types.Int64  `tfsdk:"metric"`
@@ -52,6 +53,7 @@ func (r *networkRouteResource) Schema(_ context.Context, _ resource.SchemaReques
 			"id":        optionalComputedIDAttribute(),
 			"managed":   managedAttribute(),
 			"etag":      etagAttribute(),
+			"disabled":  optionalComputedBool("Whether the entry is disabled."),
 			"gateway":   optionalComputedString("uci option gateway."),
 			"interface": optionalComputedString("Network interface this entry applies to."),
 			"metric":    optionalComputedInt64("uci option metric."),
@@ -70,6 +72,7 @@ func (r *networkRouteResource) body(ctx context.Context, m networkRouteModel, di
 	if create {
 		putStr(out, "id", m.ID)
 	}
+	putBool(out, "disabled", m.Disabled)
 	putStr(out, "gateway", m.Gateway)
 	putStr(out, "interface", m.Interface)
 	putInt64(out, "metric", m.Metric)
@@ -85,6 +88,7 @@ func (r *networkRouteResource) body(ctx context.Context, m networkRouteModel, di
 func (r *networkRouteResource) read(ctx context.Context, obj map[string]any, m *networkRouteModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
+	m.Disabled = boolVal(obj, "disabled")
 	m.Gateway = strVal(obj, "gateway")
 	m.Interface = strVal(obj, "interface")
 	m.Metric = int64Val(obj, "metric")

@@ -30,7 +30,7 @@ resource "uapi_system" "example" {
 - `log_size` (Number) uci option log_size.
 - `notes` (String) uci option notes.
 - `timezone` (String) uci option timezone.
-- `urandom_seed` (Boolean) uci option urandom_seed.
+- `urandom_seed` (String) Path the entropy seed is saved to and restored from. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.
 - `zonename` (String) uci option zonename.
 
 ### Read-Only

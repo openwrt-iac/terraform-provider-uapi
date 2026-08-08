@@ -25,12 +25,12 @@ resource "uapi_lldpd_config" "example" {
 - `enable_cdp` (Boolean) uci option enable_cdp.
 - `enable_edp` (Boolean) uci option enable_edp.
 - `enable_fdp` (Boolean) uci option enable_fdp.
-- `enable_lldpmed` (Boolean) uci option enable_lldpmed.
+- `enable_lldpmed` (Boolean, Deprecated) uci option enable_lldpmed.
 - `enable_sonmp` (Boolean) uci option enable_sonmp.
 - `interface` (List of String) Network interface this entry applies to.
 - `lldp_capabilities` (Boolean) uci option lldp_capabilities.
 - `lldp_class` (Number) uci option lldp_class.
-- `lldp_description` (Boolean) uci option lldp_description.
+- `lldp_description` (String) System description advertised in LLDP frames. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.
 - `lldp_mgmt_ip` (String) uci option lldp_mgmt_ip.
 
 ### Read-Only

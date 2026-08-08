@@ -32,5 +32,5 @@ data "uapi_system" "example" {}
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `notes` (String) uci option notes.
 - `timezone` (String) uci option timezone.
-- `urandom_seed` (Boolean) uci option urandom_seed.
+- `urandom_seed` (String) Path the entropy seed is saved to and restored from. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.
 - `zonename` (String) uci option zonename.

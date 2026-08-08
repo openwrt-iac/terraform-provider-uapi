@@ -35,7 +35,7 @@ type systemModel struct {
 	LogSize     types.Int64  `tfsdk:"log_size"`
 	Notes       types.String `tfsdk:"notes"`
 	Timezone    types.String `tfsdk:"timezone"`
-	UrandomSeed types.Bool   `tfsdk:"urandom_seed"`
+	UrandomSeed types.String `tfsdk:"urandom_seed"`
 	Zonename    types.String `tfsdk:"zonename"`
 }
 
@@ -62,7 +62,7 @@ func (r *systemResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"log_size":     optionalComputedInt64("uci option log_size."),
 			"notes":        optionalComputedString("uci option notes."),
 			"timezone":     optionalComputedString("uci option timezone."),
-			"urandom_seed": optionalComputedBool("uci option urandom_seed."),
+			"urandom_seed": optionalComputedString("Path the entropy seed is saved to and restored from. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake."),
 			"zonename":     optionalComputedString("uci option zonename."),
 		},
 	}
@@ -78,7 +78,7 @@ func (r *systemResource) body(ctx context.Context, m systemModel, diags *diagsin
 	putInt64(out, "log_size", m.LogSize)
 	putStr(out, "notes", m.Notes)
 	putStr(out, "timezone", m.Timezone)
-	putBool(out, "urandom_seed", m.UrandomSeed)
+	putStr(out, "urandom_seed", m.UrandomSeed)
 	putStr(out, "zonename", m.Zonename)
 	return out
 }
@@ -94,7 +94,7 @@ func (r *systemResource) read(ctx context.Context, obj map[string]any, m *system
 	m.LogSize = int64Val(obj, "log_size")
 	m.Notes = strVal(obj, "notes")
 	m.Timezone = strVal(obj, "timezone")
-	m.UrandomSeed = boolVal(obj, "urandom_seed")
+	m.UrandomSeed = strVal(obj, "urandom_seed")
 	m.Zonename = strVal(obj, "zonename")
 }
 

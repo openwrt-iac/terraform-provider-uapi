@@ -34,6 +34,7 @@ func (d *networkRouteDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"id":        dsIDAttribute(),
 			"managed":   dsManagedAttribute(),
 			"etag":      dsComputedString("Opaque ETag of the resource's current state."),
+			"disabled":  dsComputedBool("Whether the entry is disabled."),
 			"gateway":   dsComputedString("uci option gateway."),
 			"interface": dsComputedString("Network interface this entry applies to."),
 			"metric":    dsComputedInt64("uci option metric."),

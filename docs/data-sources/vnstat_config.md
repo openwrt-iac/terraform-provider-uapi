@@ -25,5 +25,6 @@ data "uapi_vnstat_config" "example" {}
 - `etag` (String) Opaque ETag of the resource's current state.
 - `id` (String) Stable id.
 - `interface_5min_hours` (Number) uci option interface_5min_hours.
+- `interfaces` (List of String) Devices vnstat tracks, as the kernel names them (`br-lan`, `eth0`), not uci interface names. The only vnstat option any shipped code reads.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `month_rotate` (Number) uci option month_rotate.

@@ -24,6 +24,7 @@ resource "uapi_network_rule" "example" {
 
 - `action` (String) uci option action.
 - `dest` (String) uci option dest.
+- `disabled` (Boolean) Whether the entry is disabled.
 - `goto` (Number) uci option goto.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `in` (String) uci option in.

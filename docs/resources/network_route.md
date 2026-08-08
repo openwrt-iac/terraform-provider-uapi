@@ -27,6 +27,7 @@ resource "uapi_network_route" "example" {
 
 ### Optional
 
+- `disabled` (Boolean) Whether the entry is disabled.
 - `gateway` (String) uci option gateway.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `interface` (String) Network interface this entry applies to.

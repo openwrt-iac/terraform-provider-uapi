@@ -35,8 +35,9 @@ type dhcpHostModel struct {
 	Leasetime  types.String `tfsdk:"leasetime"`
 	Mac        types.String `tfsdk:"mac"`
 	MacAliases types.List   `tfsdk:"mac_aliases"`
+	Macs       types.List   `tfsdk:"macs"`
 	Name       types.String `tfsdk:"name"`
-	Tag        types.String `tfsdk:"tag"`
+	Tag        types.List   `tfsdk:"tag"`
 }
 
 func (r *dhcpHostResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -61,10 +62,11 @@ func (r *dhcpHostResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"instance":    optionalComputedString("uci option instance."),
 			"ip":          optionalComputedString("uci option ip."),
 			"leasetime":   optionalComputedString("uci option leasetime."),
-			"mac":         optionalComputedString("uci option mac."),
-			"mac_aliases": optionalComputedStringList("uci option mac_aliases."),
+			"mac":         deprecatedOptionalComputedString("uci option mac.", "Deprecated, removed in v3: use macs. First entry of the uci list mac. macs wins when both are sent."),
+			"mac_aliases": deprecatedOptionalComputedStringList("uci option mac_aliases.", "Deprecated, removed in v3: use macs. Entries of the uci list mac after the first. macs wins when both are sent."),
+			"macs":        optionalComputedStringList("MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty."),
 			"name":        optionalComputedString("Optional section name."),
-			"tag":         optionalComputedString("uci option tag."),
+			"tag":         optionalComputedStringList("dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar."),
 		},
 	}
 }
@@ -83,8 +85,9 @@ func (r *dhcpHostResource) body(ctx context.Context, m dhcpHostModel, diags *dia
 	putStr(out, "leasetime", m.Leasetime)
 	putStr(out, "mac", m.Mac)
 	putList(ctx, out, "mac_aliases", m.MacAliases, diags.d)
+	putList(ctx, out, "macs", m.Macs, diags.d)
 	putStr(out, "name", m.Name)
-	putStr(out, "tag", m.Tag)
+	putList(ctx, out, "tag", m.Tag, diags.d)
 	return out
 }
 
@@ -100,8 +103,9 @@ func (r *dhcpHostResource) read(ctx context.Context, obj map[string]any, m *dhcp
 	m.Leasetime = strVal(obj, "leasetime")
 	m.Mac = strVal(obj, "mac")
 	m.MacAliases = diags.list(listVal(ctx, obj, "mac_aliases"))
+	m.Macs = diags.list(listVal(ctx, obj, "macs"))
 	m.Name = strVal(obj, "name")
-	m.Tag = strVal(obj, "tag")
+	m.Tag = diags.list(listVal(ctx, obj, "tag"))
 }
 
 func (r *dhcpHostResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

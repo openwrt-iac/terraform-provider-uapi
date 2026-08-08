@@ -29,6 +29,7 @@ data "uapi_network_rule" "example" {
 
 - `action` (String) uci option action.
 - `dest` (String) uci option dest.
+- `disabled` (Boolean) Whether the entry is disabled.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `goto` (Number) uci option goto.
 - `in` (String) uci option in.
