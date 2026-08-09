@@ -21,6 +21,7 @@ type networkInterfaceDSModel struct {
 	Defaultroute  types.Bool                    `tfsdk:"defaultroute"`
 	Delegate      types.Bool                    `tfsdk:"delegate"`
 	Device        types.String                  `tfsdk:"device"`
+	Disabled      types.Bool                    `tfsdk:"disabled"`
 	Dns           types.List                    `tfsdk:"dns"`
 	Gateway       types.String                  `tfsdk:"gateway"`
 	HasPrivateKey types.Bool                    `tfsdk:"has_private_key"`
@@ -75,6 +76,7 @@ func (d *networkInterfaceDataSource) Schema(_ context.Context, _ datasource.Sche
 			"defaultroute":    dsComputedBool("uci option defaultroute."),
 			"delegate":        dsComputedBool("uci option delegate."),
 			"device":          dsComputedString("Underlying device."),
+			"disabled":        dsComputedBool("Whether the entry is disabled."),
 			"dns":             dsComputedStringList("uci option dns."),
 			"gateway":         dsComputedString("uci option gateway."),
 			"has_private_key": dsComputedBool("Whether a private key is configured."),
@@ -128,6 +130,7 @@ func (d *networkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 		Defaultroute:  base.Defaultroute,
 		Delegate:      base.Delegate,
 		Device:        base.Device,
+		Disabled:      base.Disabled,
 		Dns:           base.Dns,
 		Gateway:       base.Gateway,
 		HasPrivateKey: base.HasPrivateKey,

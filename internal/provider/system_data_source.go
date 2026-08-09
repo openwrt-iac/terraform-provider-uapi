@@ -42,7 +42,7 @@ func (d *systemDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 			"log_size":     dsComputedInt64("uci option log_size."),
 			"notes":        dsComputedString("uci option notes."),
 			"timezone":     dsComputedString("uci option timezone."),
-			"urandom_seed": dsComputedBool("uci option urandom_seed."),
+			"urandom_seed": dsComputedString("Path the entropy seed is saved to and restored from. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake."),
 			"zonename":     dsComputedString("uci option zonename."),
 		},
 	}

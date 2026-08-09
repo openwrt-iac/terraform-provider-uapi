@@ -31,7 +31,7 @@ resource "uapi_usteer_config" "example" {
 - `load_balancing_threshold` (Number) uci option load_balancing_threshold.
 - `local_sta_timeout` (Number) uci option local_sta_timeout.
 - `local_sta_update` (Number) uci option local_sta_update.
-- `max_assoc_sta` (Number) uci option max_assoc_sta.
+- `max_assoc_sta` (Number, Deprecated) uci option max_assoc_sta.
 - `max_neighbor_reports` (Number) uci option max_neighbor_reports.
 - `max_retry_band` (Number) uci option max_retry_band.
 - `measurement_report_timeout` (Number) uci option measurement_report_timeout.

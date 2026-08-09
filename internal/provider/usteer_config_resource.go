@@ -85,7 +85,7 @@ func (r *usteerConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 			"load_balancing_threshold":   optionalComputedInt64("uci option load_balancing_threshold."),
 			"local_sta_timeout":          optionalComputedInt64("uci option local_sta_timeout."),
 			"local_sta_update":           optionalComputedInt64("uci option local_sta_update."),
-			"max_assoc_sta":              optionalComputedInt64("uci option max_assoc_sta."),
+			"max_assoc_sta":              deprecatedOptionalComputedInt64("uci option max_assoc_sta.", "Deprecated, removed in v3: nothing reads this. usteer's init forwards a fixed list of uci options to the daemon over ubus and this is not on it; the daemon's own `max_assoc` knob is not bridged from uci at all."),
 			"max_neighbor_reports":       optionalComputedInt64("uci option max_neighbor_reports."),
 			"max_retry_band":             optionalComputedInt64("uci option max_retry_band."),
 			"measurement_report_timeout": optionalComputedInt64("uci option measurement_report_timeout."),

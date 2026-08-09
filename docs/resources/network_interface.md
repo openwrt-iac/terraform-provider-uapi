@@ -33,6 +33,7 @@ resource "uapi_network_interface" "example" {
 - `defaultroute` (Boolean) uci option defaultroute.
 - `delegate` (Boolean) uci option delegate.
 - `device` (String) Underlying device.
+- `disabled` (Boolean) Whether the entry is disabled.
 - `dns` (List of String) uci option dns.
 - `gateway` (String) uci option gateway.
 - `hostname` (String) uci option hostname.

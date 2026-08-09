@@ -33,6 +33,7 @@ type networkInterfaceModel struct {
 	Defaultroute  types.Bool   `tfsdk:"defaultroute"`
 	Delegate      types.Bool   `tfsdk:"delegate"`
 	Device        types.String `tfsdk:"device"`
+	Disabled      types.Bool   `tfsdk:"disabled"`
 	Dns           types.List   `tfsdk:"dns"`
 	Gateway       types.String `tfsdk:"gateway"`
 	HasPrivateKey types.Bool   `tfsdk:"has_private_key"`
@@ -78,6 +79,7 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"defaultroute":    optionalComputedBool("uci option defaultroute."),
 			"delegate":        optionalComputedBool("uci option delegate."),
 			"device":          optionalComputedString("Underlying device."),
+			"disabled":        optionalComputedBool("Whether the entry is disabled."),
 			"dns":             optionalComputedStringList("uci option dns."),
 			"gateway":         optionalString("uci option gateway."),
 			"has_private_key": schema.BoolAttribute{Computed: true, Description: "Whether a private key is configured."},
@@ -115,6 +117,7 @@ func (r *networkInterfaceResource) body(ctx context.Context, m networkInterfaceM
 	putBool(out, "defaultroute", m.Defaultroute)
 	putBool(out, "delegate", m.Delegate)
 	putStr(out, "device", m.Device)
+	putBool(out, "disabled", m.Disabled)
 	putList(ctx, out, "dns", m.Dns, diags.d)
 	putStr(out, "gateway", m.Gateway)
 	putStr(out, "hostname", m.Hostname)
@@ -150,6 +153,7 @@ func (r *networkInterfaceResource) read(ctx context.Context, obj map[string]any,
 	m.Defaultroute = boolVal(obj, "defaultroute")
 	m.Delegate = boolVal(obj, "delegate")
 	m.Device = strVal(obj, "device")
+	m.Disabled = boolVal(obj, "disabled")
 	m.Dns = diags.list(listVal(ctx, obj, "dns"))
 	m.Gateway = strVal(obj, "gateway")
 	m.HasPrivateKey = boolValDefault(obj, "has_private_key")

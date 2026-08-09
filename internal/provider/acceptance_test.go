@@ -307,6 +307,82 @@ resource "uapi_network_interface" "i" {
 	})
 }
 
+// The validation sweep is opt-in because it re-validates every section on the
+// router. With validate set, invalid_sections reports what a write would reject
+// today, and skipped_for_scope says where the token was not allowed to look, so
+// an empty result is not mistaken for a clean router.
+func TestAccDiagnostics_validationSweep(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+data "uapi_diagnostics" "swept" {
+  validate = true
+}`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "invalid_sections.#", "1"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "invalid_sections.0.resource", "firewall/rules"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "invalid_sections.0.id", "cfg0a1b2c"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "invalid_sections.0.managed", "false"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "invalid_sections.0.errors.0.field", "match.dest_port"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "swept_resources.0", "firewall:rules"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "skipped_for_scope.0", "dhcp:hosts"),
+			),
+		}},
+	})
+}
+
+// A router with nothing wrong sends an empty invalid_sections. The decode must
+// still produce an empty list rather than leaving the slice nil, because the
+// framework reflects a nil slice to a null attribute and length()/for_each would
+// then fail on the result that means the router is clean.
+func TestAccDiagnostics_emptySweepIsEmptyNotNull(t *testing.T) {
+	m := newMockUAPI()
+	m.emptySweep = true
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+data "uapi_diagnostics" "clean" {
+  validate = true
+}
+output "invalid_count" {
+  value = length(data.uapi_diagnostics.clean.invalid_sections)
+}`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.clean", "invalid_sections.#", "0"),
+				resource.TestCheckOutput("invalid_count", "0"),
+			),
+		}},
+	})
+}
+
+// dhcp/hosts.tag is a list as of uapi 2.5.0: a response is always an array, even
+// for a section stored as a space-separated scalar.
+func TestAccDhcpHost_tagList(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+resource "uapi_dhcp_host" "h" {
+  name = "printer"
+  macs = ["00:11:22:33:44:55"]
+  tag  = ["red", "blue"]
+}`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "tag.0", "red"),
+				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "tag.1", "blue"),
+				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "macs.0", "00:11:22:33:44:55"),
+			),
+		}},
+	})
+}
+
 func TestAccWirelessInterface_writeOnlyKey(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()
@@ -765,6 +841,9 @@ data "uapi_diagnostics" "d" {}
 				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "lock_state.global_held", "false"),
 				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "recent_errors.0.code", "validation_failed"),
 				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "recent_errors.0.status", "422"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "management_path.device", "br-lan"),
+				// the sweep is opt-in, so it stays empty here
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "invalid_sections.#", "0"),
 			),
 		}},
 	})

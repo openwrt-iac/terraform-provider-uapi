@@ -22,11 +22,11 @@ resource "uapi_mwan3_globals" "example" {
 
 ### Optional
 
-- `local_source` (String) uci option local_source.
+- `local_source` (String, Deprecated) uci option local_source.
 - `logging` (Boolean) uci option logging.
 - `loglevel` (String) uci option loglevel.
 - `mmx_mask` (String) uci option mmx_mask.
-- `rtmon_interval` (Number) uci option rtmon_interval.
+- `rtmon_interval` (Number, Deprecated) uci option rtmon_interval.
 
 ### Read-Only
 

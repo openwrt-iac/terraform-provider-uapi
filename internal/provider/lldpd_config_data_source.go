@@ -42,7 +42,7 @@ func (d *lldpdConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"interface":         dsComputedStringList("Network interface this entry applies to."),
 			"lldp_capabilities": dsComputedBool("uci option lldp_capabilities."),
 			"lldp_class":        dsComputedInt64("uci option lldp_class."),
-			"lldp_description":  dsComputedBool("uci option lldp_description."),
+			"lldp_description":  dsComputedString("System description advertised in LLDP frames. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake."),
 			"lldp_mgmt_ip":      dsComputedString("uci option lldp_mgmt_ip."),
 		},
 	}

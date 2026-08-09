@@ -70,6 +70,7 @@ type field struct {
 	Kind       string // "required" | "optcomp" | "optclear" | "writeonly" | "createonly" | "computedbool" | "computedstring"
 	Desc       string
 	Deprecated bool   // spec `deprecated: true`: emit a DeprecationMessage
+	DeprecMsg  string // the warning text, resolved from the spec (see deprecationMessage)
 	Mirror     string // wire name of the attribute this one mirrors (see descriptor.Mirrors)
 }
 
@@ -201,11 +202,17 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 				f.Kind = "optcomp"
 			}
 		}
-		// Only the createonly path emits a DeprecationMessage today (the lone
-		// deprecated input is network_interface.name). Fail loudly rather than
-		// silently dropping a deprecation if a future spec deprecates another kind.
-		if f.Deprecated && f.Kind != "createonly" {
-			fail("deprecated field %q has kind %q with no DeprecationMessage path; add one in resAttr", n, f.Kind)
+		// createonly carries its own message (it reuses the description, which is
+		// written as a notice); every other kind resolves one here. Kinds beyond
+		// these two paths would drop the flag silently, so fail loudly instead.
+		if f.Deprecated {
+			switch f.Kind {
+			case "createonly":
+			case "optcomp":
+				f.DeprecMsg = deprecationMessage(p)
+			default:
+				fail("deprecated field %q has kind %q with no DeprecationMessage path; add one in resAttr", n, f.Kind)
+			}
 		}
 		// optclear clears by omission only because collections use PUT (full
 		// replace) so an absent field is dropped. A singleton's PATCH merge keeps
@@ -254,6 +261,14 @@ func typeOf(p specProp) string {
 	case string:
 		return t
 	case []any:
+		// A union that admits an array is modelled as the array. uapi keeps `string`
+		// in dhcp/hosts.tag so a writer may still send a scalar, but a response is
+		// always an array, and the model has to match what comes back.
+		for _, e := range t {
+			if s, _ := e.(string); s == "array" {
+				return "array"
+			}
+		}
 		for _, e := range t {
 			if s, _ := e.(string); s != "null" {
 				return s
@@ -261,6 +276,18 @@ func typeOf(p specProp) string {
 		}
 	}
 	return "string"
+}
+
+// deprecationMessage resolves the plan-time warning for a deprecated field. Most
+// of uapi's notices are written into the description already, so they are reused
+// verbatim; the rest get the reason the 2.5.0 audit gave for the whole set, which
+// is more useful than repeating the word "deprecated".
+func deprecationMessage(p specProp) string {
+	d := strings.TrimSpace(p.Description)
+	if strings.HasPrefix(strings.ToLower(d), "deprecated") {
+		return d
+	}
+	return "Deprecated by uapi and scheduled for removal in v3: no OpenWrt component reads this uci option, so setting it has never had any effect."
 }
 
 func goType(p specProp) string {

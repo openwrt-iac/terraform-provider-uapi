@@ -25,6 +25,10 @@ type mockUAPI struct {
 	runtime map[string]map[string]any
 	// lastTokenCreate is the decoded body of the most recent POST /tokens.
 	lastTokenCreate map[string]any
+	// emptySweep answers a ?validate=1 with an empty invalid_sections, which is what
+	// a router with nothing wrong sends: the key is present and empty, verified
+	// against a real 2.5.0 build.
+	emptySweep bool
 }
 
 func newMockUAPI() *mockUAPI {
@@ -163,7 +167,7 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		}, "")
 		return
 	case path == "/diagnostics" && r.Method == http.MethodGet:
-		writeJSON(w, http.StatusOK, map[string]any{
+		body := map[string]any{
 			"version":          "2.0.0",
 			"uptime_seconds":   12345,
 			"resources_loaded": []any{"network:interface", "firewall:rule"},
@@ -172,8 +176,28 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 				"ts": 1893456000, "request_id": "req-err-1", "code": "validation_failed",
 				"status": 422, "method": "POST", "path": "/api/v2/firewall/rules", "message": "bad",
 			}},
+			// Always present, unlike the sweep below.
+			"management_path": map[string]any{
+				"address": "192.168.1.10", "device": "br-lan", "interface": "lan",
+			},
 			"request_id": "req-acc-1",
-		}, "")
+		}
+		// The sweep is opt-in, so the three keys it fills are absent without it.
+		if r.URL.Query().Get("validate") == "1" {
+			body["swept_resources"] = []any{"firewall:rules", "network:interfaces"}
+			body["skipped_for_scope"] = []any{"dhcp:hosts"}
+			body["invalid_sections"] = []any{}
+			if !m.emptySweep {
+				body["invalid_sections"] = []any{map[string]any{
+					"resource": "firewall/rules", "id": "cfg0a1b2c", "managed": false,
+					"errors": []any{map[string]any{
+						"field": "match.dest_port", "code": "port_requires_tcp_udp",
+						"message": "a port match needs every proto to be tcp or udp",
+					}},
+				}}
+			}
+		}
+		writeJSON(w, http.StatusOK, body, "")
 		return
 	}
 

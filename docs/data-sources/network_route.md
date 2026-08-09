@@ -27,6 +27,7 @@ data "uapi_network_route" "example" {
 
 ### Read-Only
 
+- `disabled` (Boolean) Whether the entry is disabled.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `gateway` (String) uci option gateway.
 - `interface` (String) Network interface this entry applies to.

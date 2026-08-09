@@ -29,6 +29,7 @@ type vnstatConfigModel struct {
 	ETag               types.String `tfsdk:"etag"`
 	DatabaseDir        types.String `tfsdk:"database_dir"`
 	Interface5minHours types.Int64  `tfsdk:"interface_5min_hours"`
+	Interfaces         types.List   `tfsdk:"interfaces"`
 	MonthRotate        types.Int64  `tfsdk:"month_rotate"`
 }
 
@@ -47,9 +48,10 @@ func (r *vnstatConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 			"id":                   computedIDAttribute(),
 			"managed":              managedAttribute(),
 			"etag":                 etagAttribute(),
-			"database_dir":         optionalComputedString("uci option database_dir."),
-			"interface_5min_hours": optionalComputedInt64("uci option interface_5min_hours."),
-			"month_rotate":         optionalComputedInt64("uci option month_rotate."),
+			"database_dir":         deprecatedOptionalComputedString("uci option database_dir.", "Deprecated, removed in v3: nothing reads this. vnstat's database directory is a key of `/etc/vnstat.conf`, which ships from upstream; nothing bridges uci to it."),
+			"interface_5min_hours": deprecatedOptionalComputedInt64("uci option interface_5min_hours.", "Deprecated, removed in v3: nothing reads this. 5-minute retention is a key of `/etc/vnstat.conf`, which ships from upstream; nothing bridges uci to it."),
+			"interfaces":           optionalComputedStringList("Devices vnstat tracks, as the kernel names them (`br-lan`, `eth0`), not uci interface names. The only vnstat option any shipped code reads."),
+			"month_rotate":         deprecatedOptionalComputedInt64("uci option month_rotate.", "Deprecated, removed in v3: nothing reads this. The monthly rollover day is a key of `/etc/vnstat.conf`, which ships from upstream; nothing bridges uci to it."),
 		},
 	}
 }
@@ -58,6 +60,7 @@ func (r *vnstatConfigResource) body(ctx context.Context, m vnstatConfigModel, di
 	out := map[string]any{}
 	putStr(out, "database_dir", m.DatabaseDir)
 	putInt64(out, "interface_5min_hours", m.Interface5minHours)
+	putList(ctx, out, "interfaces", m.Interfaces, diags.d)
 	putInt64(out, "month_rotate", m.MonthRotate)
 	return out
 }
@@ -67,6 +70,7 @@ func (r *vnstatConfigResource) read(ctx context.Context, obj map[string]any, m *
 	m.Managed = boolVal(obj, "managed")
 	m.DatabaseDir = strVal(obj, "database_dir")
 	m.Interface5minHours = int64Val(obj, "interface_5min_hours")
+	m.Interfaces = diags.list(listVal(ctx, obj, "interfaces"))
 	m.MonthRotate = int64Val(obj, "month_rotate")
 }
 

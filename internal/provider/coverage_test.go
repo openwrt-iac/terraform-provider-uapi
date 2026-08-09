@@ -73,8 +73,8 @@ func TestAccAllResources(t *testing.T) {
 }`},
 		// dhcp / dns
 		{typ: "uapi_dhcp_host", hcl: `resource "uapi_dhcp_host" "t" {
-  ip  = "192.168.9.2"
-  mac = "02:00:00:00:00:09"
+  ip   = "192.168.9.2"
+  macs = ["02:00:00:00:00:09"]
 }`},
 		{typ: "uapi_dhcp_server", hcl: `resource "uapi_dhcp_server" "t" {
   interface = "lan"

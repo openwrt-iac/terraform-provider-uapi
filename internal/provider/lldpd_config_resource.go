@@ -35,7 +35,7 @@ type lldpdConfigModel struct {
 	Interface        types.List   `tfsdk:"interface"`
 	LldpCapabilities types.Bool   `tfsdk:"lldp_capabilities"`
 	LldpClass        types.Int64  `tfsdk:"lldp_class"`
-	LldpDescription  types.Bool   `tfsdk:"lldp_description"`
+	LldpDescription  types.String `tfsdk:"lldp_description"`
 	LldpMgmtIp       types.String `tfsdk:"lldp_mgmt_ip"`
 }
 
@@ -57,12 +57,12 @@ func (r *lldpdConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"enable_cdp":        optionalComputedBool("uci option enable_cdp."),
 			"enable_edp":        optionalComputedBool("uci option enable_edp."),
 			"enable_fdp":        optionalComputedBool("uci option enable_fdp."),
-			"enable_lldpmed":    optionalComputedBool("uci option enable_lldpmed."),
+			"enable_lldpmed":    deprecatedOptionalComputedBool("uci option enable_lldpmed.", "Deprecated, removed in v3: nothing reads this. LLDP-MED is a build-time switch (`CONFIG_LLDPD_WITH_LLDPMED`), not a runtime option."),
 			"enable_sonmp":      optionalComputedBool("uci option enable_sonmp."),
 			"interface":         optionalComputedStringList("Network interface this entry applies to."),
 			"lldp_capabilities": optionalComputedBool("uci option lldp_capabilities."),
 			"lldp_class":        optionalComputedInt64("uci option lldp_class."),
-			"lldp_description":  optionalComputedBool("uci option lldp_description."),
+			"lldp_description":  optionalComputedString("System description advertised in LLDP frames. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake."),
 			"lldp_mgmt_ip":      optionalComputedString("uci option lldp_mgmt_ip."),
 		},
 	}
@@ -78,7 +78,7 @@ func (r *lldpdConfigResource) body(ctx context.Context, m lldpdConfigModel, diag
 	putList(ctx, out, "interface", m.Interface, diags.d)
 	putBool(out, "lldp_capabilities", m.LldpCapabilities)
 	putInt64(out, "lldp_class", m.LldpClass)
-	putBool(out, "lldp_description", m.LldpDescription)
+	putStr(out, "lldp_description", m.LldpDescription)
 	putStr(out, "lldp_mgmt_ip", m.LldpMgmtIp)
 	return out
 }
@@ -94,7 +94,7 @@ func (r *lldpdConfigResource) read(ctx context.Context, obj map[string]any, m *l
 	m.Interface = diags.list(listVal(ctx, obj, "interface"))
 	m.LldpCapabilities = boolVal(obj, "lldp_capabilities")
 	m.LldpClass = int64Val(obj, "lldp_class")
-	m.LldpDescription = boolVal(obj, "lldp_description")
+	m.LldpDescription = strVal(obj, "lldp_description")
 	m.LldpMgmtIp = strVal(obj, "lldp_mgmt_ip")
 }
 

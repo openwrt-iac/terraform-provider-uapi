@@ -36,6 +36,7 @@ func (d *networkRuleDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"etag":     dsComputedString("Opaque ETag of the resource's current state."),
 			"action":   dsComputedString("uci option action."),
 			"dest":     dsComputedString("uci option dest."),
+			"disabled": dsComputedBool("Whether the entry is disabled."),
 			"goto":     dsComputedInt64("uci option goto."),
 			"in":       dsComputedString("uci option in."),
 			"invert":   dsComputedBool("uci option invert."),
