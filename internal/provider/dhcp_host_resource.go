@@ -65,7 +65,7 @@ func (r *dhcpHostResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"mac":         deprecatedOptionalComputedString("uci option mac.", "Deprecated, removed in v3: use macs. First entry of the uci list mac. macs wins when both are sent."),
 			"mac_aliases": deprecatedOptionalComputedStringList("uci option mac_aliases.", "Deprecated, removed in v3: use macs. Entries of the uci list mac after the first. macs wins when both are sent."),
 			"macs":        optionalComputedStringList("MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty."),
-			"name":        optionalComputedString("Optional section name."),
+			"name":        optionalComputedString("Hostname dnsmasq answers for this reservation."),
 			"tag":         optionalComputedStringList("dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar."),
 		},
 	}

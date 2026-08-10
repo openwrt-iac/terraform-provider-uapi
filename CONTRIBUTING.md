@@ -30,7 +30,14 @@ suite on every push and PR.
 ## Verifying against real hardware
 
 The acceptance suite uses a fake for determinism and CI. To exercise the
-provider against a real router, build and use a dev override:
+provider against a real router, build and use a dev override.
+
+**Have console access before you run the full suite against a remote box.** The
+`uapi_network_*` cases reconfigure the interfaces the run arrives over, and a
+`uapi_network_bridge_vlan` create has taken a test box off the network mid-suite:
+the create succeeded, the delete never ran, and the leftover section stays
+committed in uci, so it needs `uci delete network.<id>` from the console. Scope
+the run away from `uapi_network_` if you cannot reach a console.
 
 ```sh
 make install

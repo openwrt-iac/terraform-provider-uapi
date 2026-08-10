@@ -56,7 +56,7 @@ func (r *firewallZoneResource) Schema(_ context.Context, _ resource.SchemaReques
 			"input":         optionalComputedString("uci option input."),
 			"masq":          optionalComputedBool("uci option masq."),
 			"mtu_fix":       optionalComputedBool("uci option mtu_fix."),
-			"name":          schema.StringAttribute{Required: true, Description: "Optional section name."},
+			"name":          schema.StringAttribute{Required: true, Description: "Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores."},
 			"network":       optionalComputedStringList("uci option network."),
 			"output_policy": optionalComputedString("uci option output_policy."),
 		},

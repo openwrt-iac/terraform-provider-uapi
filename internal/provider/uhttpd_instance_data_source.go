@@ -40,7 +40,7 @@ func (d *uhttpdInstanceDataSource) Schema(_ context.Context, _ datasource.Schema
 			"home":            dsComputedString("uci option home."),
 			"http_keepalive":  dsComputedInt64("uci option http_keepalive."),
 			"index_page":      dsComputedStringList("uci option index_page."),
-			"key":             dsComputedString("Encryption passphrase. Write-only: never returned by the API."),
+			"key":             dsComputedString("Path to the TLS private key file, not the key material itself."),
 			"listen_http":     dsComputedStringList("uci option listen_http."),
 			"listen_https":    dsComputedStringList("uci option listen_https."),
 			"lua_prefix":      dsComputedStringList("uci option lua_prefix."),

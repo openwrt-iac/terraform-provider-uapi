@@ -1,10 +1,24 @@
 name: Live acceptance
 
-# Manually triggered acceptance run against a real uapi 2.0 router. The default
-# CI acceptance job runs against the in-process mock on every PR; this one is for
+# Manually triggered acceptance run against a real uapi router. The default CI
+# acceptance job runs against the in-process mock on every PR; this one is for
 # verifying the provider end to end against hardware (strict ints, snake_case,
 # 429/pagination). It creates and destroys resources, so point it at a test
 # router only.
+#
+# HAVE CONSOLE ACCESS TO THE TARGET BEFORE STARTING THIS.
+#
+# The suite covers uapi_network_* too, and those reconfigure the interfaces the
+# run itself arrives over. A `uapi_network_bridge_vlan` create has taken a test
+# box off the network mid-suite: the create succeeded, the bridge reconfigured,
+# and every later call failed with "no route to host", including the delete. The
+# section stays committed in uci, so the box does not recover on its own and
+# needs `uci delete network.<id>` from the console. "It is a test box" covers the
+# data on it, not your ability to reach it.
+#
+# Against a target you can only reach over the network, either be ready to use
+# the console, or scope the run away from the network resources, e.g.
+#   -run 'TestAccAllResources/uapi_(firewall|dhcp|system|snmpd|...)'
 on:
   workflow_dispatch:
     inputs:

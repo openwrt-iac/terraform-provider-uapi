@@ -23,7 +23,7 @@ resource "uapi_mwan3_member" "example" {
 
 ### Required
 
-- `interface` (String) Network interface this entry applies to.
+- `interface` (String) Name of an `uapi_mwan3_interface` section, not a network interface.
 
 ### Optional
 

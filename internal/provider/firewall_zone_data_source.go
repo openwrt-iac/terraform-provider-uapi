@@ -39,7 +39,7 @@ func (d *firewallZoneDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"input":         dsComputedString("uci option input."),
 			"masq":          dsComputedBool("uci option masq."),
 			"mtu_fix":       dsComputedBool("uci option mtu_fix."),
-			"name":          dsComputedString("Optional section name."),
+			"name":          dsComputedString("Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores."),
 			"network":       dsComputedStringList("uci option network."),
 			"output_policy": dsComputedString("uci option output_policy."),
 		},

@@ -55,7 +55,7 @@ func (r *networkDeviceResource) Schema(_ context.Context, _ resource.SchemaReque
 			"ipv6":    optionalComputedBool("uci option ipv6."),
 			"macaddr": optionalComputedString("uci option macaddr."),
 			"mtu":     optionalComputedInt64("uci option mtu."),
-			"name":    schema.StringAttribute{Required: true, Description: "Optional section name."},
+			"name":    schema.StringAttribute{Required: true, Description: "Device name as netifd and the kernel see it (`br-lan`, `eth0`)."},
 			"ports":   optionalComputedStringList("uci option ports."),
 			"type":    optionalComputedString("uci option type."),
 			"vid":     optionalComputedInt64("uci option vid."),

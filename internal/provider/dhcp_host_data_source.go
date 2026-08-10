@@ -44,7 +44,7 @@ func (d *dhcpHostDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"mac":         dsComputedString("uci option mac."),
 			"mac_aliases": dsComputedStringList("uci option mac_aliases."),
 			"macs":        dsComputedStringList("MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty."),
-			"name":        dsComputedString("Optional section name."),
+			"name":        dsComputedString("Hostname dnsmasq answers for this reservation."),
 			"tag":         dsComputedStringList("dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar."),
 		},
 	}

@@ -30,12 +30,12 @@ data "uapi_network_route" "example" {
 - `disabled` (Boolean) Whether the entry is disabled.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `gateway` (String) uci option gateway.
-- `interface` (String) Network interface this entry applies to.
+- `interface` (String) Parent network interface name.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `metric` (Number) uci option metric.
 - `mtu` (Number) uci option mtu.
 - `netmask` (String) uci option netmask.
 - `source` (String) uci option source.
 - `table` (Number) uci option table.
-- `target` (String) Target / action.
+- `target` (String) Destination IPv4 address or CIDR for this route.
 - `type` (String) uci option type.

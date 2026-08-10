@@ -31,7 +31,7 @@ data "uapi_dropbear_instance" "example" {
 - `enable` (Boolean) uci option enable.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `gateway_ports` (Boolean) uci option gateway_ports.
-- `interface` (String) Network interface this entry applies to.
+- `interface` (String) Interface or IP address dropbear listens on.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `password_auth` (Boolean) uci option password_auth.
 - `port` (Number) uci option port.

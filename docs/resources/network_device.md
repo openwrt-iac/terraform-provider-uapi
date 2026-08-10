@@ -23,7 +23,7 @@ resource "uapi_network_device" "example" {
 
 ### Required
 
-- `name` (String) Optional section name.
+- `name` (String) Device name as netifd and the kernel see it (`br-lan`, `eth0`).
 
 ### Optional
 

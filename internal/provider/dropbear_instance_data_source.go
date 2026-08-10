@@ -37,7 +37,7 @@ func (d *dropbearInstanceDataSource) Schema(_ context.Context, _ datasource.Sche
 			"banner_file":        dsComputedString("uci option banner_file."),
 			"enable":             dsComputedBool("uci option enable."),
 			"gateway_ports":      dsComputedBool("uci option gateway_ports."),
-			"interface":          dsComputedString("Network interface this entry applies to."),
+			"interface":          dsComputedString("Interface or IP address dropbear listens on."),
 			"password_auth":      dsComputedBool("uci option password_auth."),
 			"port":               dsComputedInt64("uci option port."),
 			"root_login":         dsComputedBool("uci option root_login."),

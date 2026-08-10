@@ -130,9 +130,12 @@ func TestAccAllResources(t *testing.T) {
 }`},
 		{typ: "uapi_mwan3_globals", singleton: true, hcl: `resource "uapi_mwan3_globals" "t" {}`},
 		{typ: "uapi_usteer_config", singleton: true, hcl: `resource "uapi_usteer_config" "t" {}`},
+		// `key` is a path on the router, not key material. The fixture used to pass
+		// a PEM header, which the fake accepted and a real router rejects with
+		// "must be an absolute filesystem path".
 		{typ: "uapi_openvpn_instance", hcl: `resource "uapi_openvpn_instance" "t" {
   client = true
-  key    = "-----BEGIN OpenVPN Static key-----"
+  key    = "/etc/openvpn/client.key"
 }`},
 		// packages (no etag)
 		{typ: "uapi_package", noEtag: true, hcl: `resource "uapi_package" "t" {
