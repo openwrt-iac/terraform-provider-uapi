@@ -147,6 +147,7 @@ func (r *prometheusNodeExporterLuaConfigResource) Create(ctx context.Context, re
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -190,6 +191,7 @@ func (r *prometheusNodeExporterLuaConfigResource) Update(ctx context.Context, re
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

@@ -355,6 +355,7 @@ func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[4]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Post(ctx, "/"+%[2]s, body, "")
@@ -383,6 +384,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Put(ctx, "/"+%[2]s+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
@@ -396,6 +398,7 @@ func (r *%[1]sResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	var state %[1]sModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+%[2]s+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", %[3]q, err)
 	}
@@ -417,6 +420,7 @@ func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[4]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, "")
@@ -445,6 +449,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, state.ETag.ValueString())

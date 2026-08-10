@@ -55,8 +55,14 @@ func TestAccAllResources(t *testing.T) {
   src    = "192.168.9.0/24"
   lookup = 1
 }`},
+		// Deliberately NOT br-lan. Creating a bridge VLAN on the management bridge
+		// enables VLAN filtering on it, untagged traffic stops, and a live run takes
+		// its own target off the network mid-suite (the delete then never runs, so
+		// the section stays committed in uci). Against the fake any name works;
+		// against a real router this name does not exist, so the case fails with a
+		// harmless 422 instead of stranding the box.
 		{typ: "uapi_network_bridge_vlan", hcl: `resource "uapi_network_bridge_vlan" "t" {
-  device = "br-lan"
+  device = "br-uapitest"
   vlan   = 9
 }`},
 		{typ: "uapi_network_wireguard_peer", hcl: `resource "uapi_network_wireguard_peer" "t" {

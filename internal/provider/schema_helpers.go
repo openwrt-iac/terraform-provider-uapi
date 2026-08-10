@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
 
 func computedIDAttribute() schema.StringAttribute {
@@ -253,6 +255,14 @@ type diagsink struct {
 
 func newDiagsink(d *diag.Diagnostics) *diagsink {
 	return &diagsink{d: d}
+}
+
+var _ client.Warner = (*diagsink)(nil)
+
+// APIWarning makes diagsink a client.Warner, so an advisory response header
+// becomes a Terraform warning instead of a debug log line nobody reads.
+func (s *diagsink) APIWarning(summary, detail string) {
+	s.d.AddWarning(summary, detail)
 }
 
 func (s *diagsink) list(v types.List, dd diag.Diagnostics) types.List {

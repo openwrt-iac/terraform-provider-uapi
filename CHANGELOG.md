@@ -6,6 +6,28 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-08-10
+
+### Added
+- uapi's `X-Mgmt-Path-Warning` is now surfaced as a Terraform warning. uapi sets it
+  when a write touches the interface the request arrived through, and the provider
+  was discarding it, so the first sign was the router no longer answering. It now
+  appears against the resource on the apply that causes it, carrying uapi's own
+  explanation. Nothing else changes: it is advisory, and the write proceeds.
+
+  uapi declares the header on `network/interfaces` writes today. The provider reads
+  it from every write response, so it will surface on further resources without a
+  provider release if uapi widens it (tracked at openwrt-iac/uapi#132, opened after
+  a `network/bridge_vlans` write took a test router off the network with no warning
+  available).
+
+### Notes
+- The acceptance fixture for `uapi_network_bridge_vlan` no longer targets `br-lan`.
+  Creating a bridge VLAN on the management bridge enables VLAN filtering on it and
+  takes a live target off the network mid-suite, which is how the gap above was
+  found. It now names a bridge that does not exist on a stock router, so a live run
+  fails that one case with a harmless 422 rather than stranding the box.
+
 ## [2.5.1] - 2026-08-10
 
 Documentation only. No schema, behaviour or dependency change, so upgrading from

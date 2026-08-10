@@ -264,3 +264,60 @@ func TestPostSendsIdempotencyKey(t *testing.T) {
 		t.Errorf("GET should not carry an Idempotency-Key, got %q", getKey)
 	}
 }
+
+// warnRecorder captures what the client reports through the Warner sink.
+type warnRecorder struct{ summaries, details []string }
+
+func (w *warnRecorder) APIWarning(summary, detail string) {
+	w.summaries = append(w.summaries, summary)
+	w.details = append(w.details, detail)
+}
+
+// uapi sets X-Mgmt-Path-Warning when a write touches the interface the caller
+// arrived through. Dropping it means an operator only finds out when the router
+// stops answering, so the client has to hand it to the caller.
+func TestWriteSurfacesMgmtPathWarning(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Mgmt-Path-Warning", "br-lan carries this request; the interface will be reconfigured")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"lan"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok", true, "test")
+	rec := &warnRecorder{}
+	ctx := WithWarner(context.Background(), rec)
+
+	if _, _, err := c.Put(ctx, "/network/interfaces/lan", map[string]any{"proto": "dhcp"}, ""); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if len(rec.summaries) != 1 {
+		t.Fatalf("expected 1 warning, got %d", len(rec.summaries))
+	}
+	if !strings.Contains(rec.details[0], "br-lan carries this request") {
+		t.Errorf("warning lost the server's detail: %q", rec.details[0])
+	}
+
+	// No sink attached must not panic: most calls do not set one.
+	if _, _, err := c.Put(context.Background(), "/network/interfaces/lan", map[string]any{}, ""); err != nil {
+		t.Fatalf("put without a warner: %v", err)
+	}
+}
+
+// A response without the header must produce no warning at all.
+func TestWriteWithoutWarningHeaderIsSilent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"lan"}`))
+	}))
+	defer srv.Close()
+
+	rec := &warnRecorder{}
+	c := New(srv.URL, "tok", true, "test")
+	if _, _, err := c.Put(WithWarner(context.Background(), rec), "/x/y", map[string]any{}, ""); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if len(rec.summaries) != 0 {
+		t.Fatalf("expected no warning, got %v", rec.summaries)
+	}
+}

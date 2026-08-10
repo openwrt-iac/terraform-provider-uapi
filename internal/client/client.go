@@ -43,6 +43,28 @@ func newIdempotencyKey() string {
 	return hex.EncodeToString(b[:])
 }
 
+// Warner receives the advisory headers uapi attaches to a response. uapi emits
+// X-Mgmt-Path-Warning when a write touches the interface the request arrived
+// through, which is the one warning an operator has to see before the apply
+// finishes: by the time it takes effect, the router may be unreachable. Logging
+// it is not enough, so the caller supplies a sink that turns it into a
+// diagnostic. Attach one with WithWarner; requests without one just skip it.
+type Warner interface {
+	APIWarning(summary, detail string)
+}
+
+type warnerKey struct{}
+
+// WithWarner attaches a sink for advisory response headers to ctx.
+func WithWarner(ctx context.Context, w Warner) context.Context {
+	return context.WithValue(ctx, warnerKey{}, w)
+}
+
+func warnerFrom(ctx context.Context) Warner {
+	w, _ := ctx.Value(warnerKey{}).(Warner)
+	return w
+}
+
 type Client struct {
 	baseURL   string
 	token     string
@@ -174,6 +196,13 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 
 		etag = resp.Header.Get("ETag")
 		nextCursor = resp.Header.Get("X-Next-Cursor")
+		// Surfaced whatever the status: a write that reconfigures the management
+		// path is worth reporting even when it also failed.
+		if mp := resp.Header.Get("X-Mgmt-Path-Warning"); mp != "" {
+			if w := warnerFrom(ctx); w != nil {
+				w.APIWarning("This write affects the interface uapi was reached through", mp)
+			}
+		}
 		// X-Reload-Status is uapi's "did the init-script reload run" signal (ok |
 		// no_reload). 2xx means the write committed, not that the daemon converged;
 		// surface it at debug for "applied but nothing changed" diagnosis.
