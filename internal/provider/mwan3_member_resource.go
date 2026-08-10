@@ -46,7 +46,7 @@ func (r *mwan3MemberResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"id":        optionalComputedIDAttribute(),
 			"managed":   managedAttribute(),
 			"etag":      etagAttribute(),
-			"interface": schema.StringAttribute{Required: true, Description: "Network interface this entry applies to."},
+			"interface": schema.StringAttribute{Required: true, Description: "Name of an `uapi_mwan3_interface` section, not a network interface."},
 			"metric":    optionalComputedInt64("uci option metric."),
 			"weight":    optionalComputedInt64("uci option weight."),
 		},

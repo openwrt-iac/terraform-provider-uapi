@@ -28,7 +28,7 @@ data "uapi_mwan3_member" "example" {
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state.
-- `interface` (String) Network interface this entry applies to.
+- `interface` (String) Name of an `uapi_mwan3_interface` section, not a network interface.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `metric` (Number) uci option metric.
 - `weight` (Number) uci option weight.

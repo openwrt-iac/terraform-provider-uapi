@@ -6,6 +6,41 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-08-10
+
+Documentation only. No schema, behaviour or dependency change, so upgrading from
+2.5.0 needs nothing.
+
+### Fixed
+- Eleven attribute descriptions described the wrong thing. Descriptions are keyed
+  by field name, so a name meaning different things on different resources got one
+  generic sentence, and for these it was misleading rather than merely vague. Found
+  by running the acceptance suite against a real router, where
+  `uapi_openvpn_instance.key` was rejected with "must be an absolute filesystem
+  path" while the docs called it a passphrase.
+  - `uapi_openvpn_instance.key`, `tls_auth` and `pkcs12`, and
+    `uapi_uhttpd_instance.key`, are **paths to files on the router**, not the key
+    material. They were documented as passphrases and bundles.
+  - `uapi_network_route.target` is the **destination address or CIDR**. It was
+    documented as "Target / action.", which is the firewall meaning of the word.
+  - `uapi_dropbear_instance.interface` is the interface or IP dropbear **listens
+    on**, and `uapi_mwan3_member.interface` names an `uapi_mwan3_interface` section
+    rather than a network interface.
+  - `name` on `uapi_dhcp_host`, `uapi_firewall_zone` and `uapi_network_device` is
+    the hostname, the zone name and the kernel device name respectively. All three
+    were documented as "Optional section name.", which understates what they do.
+
+  `uapi_network_interface.private_key` and `uapi_network_wireguard_peer.preshared_key`
+  are unchanged: those really are key material.
+
+### Notes
+- The acceptance fixture for `uapi_openvpn_instance` passed a PEM header where a
+  path belongs. The fake accepted it and a real router did not, which is what
+  surfaced the documentation bug; the fixture now uses a path.
+- `CONTRIBUTING.md` and the live-acceptance workflow now warn that the
+  `uapi_network_*` cases reconfigure the interfaces the run arrives over, and can
+  take a remote box off the network with a section that stays committed in uci.
+
 ## [2.5.0] - 2026-08-09
 
 Tracks uapi 2.5.0. Requires uapi >= 2.5.0.

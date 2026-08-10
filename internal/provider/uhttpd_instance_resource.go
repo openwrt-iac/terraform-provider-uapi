@@ -68,7 +68,7 @@ func (r *uhttpdInstanceResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"home":            optionalComputedString("uci option home."),
 			"http_keepalive":  optionalComputedInt64("uci option http_keepalive."),
 			"index_page":      optionalComputedStringList("uci option index_page."),
-			"key":             optionalComputedString("Encryption passphrase. Write-only: never returned by the API."),
+			"key":             optionalComputedString("Path to the TLS private key file, not the key material itself."),
 			"listen_http":     optionalComputedStringList("uci option listen_http."),
 			"listen_https":    optionalComputedStringList("uci option listen_https."),
 			"lua_prefix":      optionalComputedStringList("uci option lua_prefix."),

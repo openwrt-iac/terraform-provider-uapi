@@ -34,7 +34,7 @@ func (d *mwan3MemberDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"id":        dsIDAttribute(),
 			"managed":   dsManagedAttribute(),
 			"etag":      dsComputedString("Opaque ETag of the resource's current state."),
-			"interface": dsComputedString("Network interface this entry applies to."),
+			"interface": dsComputedString("Name of an `uapi_mwan3_interface` section, not a network interface."),
 			"metric":    dsComputedInt64("uci option metric."),
 			"weight":    dsComputedInt64("uci option weight."),
 		},

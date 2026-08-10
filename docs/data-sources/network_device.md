@@ -33,7 +33,7 @@ data "uapi_network_device" "example" {
 - `macaddr` (String) uci option macaddr.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `mtu` (Number) uci option mtu.
-- `name` (String) Optional section name.
+- `name` (String) Device name as netifd and the kernel see it (`br-lan`, `eth0`).
 - `ports` (List of String) uci option ports.
 - `type` (String) uci option type.
 - `vid` (Number) uci option vid.

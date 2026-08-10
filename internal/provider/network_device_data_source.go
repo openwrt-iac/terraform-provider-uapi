@@ -38,7 +38,7 @@ func (d *networkDeviceDataSource) Schema(_ context.Context, _ datasource.SchemaR
 			"ipv6":    dsComputedBool("uci option ipv6."),
 			"macaddr": dsComputedString("uci option macaddr."),
 			"mtu":     dsComputedInt64("uci option mtu."),
-			"name":    dsComputedString("Optional section name."),
+			"name":    dsComputedString("Device name as netifd and the kernel see it (`br-lan`, `eth0`)."),
 			"ports":   dsComputedStringList("uci option ports."),
 			"type":    dsComputedString("uci option type."),
 			"vid":     dsComputedInt64("uci option vid."),

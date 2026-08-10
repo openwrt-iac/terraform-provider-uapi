@@ -54,7 +54,7 @@ func (r *dropbearInstanceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"banner_file":        optionalComputedString("uci option banner_file."),
 			"enable":             optionalComputedBool("uci option enable."),
 			"gateway_ports":      optionalComputedBool("uci option gateway_ports."),
-			"interface":          optionalComputedString("Network interface this entry applies to."),
+			"interface":          optionalComputedString("Interface or IP address dropbear listens on."),
 			"password_auth":      optionalComputedBool("uci option password_auth."),
 			"port":               optionalComputedInt64("uci option port."),
 			"root_login":         optionalComputedBool("uci option root_login."),

@@ -29,7 +29,7 @@ resource "uapi_uhttpd_instance" "example" {
 - `http_keepalive` (Number) uci option http_keepalive.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `index_page` (List of String) uci option index_page.
-- `key` (String) Encryption passphrase. Write-only: never returned by the API.
+- `key` (String) Path to the TLS private key file, not the key material itself.
 - `listen_http` (List of String) uci option listen_http.
 - `listen_https` (List of String) uci option listen_https.
 - `lua_prefix` (List of String) uci option lua_prefix.

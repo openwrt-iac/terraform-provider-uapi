@@ -34,7 +34,7 @@ data "uapi_uhttpd_instance" "example" {
 - `home` (String) uci option home.
 - `http_keepalive` (Number) uci option http_keepalive.
 - `index_page` (List of String) uci option index_page.
-- `key` (String) Encryption passphrase. Write-only: never returned by the API.
+- `key` (String) Path to the TLS private key file, not the key material itself.
 - `listen_http` (List of String) uci option listen_http.
 - `listen_https` (List of String) uci option listen_https.
 - `lua_prefix` (List of String) uci option lua_prefix.

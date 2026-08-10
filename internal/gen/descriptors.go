@@ -146,7 +146,9 @@ func natMatchFields() *nested {
 
 var descriptors = []descriptor{
 	// firewall
-	{Type: "firewall_zone", Schema: "FirewallZones", Collection: "firewall/zones", Kind: "collection", Label: "firewall zone", GenDataSource: true},
+	{Type: "firewall_zone", Schema: "FirewallZones", Collection: "firewall/zones", Kind: "collection", Label: "firewall zone", GenDataSource: true, Descs: map[string]string{
+		"name": "Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores.",
+	}},
 	{Type: "firewall_rule", Schema: "FirewallRules", Collection: "firewall/rules", Kind: "collection", Label: "firewall rule", GenDataSource: true, Nested: matchFields(false)},
 	{Type: "firewall_redirect", Schema: "FirewallRedirects", Collection: "firewall/redirects", Kind: "collection", Label: "firewall redirect", GenDataSource: true, Nested: matchFields(true)},
 	{Type: "firewall_forwarding", Schema: "FirewallForwardings", Collection: "firewall/forwardings", Kind: "collection", Label: "firewall forwarding", GenDataSource: true},
@@ -165,8 +167,13 @@ var descriptors = []descriptor{
 			"ipaddr":  "Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface.",
 			"ipaddrs": "Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees.",
 		}},
-	{Type: "network_device", Schema: "NetworkDevices", Collection: "network/devices", Kind: "collection", Label: "network device", GenDataSource: true},
-	{Type: "network_route", Schema: "NetworkRoutes", Collection: "network/routes", Kind: "collection", Label: "network route", GenDataSource: true},
+	{Type: "network_device", Schema: "NetworkDevices", Collection: "network/devices", Kind: "collection", Label: "network device", GenDataSource: true, Descs: map[string]string{
+		"name": "Device name as netifd and the kernel see it (`br-lan`, `eth0`).",
+	}},
+	{Type: "network_route", Schema: "NetworkRoutes", Collection: "network/routes", Kind: "collection", Label: "network route", GenDataSource: true, Descs: map[string]string{
+		"target":    "Destination IPv4 address or CIDR for this route.",
+		"interface": "Parent network interface name.",
+	}},
 	{Type: "network_rule", Schema: "NetworkRules", Collection: "network/rules", Kind: "collection", Label: "network rule", GenDataSource: true},
 	{Type: "network_bridge_vlan", Schema: "NetworkBridgeVlans", Collection: "network/bridge_vlans", Kind: "collection", Label: "network bridge VLAN", GenDataSource: true},
 	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true},
@@ -175,6 +182,7 @@ var descriptors = []descriptor{
 	{Type: "wireless_interface", Schema: "WirelessInterfaces", Collection: "wireless/interfaces", Kind: "collection", Label: "wireless interface", GenDataSource: true, Runtime: "wireless"},
 	// dhcp
 	{Type: "dhcp_host", Schema: "DhcpHosts", Collection: "dhcp/hosts", Kind: "collection", Label: "dhcp host", GenDataSource: true, Descs: map[string]string{
+		"name": "Hostname dnsmasq answers for this reservation.",
 		"macs": "MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.",
 		"tag":  "dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar.",
 	}},
@@ -190,8 +198,12 @@ var descriptors = []descriptor{
 	// sqm / uhttpd / dropbear / system / vnstat / unbound / lldpd / prometheus
 	{Type: "sqm_queue", Schema: "SqmQueues", Collection: "sqm/queues", Kind: "collection", Label: "sqm queue", GenDataSource: true},
 	{Type: "uhttpd_cert", Schema: "UhttpdCerts", Collection: "uhttpd/certs", Kind: "collection", Label: "uhttpd cert", GenDataSource: true},
-	{Type: "uhttpd_instance", Schema: "UhttpdInstances", Collection: "uhttpd/instances", Kind: "collection", Label: "uhttpd instance", GenDataSource: true},
-	{Type: "dropbear_instance", Schema: "DropbearInstances", Collection: "dropbear/instances", Kind: "collection", Label: "dropbear instance", GenDataSource: true},
+	{Type: "uhttpd_instance", Schema: "UhttpdInstances", Collection: "uhttpd/instances", Kind: "collection", Label: "uhttpd instance", GenDataSource: true, Descs: map[string]string{
+		"key": "Path to the TLS private key file, not the key material itself.",
+	}},
+	{Type: "dropbear_instance", Schema: "DropbearInstances", Collection: "dropbear/instances", Kind: "collection", Label: "dropbear instance", GenDataSource: true, Descs: map[string]string{
+		"interface": "Interface or IP address dropbear listens on.",
+	}},
 	{Type: "system_timeserver", Schema: "SystemTimeservers", Collection: "system/timeservers", Kind: "collection", Label: "system timeserver", GenDataSource: true},
 	{Type: "vnstat_interface", Schema: "VnstatInterfaces", Collection: "vnstat/interfaces", Kind: "collection", Label: "vnstat interface", GenDataSource: true},
 	{Type: "system", Schema: "System", Collection: "system", Kind: "singleton", Label: "system settings", GenDataSource: true, Descs: map[string]string{
@@ -209,11 +221,17 @@ var descriptors = []descriptor{
 	{Type: "prometheus_node_exporter_lua_config", Schema: "PrometheusNodeExporterLuaConfig", Collection: "prometheus_node_exporter_lua/config", Kind: "singleton", Label: "prometheus node_exporter config", GenDataSource: true},
 	// mwan3 (added in uapi 2.0.0-rc3)
 	{Type: "mwan3_interface", Schema: "Mwan3Interfaces", Collection: "mwan3/interfaces", Kind: "collection", Label: "mwan3 interface", GenDataSource: true},
-	{Type: "mwan3_member", Schema: "Mwan3Members", Collection: "mwan3/members", Kind: "collection", Label: "mwan3 member", GenDataSource: true},
+	{Type: "mwan3_member", Schema: "Mwan3Members", Collection: "mwan3/members", Kind: "collection", Label: "mwan3 member", GenDataSource: true, Descs: map[string]string{
+		"interface": "Name of an `uapi_mwan3_interface` section, not a network interface.",
+	}},
 	{Type: "mwan3_policy", Schema: "Mwan3Policies", Collection: "mwan3/policies", Kind: "collection", Label: "mwan3 policy", GenDataSource: true},
 	{Type: "mwan3_rule", Schema: "Mwan3Rules", Collection: "mwan3/rules", Kind: "collection", Label: "mwan3 rule", GenDataSource: true},
 	{Type: "mwan3_globals", Schema: "Mwan3Globals", Collection: "mwan3/globals", Kind: "singleton", Label: "mwan3 globals", GenDataSource: true},
 	// usteer + openvpn (added in uapi 2.0.0-rc3; openvpn key/tls_auth/pkcs12 are write-only per the spec)
 	{Type: "usteer_config", Schema: "UsteerConfig", Collection: "usteer/config", Kind: "singleton", Label: "usteer config", GenDataSource: true},
-	{Type: "openvpn_instance", Schema: "OpenvpnInstances", Collection: "openvpn/instances", Kind: "collection", Label: "openvpn instance", GenDataSource: true},
+	{Type: "openvpn_instance", Schema: "OpenvpnInstances", Collection: "openvpn/instances", Kind: "collection", Label: "openvpn instance", GenDataSource: true, Descs: map[string]string{
+		"key":      "Path to the private key PEM on the router, not the key material itself. Write-only: reads return `has_key`.",
+		"tls_auth": "Path to the tls-auth/tls-crypt key file on the router, not the key material itself. Write-only: reads return `has_tls_auth`.",
+		"pkcs12":   "Path to the PKCS#12 bundle on the router, not the bundle itself. Write-only: reads return `has_pkcs12`.",
+	}},
 }

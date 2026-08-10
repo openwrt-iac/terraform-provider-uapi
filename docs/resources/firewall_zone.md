@@ -23,7 +23,7 @@ resource "uapi_firewall_zone" "example" {
 
 ### Required
 
-- `name` (String) Optional section name.
+- `name` (String) Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores.
 
 ### Optional
 

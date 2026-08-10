@@ -26,7 +26,7 @@ resource "uapi_dropbear_instance" "example" {
 - `enable` (Boolean) uci option enable.
 - `gateway_ports` (Boolean) uci option gateway_ports.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
-- `interface` (String) Network interface this entry applies to.
+- `interface` (String) Interface or IP address dropbear listens on.
 - `password_auth` (Boolean) uci option password_auth.
 - `port` (Number) uci option port.
 - `root_login` (Boolean) uci option root_login.

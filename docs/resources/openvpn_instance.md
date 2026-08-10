@@ -42,7 +42,7 @@ resource "uapi_openvpn_instance" "example" {
 - `ifconfig` (String) uci option ifconfig.
 - `ifconfig_pool` (String) uci option ifconfig_pool.
 - `keepalive` (String) uci option keepalive.
-- `key` (String, Sensitive) Encryption passphrase. Write-only: never returned by the API.
+- `key` (String, Sensitive) Path to the private key PEM on the router, not the key material itself. Write-only: reads return `has_key`.
 - `local` (String) uci option local.
 - `log` (String) uci option log.
 - `log_append` (String) uci option log_append.
@@ -55,7 +55,7 @@ resource "uapi_openvpn_instance" "example" {
 - `persist_tun` (Boolean) uci option persist_tun.
 - `ping` (Number) uci option ping.
 - `ping_restart` (Number) uci option ping_restart.
-- `pkcs12` (String, Sensitive) OpenVPN PKCS#12 bundle. Write-only: never returned by the API.
+- `pkcs12` (String, Sensitive) Path to the PKCS#12 bundle on the router, not the bundle itself. Write-only: reads return `has_pkcs12`.
 - `port` (Number) uci option port.
 - `proto` (String) Protocol.
 - `push` (List of String) uci option push.
@@ -67,7 +67,7 @@ resource "uapi_openvpn_instance" "example" {
 - `server` (String) uci option server.
 - `server_bridge` (String) uci option server_bridge.
 - `status` (String) uci option status.
-- `tls_auth` (String, Sensitive) OpenVPN tls-auth/tls-crypt key material. Write-only: never returned by the API.
+- `tls_auth` (String, Sensitive) Path to the tls-auth/tls-crypt key file on the router, not the key material itself. Write-only: reads return `has_tls_auth`.
 - `tls_client` (Boolean) uci option tls_client.
 - `tls_crypt` (String) uci option tls_crypt.
 - `tls_server` (Boolean) uci option tls_server.
