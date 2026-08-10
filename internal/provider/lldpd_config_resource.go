@@ -30,7 +30,6 @@ type lldpdConfigModel struct {
 	EnableCdp        types.Bool   `tfsdk:"enable_cdp"`
 	EnableEdp        types.Bool   `tfsdk:"enable_edp"`
 	EnableFdp        types.Bool   `tfsdk:"enable_fdp"`
-	EnableLldpmed    types.Bool   `tfsdk:"enable_lldpmed"`
 	EnableSonmp      types.Bool   `tfsdk:"enable_sonmp"`
 	Interface        types.List   `tfsdk:"interface"`
 	LldpCapabilities types.Bool   `tfsdk:"lldp_capabilities"`
@@ -57,7 +56,6 @@ func (r *lldpdConfigResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"enable_cdp":        optionalComputedBool("uci option enable_cdp."),
 			"enable_edp":        optionalComputedBool("uci option enable_edp."),
 			"enable_fdp":        optionalComputedBool("uci option enable_fdp."),
-			"enable_lldpmed":    deprecatedOptionalComputedBool("uci option enable_lldpmed.", "Deprecated, removed in v3: nothing reads this. LLDP-MED is a build-time switch (`CONFIG_LLDPD_WITH_LLDPMED`), not a runtime option."),
 			"enable_sonmp":      optionalComputedBool("uci option enable_sonmp."),
 			"interface":         optionalComputedStringList("Network interface this entry applies to."),
 			"lldp_capabilities": optionalComputedBool("uci option lldp_capabilities."),
@@ -73,7 +71,6 @@ func (r *lldpdConfigResource) body(ctx context.Context, m lldpdConfigModel, diag
 	putBool(out, "enable_cdp", m.EnableCdp)
 	putBool(out, "enable_edp", m.EnableEdp)
 	putBool(out, "enable_fdp", m.EnableFdp)
-	putBool(out, "enable_lldpmed", m.EnableLldpmed)
 	putBool(out, "enable_sonmp", m.EnableSonmp)
 	putList(ctx, out, "interface", m.Interface, diags.d)
 	putBool(out, "lldp_capabilities", m.LldpCapabilities)
@@ -89,7 +86,6 @@ func (r *lldpdConfigResource) read(ctx context.Context, obj map[string]any, m *l
 	m.EnableCdp = boolVal(obj, "enable_cdp")
 	m.EnableEdp = boolVal(obj, "enable_edp")
 	m.EnableFdp = boolVal(obj, "enable_fdp")
-	m.EnableLldpmed = boolVal(obj, "enable_lldpmed")
 	m.EnableSonmp = boolVal(obj, "enable_sonmp")
 	m.Interface = diags.list(listVal(ctx, obj, "interface"))
 	m.LldpCapabilities = boolVal(obj, "lldp_capabilities")
@@ -105,6 +101,7 @@ func (r *lldpdConfigResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -148,6 +145,7 @@ func (r *lldpdConfigResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

@@ -71,6 +71,7 @@ func (r *snmpdAgentResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -114,6 +115,7 @@ func (r *snmpdAgentResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
@@ -134,6 +136,7 @@ func (r *snmpdAgentResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+snmpdAgentCollection+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", "snmpd agent", err)
 	}

@@ -15,17 +15,6 @@ type descriptor struct {
 	Runtime       string   // "" | "interface" | "wireless": adds a computed runtime block to the data source
 	CreateOnly    []string // fields that are create-time only and immutable (Optional + RequiresReplace, sent only on create, never returned), e.g. an interface `name`
 	Descs         map[string]string
-	// Mirrors lists pairs of wire names that are two views of ONE uci option, which
-	// uapi fills from that single key on read. Both are Optional+Computed (they are
-	// server-filled), so plain UseStateForUnknown would pin the side the caller does
-	// not set and a full-replace PUT would send it back and clobber the one they do
-	// set. The generator gives both sides the sibling-aware plan modifier instead
-	// (mirroredString / mirroredStringList); see the comment on those.
-	//
-	// Note this does not make either side clearable: with neither in config both
-	// fall back to prior state and are resent, so removing an address from config
-	// does not drop the uci option. That gap is upstream, openwrt-iac/uapi#3.
-	Mirrors [][2]string
 }
 
 // Desc returns a human description for a field (best-effort; docs only). The
@@ -97,20 +86,28 @@ func matchFields(redirect bool) *nested {
 		srcZone.Kind = "required"
 		srcZone.Desc = "Source firewall zone name."
 	}
+	// A rule matches with real lists. A redirect's selectors are scalars as of uapi
+	// 3.0: firewall4 parses a `config redirect` option as a scalar, and the array
+	// with maxItems 1 that v2 used made a second value an apply-time 422 instead of
+	// a plan-time type error.
+	addrType, portType := "types.List", "types.List"
+	if redirect {
+		addrType, portType = "types.String", "types.String"
+	}
 	f := []field{
 		srcZone,
 		{Name: "dest_zone", GoName: "DestZone", GoType: "types.String", Kind: "optcomp", Desc: "Destination firewall zone name."},
-		{Name: "src_ip", GoName: "SrcIP", GoType: "types.List", Kind: "optcomp", Desc: "Source IP addresses or CIDRs."},
-		{Name: "src_port", GoName: "SrcPort", GoType: "types.List", Kind: "optcomp", Desc: "Source ports."},
+		{Name: "src_ip", GoName: "SrcIP", GoType: addrType, Kind: "optcomp", Desc: "Source IP addresses or CIDRs."},
+		{Name: "src_port", GoName: "SrcPort", GoType: portType, Kind: "optcomp", Desc: "Source ports."},
 	}
 	if redirect {
-		f = append(f, field{Name: "src_dport", GoName: "SrcDport", GoType: "types.List", Kind: "optcomp", Desc: "With target DNAT, the incoming (destination) port or range to redirect. With target SNAT, the source port to rewrite to. One value only."})
-		f = append(f, field{Name: "src_dip", GoName: "SrcDip", GoType: "types.List", Kind: "optcomp", Desc: "With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the address to rewrite the source to, and required. One value only."})
-		f = append(f, field{Name: "dest_ip", GoName: "DestIP", GoType: "types.List", Kind: "optcomp", Desc: "Internal destination address to rewrite to. One value only."})
-		f = append(f, field{Name: "dest_port", GoName: "DestPort", GoType: "types.List", Kind: "optcomp", Desc: "Internal destination port or range to rewrite to. One value only."})
+		f = append(f, field{Name: "src_dport", GoName: "SrcDport", GoType: portType, Kind: "optcomp", Desc: "With target DNAT, the incoming (destination) port or range to redirect. With target SNAT, the source port to rewrite to."})
+		f = append(f, field{Name: "src_dip", GoName: "SrcDip", GoType: addrType, Kind: "optcomp", Desc: "With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the address to rewrite the source to, and required."})
+		f = append(f, field{Name: "dest_ip", GoName: "DestIP", GoType: addrType, Kind: "optcomp", Desc: "Internal destination address to rewrite to."})
+		f = append(f, field{Name: "dest_port", GoName: "DestPort", GoType: portType, Kind: "optcomp", Desc: "Internal destination port or range to rewrite to."})
 	} else {
-		f = append(f, field{Name: "dest_ip", GoName: "DestIP", GoType: "types.List", Kind: "optcomp", Desc: "Destination IP addresses or CIDRs."})
-		f = append(f, field{Name: "dest_port", GoName: "DestPort", GoType: "types.List", Kind: "optcomp", Desc: "Destination ports."})
+		f = append(f, field{Name: "dest_ip", GoName: "DestIP", GoType: addrType, Kind: "optcomp", Desc: "Destination IP addresses or CIDRs."})
+		f = append(f, field{Name: "dest_port", GoName: "DestPort", GoType: portType, Kind: "optcomp", Desc: "Destination ports."})
 	}
 	f = append(f,
 		field{Name: "proto", GoName: "Proto", GoType: "types.List", Kind: "optcomp", Desc: protoDesc},
@@ -158,14 +155,13 @@ var descriptors = []descriptor{
 	}},
 	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
-	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", CreateOnly: []string{"name"},
-		Mirrors: [][2]string{{"ipaddr", "ipaddrs"}},
+	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface",
 		// Phrased to read correctly on the data source too, where "set one or the
 		// other" would be meaningless: these state a fact about the API rather than
 		// instructing the reader.
 		Descs: map[string]string{
-			"ipaddr":  "Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface.",
-			"ipaddrs": "Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees.",
+			"ipaddr":  "Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.",
+			"ipaddrs": "Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.",
 		}},
 	{Type: "network_device", Schema: "NetworkDevices", Collection: "network/devices", Kind: "collection", Label: "network device", GenDataSource: true, Descs: map[string]string{
 		"name": "Device name as netifd and the kernel see it (`br-lan`, `eth0`).",
@@ -205,7 +201,6 @@ var descriptors = []descriptor{
 		"interface": "Interface or IP address dropbear listens on.",
 	}},
 	{Type: "system_timeserver", Schema: "SystemTimeservers", Collection: "system/timeservers", Kind: "collection", Label: "system timeserver", GenDataSource: true},
-	{Type: "vnstat_interface", Schema: "VnstatInterfaces", Collection: "vnstat/interfaces", Kind: "collection", Label: "vnstat interface", GenDataSource: true},
 	{Type: "system", Schema: "System", Collection: "system", Kind: "singleton", Label: "system settings", GenDataSource: true, Descs: map[string]string{
 		"urandom_seed": "Path the entropy seed is saved to and restored from. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.",
 	}},

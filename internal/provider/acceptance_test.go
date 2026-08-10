@@ -195,118 +195,6 @@ resource "uapi_firewall_nat" "all" {
 	})
 }
 
-// `ipaddr` and `ipaddrs` are one uci option that uapi fills under both names on
-// read, so whichever the config does not set is pinned in state and would be sent
-// back on the full-replace PUT. uapi prefers the list, so a stale pinned list
-// silently overwrote a changed scalar. Both directions have to survive a change.
-func TestAccNetworkInterface_mirroredAddressList(t *testing.T) {
-	m := newMockUAPI()
-	defer m.Close()
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: accProviders(),
-		Steps: []resource.TestStep{
-			{
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "i" {
-  id      = "mirlist"
-  proto   = "static"
-  ipaddrs = ["192.168.60.1/24"]
-}`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.60.1/24"),
-					// the server mirrors the list's first entry into the scalar
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.60.1/24"),
-				),
-			},
-			{
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "i" {
-  id      = "mirlist"
-  proto   = "static"
-  ipaddrs = ["192.168.61.1/24"]
-}`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.61.1/24"),
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.61.1/24"),
-				),
-			},
-		},
-	})
-}
-
-func TestAccNetworkInterface_mirroredAddressScalar(t *testing.T) {
-	m := newMockUAPI()
-	defer m.Close()
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: accProviders(),
-		Steps: []resource.TestStep{
-			{
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "i" {
-  id     = "mirscalar"
-  proto  = "static"
-  ipaddr = "192.168.70.1/24"
-}`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.70.1/24"),
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.70.1/24"),
-				),
-			},
-			{
-				// The regression: without dropping the pinned ipaddrs, the server's list
-				// preference applies the OLD address and the apply fails as inconsistent.
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "i" {
-  id     = "mirscalar"
-  proto  = "static"
-  ipaddr = "192.168.71.1/24"
-}`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.71.1/24"),
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.71.1/24"),
-				),
-			},
-		},
-	})
-}
-
-// The other half of the mirror contract: when config sets neither side, the pair
-// must still round-trip on an unrelated update. The sibling-aware modifier falls
-// back to prior state there, so the full-replace PUT carries the address instead
-// of dropping the uci option.
-func TestAccNetworkInterface_mirrorPreservedOnUnrelatedUpdate(t *testing.T) {
-	m := newMockUAPI()
-	defer m.Close()
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: accProviders(),
-		Steps: []resource.TestStep{
-			{
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "i" {
-  id     = "mirkeep"
-  proto  = "static"
-  ipaddr = "192.168.72.1/24"
-}`,
-				Check: resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.72.1/24"),
-			},
-			{
-				// ipaddr leaves config entirely and an unrelated field changes.
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "i" {
-  id     = "mirkeep"
-  proto  = "static"
-  metric = 42
-}`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "metric", "42"),
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddr", "192.168.72.1/24"),
-					resource.TestCheckResourceAttr("uapi_network_interface.i", "ipaddrs.0", "192.168.72.1/24"),
-				),
-			},
-		},
-	})
-}
-
 // The validation sweep is opt-in because it re-validates every section on the
 // router. With validate set, invalid_sections reports what a write would reject
 // today, and skipped_for_scope says where the token was not allowed to look, so
@@ -513,7 +401,7 @@ func TestAccClearOnOmit(t *testing.T) {
 resource "uapi_network_interface" "clr" {
   id      = "clearif"
   proto   = "static"
-  ipaddr  = "192.168.50.1"
+  ipaddrs = ["192.168.50.1"]
   netmask = "255.255.255.0"
   gateway = "192.168.50.254"
 }`,
@@ -528,7 +416,7 @@ resource "uapi_network_interface" "clr" {
 resource "uapi_network_interface" "clr" {
   id     = "clearif"
   proto  = "static"
-  ipaddr = "192.168.50.1"
+  ipaddrs = ["192.168.50.1"]
 }`,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -541,43 +429,6 @@ resource "uapi_network_interface" "clr" {
 					// ipaddr is not clear-on-omit (not flagged): it must survive.
 					resource.TestCheckResourceAttr("uapi_network_interface.clr", "ipaddr", "192.168.50.1"),
 				),
-			},
-		},
-	})
-}
-
-// TestAccNameToIDMigration covers the 2.2.1 N3 fix: the deprecated create-only
-// `name` is an alias of `id`, so switching `name = "x"` to `id = "x"` no longer
-// forces a destroy+recreate. It is a non-destructive in-place update (the `name`
-// attribute clears from state); changing name to a different value still replaces
-// (TestAccNameRenameReplaces).
-func TestAccNameToIDMigration(t *testing.T) {
-	m := newMockUAPI()
-	defer m.Close()
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: accProviders(),
-		Steps: []resource.TestStep{
-			{
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "wg" {
-  name  = "wg0"
-  proto = "wireguard"
-}`,
-				Check: resource.TestCheckResourceAttr("uapi_network_interface.wg", "id", "wg0"),
-			},
-			{
-				// Migrate to id with the same value: in-place update (name clears), not a replacement.
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "wg" {
-  id    = "wg0"
-  proto = "wireguard"
-}`,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						// In-place update (name clears), NOT a replacement.
-						plancheck.ExpectResourceAction("uapi_network_interface.wg", plancheck.ResourceActionUpdate),
-					},
-				},
 			},
 		},
 	})
@@ -603,39 +454,8 @@ resource "uapi_network_interface" "dup" {
 	})
 }
 
-// TestAccNameRenameReplaces guards the other half of N3: changing the deprecated
-// `name` to a different non-null value is still a real rename and forces replace.
-func TestAccNameRenameReplaces(t *testing.T) {
-	m := newMockUAPI()
-	defer m.Close()
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: accProviders(),
-		Steps: []resource.TestStep{
-			{
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "wg" {
-  name  = "wga"
-  proto = "wireguard"
-}`,
-			},
-			{
-				Config: providerHCL(m.URL) + `
-resource "uapi_network_interface" "wg" {
-  name  = "wgb"
-  proto = "wireguard"
-}`,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("uapi_network_interface.wg", plancheck.ResourceActionDestroyBeforeCreate),
-					},
-				},
-			},
-		},
-	})
-}
-
 // TestAccDhcpHostDNSOnly covers the 2.2.0 relaxation: ip is no longer required, so
-// a host can be a DNS-only reservation (mac + name, no static lease). Before 2.2.0
+// a host can be a DNS-only reservation (macs + name, no static lease). Before 2.2.0
 // the schema marked ip required and this config failed at plan.
 func TestAccDhcpHostDNSOnly(t *testing.T) {
 	m := newMockUAPI()
@@ -647,11 +467,11 @@ func TestAccDhcpHostDNSOnly(t *testing.T) {
 resource "uapi_dhcp_host" "dnsonly" {
   id   = "dnsonly"
   name = "printer"
-  mac  = "02:00:00:00:00:99"
+  macs = ["02:00:00:00:00:99"]
 }`,
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("uapi_dhcp_host.dnsonly", "name", "printer"),
-				resource.TestCheckResourceAttr("uapi_dhcp_host.dnsonly", "mac", "02:00:00:00:00:99"),
+				resource.TestCheckResourceAttr("uapi_dhcp_host.dnsonly", "macs.0", "02:00:00:00:00:99"),
 				resource.TestCheckNoResourceAttr("uapi_dhcp_host.dnsonly", "ip"),
 			),
 		}},
@@ -800,7 +620,7 @@ func TestAccDataSources(t *testing.T) {
 			Config: providerHCL(m.URL) + `
 resource "uapi_network_interface" "lan" {
   proto  = "static"
-  ipaddr = "192.168.1.1"
+  ipaddrs = ["192.168.1.1"]
 }
 
 data "uapi_network_interface" "lan" {

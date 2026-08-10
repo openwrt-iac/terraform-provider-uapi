@@ -55,12 +55,44 @@ func TestAccAllResources(t *testing.T) {
   src    = "192.168.9.0/24"
   lookup = 1
 }`},
-		{typ: "uapi_network_bridge_vlan", hcl: `resource "uapi_network_bridge_vlan" "t" {
-  device = "br-lan"
+		// Deliberately NOT br-lan. Creating a bridge VLAN on the management bridge
+		// enables VLAN filtering on it, untagged traffic stops, and a live run takes
+		// its own target off the network mid-suite (the delete then never runs, so
+		// the section stays committed in uci).
+		//
+		// It creates the bridge it filters, rather than naming one it hopes exists.
+		// Naming a nonexistent device made the case fail every live run with
+		// `device: conflict, bridge "br-uapitest" does not exist`, which is a
+		// permanently red test nobody reads. A portless bridge (uapi >= 2.2.0)
+		// carries no traffic, so filtering it cannot strand anything.
+		{typ: "uapi_network_bridge_vlan", hcl: `resource "uapi_network_device" "for_vlan" {
+  name = "br-uapitest"
+  type = "bridge"
+}
+
+resource "uapi_network_bridge_vlan" "t" {
+  device = uapi_network_device.for_vlan.name
   vlan   = 9
 }`},
-		{typ: "uapi_network_wireguard_peer", hcl: `resource "uapi_network_wireguard_peer" "t" {
-  interface   = "wg0"
+		// Creates the wireguard interface it attaches to. Naming a bare "wg0" assumed
+		// one already existed, which no real router guarantees, so this shared the
+		// defect fixed in the snmpd_access and sqm_queue cases.
+		//
+		// `private_key` is a throwaway generated for this fixture, not a secret: the
+		// interface exists for the length of one test. It has to be a real 44-char
+		// (32-byte) base64 key, and `addresses` is required when proto is wireguard.
+		// The fake validates neither, so the first version of this case carried a
+		// 48-char string and no addresses and was refused by every real router.
+		{typ: "uapi_network_wireguard_peer", hcl: `resource "uapi_network_interface" "for_peer" {
+  id          = "wgfixture"
+  proto       = "wireguard"
+  private_key = "4TMrf9VJAdq0+HDQRFG9uuRYXTtMmu6PrCwpaomeICk="
+  listen_port = 51999
+  addresses   = ["10.9.0.1/24"]
+}
+
+resource "uapi_network_wireguard_peer" "t" {
+  interface   = uapi_network_interface.for_peer.id
   public_key  = "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg="
   allowed_ips = ["10.9.0.2/32"]
 }`},
@@ -85,8 +117,15 @@ func TestAccAllResources(t *testing.T) {
 		{typ: "uapi_dhcp_odhcpd", singleton: true, hcl: `resource "uapi_dhcp_odhcpd" "t" {}`},
 		{typ: "uapi_unbound_server", singleton: true, hcl: `resource "uapi_unbound_server" "t" {}`},
 		// snmpd
-		{typ: "uapi_snmpd_access", hcl: `resource "uapi_snmpd_access" "t" {
-  group = "g"
+		// Creates the group it references. Referencing a bare name assumed a group
+		// already existed, which is true of the fake and of no real router, so this
+		// case failed every live run and had to be triaged as known-noise.
+		{typ: "uapi_snmpd_access", hcl: `resource "uapi_snmpd_group" "for_access" {
+  group = "acc_group"
+}
+
+resource "uapi_snmpd_access" "t" {
+  group = uapi_snmpd_group.for_access.group
 }`},
 		{typ: "uapi_snmpd_agent", hcl: `resource "uapi_snmpd_agent" "t" {}`},
 		{typ: "uapi_snmpd_com2sec", hcl: `resource "uapi_snmpd_com2sec" "t" {
@@ -104,13 +143,14 @@ func TestAccAllResources(t *testing.T) {
 }`},
 		{typ: "uapi_uhttpd_instance", hcl: `resource "uapi_uhttpd_instance" "t" {}`},
 		{typ: "uapi_dropbear_instance", hcl: `resource "uapi_dropbear_instance" "t" {}`},
+		// `wan` exists on a stock OpenWrt where `eth1` does not, and enabled=false
+		// keeps sqm from actually shaping the interface a live run may be arriving
+		// over. Exercises create/read/destroy without touching traffic.
 		{typ: "uapi_sqm_queue", hcl: `resource "uapi_sqm_queue" "t" {
-  interface = "eth1"
+  interface = "wan"
+  enabled   = false
 }`},
 		{typ: "uapi_system_timeserver", hcl: `resource "uapi_system_timeserver" "t" {}`},
-		{typ: "uapi_vnstat_interface", hcl: `resource "uapi_vnstat_interface" "t" {
-  interface = "eth0"
-}`},
 		{typ: "uapi_vnstat_config", singleton: true, hcl: `resource "uapi_vnstat_config" "t" {}`},
 		{typ: "uapi_lldpd_config", singleton: true, hcl: `resource "uapi_lldpd_config" "t" {}`},
 		{typ: "uapi_prometheus_node_exporter_lua_config", singleton: true, hcl: `resource "uapi_prometheus_node_exporter_lua_config" "t" {}`},

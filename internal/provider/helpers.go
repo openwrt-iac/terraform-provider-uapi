@@ -83,20 +83,25 @@ func int64Val(m map[string]any, key string) types.Int64 {
 	return types.Int64Null()
 }
 
-// listVal converts a JSON string array into a types.List. A missing or null
-// value becomes an empty list, matching the API which always emits an array.
+// listVal converts a JSON string array into a types.List. uapi 3.0 answers null
+// for an absent uci list rather than an empty array, and the distinction is the
+// point: unset is not the same as set-to-empty. So absent or null becomes a null
+// list, and only an actual array becomes a list, empty or otherwise.
 func listVal(ctx context.Context, m map[string]any, key string) (types.List, diag.Diagnostics) {
 	raw, ok := m[key]
-	items := []string{}
-	if ok && raw != nil {
-		if arr, ok := raw.([]any); ok {
-			for _, e := range arr {
-				if s, ok := e.(string); ok {
-					items = append(items, s)
-				} else if e != nil {
-					items = append(items, fmt.Sprintf("%v", e))
-				}
-			}
+	if !ok || raw == nil {
+		return types.ListNull(types.StringType), nil
+	}
+	arr, ok := raw.([]any)
+	if !ok {
+		return types.ListNull(types.StringType), nil
+	}
+	items := make([]string, 0, len(arr))
+	for _, e := range arr {
+		if s, ok := e.(string); ok {
+			items = append(items, s)
+		} else if e != nil {
+			items = append(items, fmt.Sprintf("%v", e))
 		}
 	}
 	return types.ListValueFrom(ctx, types.StringType, items)

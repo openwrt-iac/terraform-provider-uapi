@@ -42,7 +42,7 @@ the run away from `uapi_network_` if you cannot reach a console.
 ```sh
 make install
 export TF_CLI_CONFIG_FILE=$PWD/examples/dev.tfrc   # edit the path inside first
-export UAPI_ENDPOINT=https://<router>/api/v2 UAPI_TOKEN=... UAPI_INSECURE=1
+export UAPI_ENDPOINT=https://<router>/api/v3 UAPI_TOKEN=... UAPI_INSECURE=1
 # then terraform plan/apply a config in a scratch dir
 ```
 

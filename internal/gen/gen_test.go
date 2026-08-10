@@ -47,12 +47,15 @@ func goldenCases() map[string]string {
 		Kind: "singleton", Label: "lab single", GenDataSource: true,
 		CreateOnly: []string{"wgname", "lockedname"},
 	}
-	cr := buildResource(collection, fixtureProps(), []string{"name"})
+	// v3 splits request and response. The fixture uses the same property set for
+	// both, so every field stays writable and the split is exercised without the
+	// golden output changing shape.
+	cr := buildResource(collection, fixtureProps(), fixtureProps(), []string{"name"})
 	// clear-on-omit is collection-only (the singleton guard rejects it), so the
 	// singleton fixture must not carry the clearable field.
 	singleProps := fixtureProps()
 	delete(singleProps, "clearable")
-	sr := buildResource(singleton, singleProps, nil)
+	sr := buildResource(singleton, singleProps, singleProps, nil)
 	return map[string]string{
 		"lab_thing_resource.go.golden":    renderResource(cr),
 		"lab_thing_data_source.go.golden": renderDataSource(cr),

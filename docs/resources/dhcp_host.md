@@ -30,8 +30,6 @@ resource "uapi_dhcp_host" "example" {
 - `instance` (String) uci option instance.
 - `ip` (String) uci option ip.
 - `leasetime` (String) uci option leasetime.
-- `mac` (String, Deprecated) uci option mac.
-- `mac_aliases` (List of String, Deprecated) uci option mac_aliases.
 - `macs` (List of String) MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.
 - `name` (String) Hostname dnsmasq answers for this reservation.
 - `tag` (List of String) dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar.

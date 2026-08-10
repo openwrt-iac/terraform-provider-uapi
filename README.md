@@ -14,17 +14,18 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 
 ## Requirements
 
-- An OpenWrt router running **uapi >= 2.3.0** (OpenWrt 25.12+), reachable over HTTP(S).
+- An OpenWrt router running **uapi >= 3.0.0** (OpenWrt 25.12+), reachable over HTTP(S).
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
 - Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
 
-> **OpenTofu users:** the provider is published on `registry.terraform.io` as `openwrt-iac/uapi`.
-> Until it is also on the OpenTofu registry, set a `dev_overrides` / mirror so `tofu init` resolves
-> `openwrt-iac/uapi` (see `examples/dev.tfrc`).
+> **OpenTofu users:** the provider is published on both registries as `openwrt-iac/uapi`, and the
+> OpenTofu registry auto-syncs each GitHub release (usually within hours of a tag). If a brand new
+> version has not appeared yet, the `/download/<os>/<arch>` endpoint is the authoritative check;
+> a `dev_overrides` / mirror (see `examples/dev.tfrc`) covers the gap.
 
 > **Daemon packages first.** Resources whose daemon ships as a separate OpenWrt package
 > (`uapi_unbound_server`, `uapi_sqm_queue`, `uapi_snmpd_*`, `uapi_openvpn_instance`,
-> `uapi_mwan3_*`, `uapi_vnstat_*`, `uapi_lldpd_config`) need that package installed first, or
+> `uapi_mwan3_*`, `uapi_vnstat_config`, `uapi_lldpd_config`) need that package installed first, or
 > the write returns `503 init_script_missing`. Install it out of band, or manage it with
 > `uapi_package` and `depends_on = [uapi_package.<name>]`.
 
@@ -32,7 +33,7 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 
 ```hcl
 provider "uapi" {
-  endpoint = "https://192.168.1.1/api/v2" # or env UAPI_ENDPOINT / UAPI_BASE
+  endpoint = "https://192.168.1.1/api/v3" # or env UAPI_ENDPOINT / UAPI_BASE
   token    = var.uapi_token               # or env UAPI_TOKEN
   insecure = true                         # or env UAPI_INSECURE=1
 }
@@ -40,7 +41,7 @@ provider "uapi" {
 
 | Argument   | Env                          | Description                                                        |
 |------------|------------------------------|--------------------------------------------------------------------|
-| `endpoint` | `UAPI_ENDPOINT`, `UAPI_BASE` | API root including the `/api/v2` prefix.                            |
+| `endpoint` | `UAPI_ENDPOINT`, `UAPI_BASE` | API root including the `/api/v3` prefix.                            |
 | `token`    | `UAPI_TOKEN`                 | Bearer token. Sensitive.                                           |
 | `insecure` | `UAPI_INSECURE`              | Skip TLS verification. Needed for uapi's default self-signed cert. |
 
@@ -61,7 +62,7 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
   `uapi_network_wireguard_peer` (write-only `preshared_key`).
 - **Wireless:** `uapi_wireless_device`, `uapi_wireless_interface` (write-only `key`).
 - **DHCP/DNS:** `uapi_dhcp_host` (set `ip` for a static lease, or omit it for a
-  DNS-only `mac`+`name` reservation), `uapi_dhcp_server`, `uapi_dhcp_dnsmasq` (singleton),
+  DNS-only `macs`+`name` reservation), `uapi_dhcp_server`, `uapi_dhcp_dnsmasq` (singleton),
   `uapi_dhcp_odhcpd` (singleton), `uapi_unbound_server` (singleton), `uapi_unbound_srv`
   (singleton: bind/outgoing addresses + raw `server:` lines), `uapi_unbound_ext`
   (singleton: raw extra-config lines).
@@ -70,7 +71,8 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
   `uapi_authorized_key` (root SSH keys), `uapi_system_password` (write-only password set).
 - **SNMP:** `uapi_snmpd_system` (singleton), `uapi_snmpd_com2sec`, `uapi_snmpd_group`,
   `uapi_snmpd_access`, `uapi_snmpd_agent`.
-- **Traffic/metrics:** `uapi_sqm_queue`, `uapi_vnstat_interface`, `uapi_vnstat_config` (singleton),
+- **Traffic/metrics:** `uapi_sqm_queue`, `uapi_vnstat_config` (singleton; its `interfaces` list
+  replaces the `uapi_vnstat_interface` resource removed in 3.0.0),
   `uapi_prometheus_node_exporter_lua_config` (singleton).
 - **mwan3:** `uapi_mwan3_interface`, `uapi_mwan3_member`, `uapi_mwan3_policy`, `uapi_mwan3_rule`,
   `uapi_mwan3_globals` (singleton). Requires the `mwan3` package on the router.
@@ -236,7 +238,7 @@ provider `1.2.*` targets the resources, fields, and endpoints of uapi `1.2.*`.
 
 This works because uapi keeps a version additive within its major: uapi `1.y` is a superset of
 `1.(y-1)` (new endpoints, optional fields, response fields, error codes, scope names, enum values),
-and only breaking changes bump the major (`/api/v2/`).
+and only breaking changes bump the major (`/api/v3/`).
 
 What that means in practice:
 
@@ -251,7 +253,7 @@ What that means in practice:
   a provider release (a provider release just documents them).
 - **Errors are handled by HTTP status, not by the `code` string.** New error codes are surfaced
   verbatim in diagnostics but never change behaviour.
-- **A breaking uapi major (`v2`, served at `/api/v2/`) maps to a provider `2.*`.** Point `endpoint`
+- **A breaking uapi major (`v3`, served at `/api/v3/`) maps to a provider `3.*`.** Point `endpoint`
   at the matching `/api/vN` segment for the provider major you run.
 
 ## Building and local development
@@ -289,7 +291,7 @@ so combine the provider block with a resource snippet to get a runnable config:
 ```sh
 make install
 export TF_CLI_CONFIG_FILE=$PWD/examples/dev.tfrc   # edit the path inside first
-export UAPI_ENDPOINT=https://192.168.1.1/api/v2 UAPI_TOKEN=... UAPI_INSECURE=1
+export UAPI_ENDPOINT=https://192.168.1.1/api/v3 UAPI_TOKEN=... UAPI_INSECURE=1
 
 mkdir -p /tmp/uapi-dev
 cat examples/provider/provider.tf \

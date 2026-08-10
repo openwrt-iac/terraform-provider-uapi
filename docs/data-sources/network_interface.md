@@ -29,6 +29,7 @@ data "uapi_network_interface" "example" {
 
 - `addresses` (List of String) uci option addresses.
 - `auto` (Boolean) uci option auto.
+- `broadcast` (String) uci option broadcast.
 - `clientid` (String) uci option clientid.
 - `defaultroute` (Boolean) uci option defaultroute.
 - `delegate` (Boolean) uci option delegate.
@@ -40,12 +41,15 @@ data "uapi_network_interface" "example" {
 - `has_private_key` (Boolean) Whether a private key is configured.
 - `hostname` (String) uci option hostname.
 - `ip4table` (String) uci option ip4table.
+- `ip6addrs` (List of String) uci option ip6addrs.
 - `ip6assign` (Number) uci option ip6assign.
+- `ip6gw` (String) uci option ip6gw.
 - `ip6hint` (String) uci option ip6hint.
 - `ip6ifaceid` (String) uci option ip6ifaceid.
+- `ip6prefix` (String) uci option ip6prefix.
 - `ip6table` (String) uci option ip6table.
-- `ipaddr` (String) Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface.
-- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees.
+- `ipaddr` (String) Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.
+- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.
 - `listen_port` (Number) uci option listen_port.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `metric` (Number) uci option metric.

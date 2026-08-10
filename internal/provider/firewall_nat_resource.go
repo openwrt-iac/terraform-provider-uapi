@@ -143,6 +143,7 @@ func (r *firewallNatResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -186,6 +187,7 @@ func (r *firewallNatResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
@@ -206,6 +208,7 @@ func (r *firewallNatResource) Delete(ctx context.Context, req resource.DeleteReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+firewallNatCollection+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", "firewall NAT rule", err)
 	}

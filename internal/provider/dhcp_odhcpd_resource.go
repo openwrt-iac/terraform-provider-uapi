@@ -81,6 +81,7 @@ func (r *dhcpOdhcpdResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -124,6 +125,7 @@ func (r *dhcpOdhcpdResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

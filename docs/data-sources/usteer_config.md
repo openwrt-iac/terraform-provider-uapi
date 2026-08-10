@@ -33,7 +33,6 @@ data "uapi_usteer_config" "example" {}
 - `local_sta_timeout` (Number) uci option local_sta_timeout.
 - `local_sta_update` (Number) uci option local_sta_update.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `max_assoc_sta` (Number) uci option max_assoc_sta.
 - `max_neighbor_reports` (Number) uci option max_neighbor_reports.
 - `max_retry_band` (Number) uci option max_retry_band.
 - `measurement_report_timeout` (Number) uci option measurement_report_timeout.

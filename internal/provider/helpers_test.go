@@ -55,13 +55,21 @@ func TestListVal(t *testing.T) {
 		t.Errorf("list = %v", out)
 	}
 
-	// Missing key becomes an empty (non-null) list to match the API.
+	// uapi 3.0 answers null for an absent uci list, and unset must stay
+	// distinguishable from set-to-empty, so an absent key becomes a null list.
 	mv, _ := listVal(ctx, m, "missing")
-	if mv.IsNull() {
-		t.Error("missing list should be empty, not null")
+	if !mv.IsNull() {
+		t.Errorf("absent list should be null, got %v", mv)
 	}
-	if len(mv.Elements()) != 0 {
-		t.Errorf("missing list should be empty, got %v", mv.Elements())
+	// An explicit null is the same case.
+	nv, _ := listVal(ctx, map[string]any{"k": nil}, "k")
+	if !nv.IsNull() {
+		t.Errorf("null list should be null, got %v", nv)
+	}
+	// An empty array is not absent: it stays an empty, non-null list.
+	ev, _ := listVal(ctx, map[string]any{"k": []any{}}, "k")
+	if ev.IsNull() || len(ev.Elements()) != 0 {
+		t.Errorf("empty array should be an empty list, got %v", ev)
 	}
 }
 

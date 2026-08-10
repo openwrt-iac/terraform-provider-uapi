@@ -106,6 +106,7 @@ func (r *wirelessInterfaceResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -149,6 +150,7 @@ func (r *wirelessInterfaceResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
@@ -169,6 +171,7 @@ func (r *wirelessInterfaceResource) Delete(ctx context.Context, req resource.Del
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+wirelessInterfaceCollection+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", "wireless interface", err)
 	}

@@ -70,7 +70,7 @@ func (r *labThingResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"secret":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "uci option secret."},
 			"tags":       optionalComputedStringList("uci option tags."),
 			"weight":     optionalComputedInt64("uci option weight."),
-			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{deprecatedAliasRequiresReplace()}, Description: "Create-only kernel name.", DeprecationMessage: "Create-only kernel name."},
+			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Create-only kernel name."},
 			"match": schema.SingleNestedAttribute{
 				Required:    true,
 				Description: "Match conditions.",
@@ -139,6 +139,7 @@ func (r *labThingResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -182,6 +183,7 @@ func (r *labThingResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
@@ -202,6 +204,7 @@ func (r *labThingResource) Delete(ctx context.Context, req resource.DeleteReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+labThingCollection+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", "lab thing", err)
 	}

@@ -6,7 +6,6 @@ import (
 	"context"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
@@ -29,6 +28,7 @@ type networkInterfaceModel struct {
 	ETag          types.String `tfsdk:"etag"`
 	Addresses     types.List   `tfsdk:"addresses"`
 	Auto          types.Bool   `tfsdk:"auto"`
+	Broadcast     types.String `tfsdk:"broadcast"`
 	Clientid      types.String `tfsdk:"clientid"`
 	Defaultroute  types.Bool   `tfsdk:"defaultroute"`
 	Delegate      types.Bool   `tfsdk:"delegate"`
@@ -39,16 +39,18 @@ type networkInterfaceModel struct {
 	HasPrivateKey types.Bool   `tfsdk:"has_private_key"`
 	Hostname      types.String `tfsdk:"hostname"`
 	Ip4table      types.String `tfsdk:"ip4table"`
+	Ip6addrs      types.List   `tfsdk:"ip6addrs"`
 	Ip6assign     types.Int64  `tfsdk:"ip6assign"`
+	Ip6gw         types.String `tfsdk:"ip6gw"`
 	Ip6hint       types.String `tfsdk:"ip6hint"`
 	Ip6ifaceid    types.String `tfsdk:"ip6ifaceid"`
+	Ip6prefix     types.String `tfsdk:"ip6prefix"`
 	Ip6table      types.String `tfsdk:"ip6table"`
 	Ipaddr        types.String `tfsdk:"ipaddr"`
 	Ipaddrs       types.List   `tfsdk:"ipaddrs"`
 	ListenPort    types.Int64  `tfsdk:"listen_port"`
 	Metric        types.Int64  `tfsdk:"metric"`
 	Mtu           types.Int64  `tfsdk:"mtu"`
-	Name          types.String `tfsdk:"name"`
 	Netmask       types.String `tfsdk:"netmask"`
 	Nohostroute   types.Bool   `tfsdk:"nohostroute"`
 	Peerdns       types.Bool   `tfsdk:"peerdns"`
@@ -75,6 +77,7 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"etag":            etagAttribute(),
 			"addresses":       optionalComputedStringList("uci option addresses."),
 			"auto":            optionalComputedBool("uci option auto."),
+			"broadcast":       optionalString("uci option broadcast."),
 			"clientid":        optionalComputedString("uci option clientid."),
 			"defaultroute":    optionalComputedBool("uci option defaultroute."),
 			"delegate":        optionalComputedBool("uci option delegate."),
@@ -85,16 +88,18 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"has_private_key": schema.BoolAttribute{Computed: true, Description: "Whether a private key is configured."},
 			"hostname":        optionalComputedString("uci option hostname."),
 			"ip4table":        optionalComputedString("uci option ip4table."),
+			"ip6addrs":        optionalComputedStringList("uci option ip6addrs."),
 			"ip6assign":       optionalComputedInt64("uci option ip6assign."),
+			"ip6gw":           optionalString("uci option ip6gw."),
 			"ip6hint":         optionalComputedString("uci option ip6hint."),
 			"ip6ifaceid":      optionalComputedString("uci option ip6ifaceid."),
+			"ip6prefix":       optionalString("uci option ip6prefix."),
 			"ip6table":        optionalComputedString("uci option ip6table."),
-			"ipaddr":          mirroredString("Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface.", "ipaddrs"),
-			"ipaddrs":         mirroredStringList("Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees.", "ipaddr"),
+			"ipaddr":          schema.StringAttribute{Computed: true, Description: "Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address."},
+			"ipaddrs":         optionalComputedStringList("Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry."),
 			"listen_port":     optionalComputedInt64("uci option listen_port."),
 			"metric":          optionalComputedInt64("uci option metric."),
 			"mtu":             optionalComputedInt64("uci option mtu."),
-			"name":            schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{deprecatedAliasRequiresReplace()}, Description: "DEPRECATED in 2.2.0: use `id` instead (the universal section-name input across every resource). Both are accepted during the deprecation window; if both are supplied they must match. `name` is scheduled for removal in v3. See docs/deprecations.md.", DeprecationMessage: "DEPRECATED in 2.2.0: use `id` instead (the universal section-name input across every resource). Both are accepted during the deprecation window; if both are supplied they must match. `name` is scheduled for removal in v3. See docs/deprecations.md."},
 			"netmask":         optionalString("uci option netmask."),
 			"nohostroute":     optionalComputedBool("uci option nohostroute."),
 			"peerdns":         optionalComputedBool("uci option peerdns."),
@@ -113,6 +118,7 @@ func (r *networkInterfaceResource) body(ctx context.Context, m networkInterfaceM
 	}
 	putList(ctx, out, "addresses", m.Addresses, diags.d)
 	putBool(out, "auto", m.Auto)
+	putStr(out, "broadcast", m.Broadcast)
 	putStr(out, "clientid", m.Clientid)
 	putBool(out, "defaultroute", m.Defaultroute)
 	putBool(out, "delegate", m.Delegate)
@@ -122,18 +128,17 @@ func (r *networkInterfaceResource) body(ctx context.Context, m networkInterfaceM
 	putStr(out, "gateway", m.Gateway)
 	putStr(out, "hostname", m.Hostname)
 	putStr(out, "ip4table", m.Ip4table)
+	putList(ctx, out, "ip6addrs", m.Ip6addrs, diags.d)
 	putInt64(out, "ip6assign", m.Ip6assign)
+	putStr(out, "ip6gw", m.Ip6gw)
 	putStr(out, "ip6hint", m.Ip6hint)
 	putStr(out, "ip6ifaceid", m.Ip6ifaceid)
+	putStr(out, "ip6prefix", m.Ip6prefix)
 	putStr(out, "ip6table", m.Ip6table)
-	putStr(out, "ipaddr", m.Ipaddr)
 	putList(ctx, out, "ipaddrs", m.Ipaddrs, diags.d)
 	putInt64(out, "listen_port", m.ListenPort)
 	putInt64(out, "metric", m.Metric)
 	putInt64(out, "mtu", m.Mtu)
-	if create {
-		putStr(out, "name", m.Name)
-	}
 	putStr(out, "netmask", m.Netmask)
 	putBool(out, "nohostroute", m.Nohostroute)
 	putBool(out, "peerdns", m.Peerdns)
@@ -149,6 +154,7 @@ func (r *networkInterfaceResource) read(ctx context.Context, obj map[string]any,
 	m.Managed = boolVal(obj, "managed")
 	m.Addresses = diags.list(listVal(ctx, obj, "addresses"))
 	m.Auto = boolVal(obj, "auto")
+	m.Broadcast = strVal(obj, "broadcast")
 	m.Clientid = strVal(obj, "clientid")
 	m.Defaultroute = boolVal(obj, "defaultroute")
 	m.Delegate = boolVal(obj, "delegate")
@@ -159,16 +165,18 @@ func (r *networkInterfaceResource) read(ctx context.Context, obj map[string]any,
 	m.HasPrivateKey = boolValDefault(obj, "has_private_key")
 	m.Hostname = strVal(obj, "hostname")
 	m.Ip4table = strVal(obj, "ip4table")
+	m.Ip6addrs = diags.list(listVal(ctx, obj, "ip6addrs"))
 	m.Ip6assign = int64Val(obj, "ip6assign")
+	m.Ip6gw = strVal(obj, "ip6gw")
 	m.Ip6hint = strVal(obj, "ip6hint")
 	m.Ip6ifaceid = strVal(obj, "ip6ifaceid")
+	m.Ip6prefix = strVal(obj, "ip6prefix")
 	m.Ip6table = strVal(obj, "ip6table")
 	m.Ipaddr = strVal(obj, "ipaddr")
 	m.Ipaddrs = diags.list(listVal(ctx, obj, "ipaddrs"))
 	m.ListenPort = int64Val(obj, "listen_port")
 	m.Metric = int64Val(obj, "metric")
 	m.Mtu = int64Val(obj, "mtu")
-	// name is create-only: preserve the planned value (the API never returns it).
 	m.Netmask = strVal(obj, "netmask")
 	m.Nohostroute = boolVal(obj, "nohostroute")
 	m.Peerdns = boolVal(obj, "peerdns")
@@ -185,6 +193,7 @@ func (r *networkInterfaceResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -228,6 +237,7 @@ func (r *networkInterfaceResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
@@ -248,6 +258,7 @@ func (r *networkInterfaceResource) Delete(ctx context.Context, req resource.Dele
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+networkInterfaceCollection+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", "network interface", err)
 	}

@@ -17,6 +17,7 @@ type networkInterfaceDSModel struct {
 	ETag          types.String                  `tfsdk:"etag"`
 	Addresses     types.List                    `tfsdk:"addresses"`
 	Auto          types.Bool                    `tfsdk:"auto"`
+	Broadcast     types.String                  `tfsdk:"broadcast"`
 	Clientid      types.String                  `tfsdk:"clientid"`
 	Defaultroute  types.Bool                    `tfsdk:"defaultroute"`
 	Delegate      types.Bool                    `tfsdk:"delegate"`
@@ -27,9 +28,12 @@ type networkInterfaceDSModel struct {
 	HasPrivateKey types.Bool                    `tfsdk:"has_private_key"`
 	Hostname      types.String                  `tfsdk:"hostname"`
 	Ip4table      types.String                  `tfsdk:"ip4table"`
+	Ip6addrs      types.List                    `tfsdk:"ip6addrs"`
 	Ip6assign     types.Int64                   `tfsdk:"ip6assign"`
+	Ip6gw         types.String                  `tfsdk:"ip6gw"`
 	Ip6hint       types.String                  `tfsdk:"ip6hint"`
 	Ip6ifaceid    types.String                  `tfsdk:"ip6ifaceid"`
+	Ip6prefix     types.String                  `tfsdk:"ip6prefix"`
 	Ip6table      types.String                  `tfsdk:"ip6table"`
 	Ipaddr        types.String                  `tfsdk:"ipaddr"`
 	Ipaddrs       types.List                    `tfsdk:"ipaddrs"`
@@ -72,6 +76,7 @@ func (d *networkInterfaceDataSource) Schema(_ context.Context, _ datasource.Sche
 			"etag":            dsComputedString("Opaque ETag of the resource's current state."),
 			"addresses":       dsComputedStringList("uci option addresses."),
 			"auto":            dsComputedBool("uci option auto."),
+			"broadcast":       dsComputedString("uci option broadcast."),
 			"clientid":        dsComputedString("uci option clientid."),
 			"defaultroute":    dsComputedBool("uci option defaultroute."),
 			"delegate":        dsComputedBool("uci option delegate."),
@@ -82,12 +87,15 @@ func (d *networkInterfaceDataSource) Schema(_ context.Context, _ datasource.Sche
 			"has_private_key": dsComputedBool("Whether a private key is configured."),
 			"hostname":        dsComputedString("uci option hostname."),
 			"ip4table":        dsComputedString("uci option ip4table."),
+			"ip6addrs":        dsComputedStringList("uci option ip6addrs."),
 			"ip6assign":       dsComputedInt64("uci option ip6assign."),
+			"ip6gw":           dsComputedString("uci option ip6gw."),
 			"ip6hint":         dsComputedString("uci option ip6hint."),
 			"ip6ifaceid":      dsComputedString("uci option ip6ifaceid."),
+			"ip6prefix":       dsComputedString("uci option ip6prefix."),
 			"ip6table":        dsComputedString("uci option ip6table."),
-			"ipaddr":          dsComputedString("Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface."),
-			"ipaddrs":         dsComputedStringList("Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees."),
+			"ipaddr":          dsComputedString("Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address."),
+			"ipaddrs":         dsComputedStringList("Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry."),
 			"listen_port":     dsComputedInt64("uci option listen_port."),
 			"metric":          dsComputedInt64("uci option metric."),
 			"mtu":             dsComputedInt64("uci option mtu."),
@@ -126,6 +134,7 @@ func (d *networkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 		ID: base.ID, Managed: base.Managed, ETag: base.ETag,
 		Addresses:     base.Addresses,
 		Auto:          base.Auto,
+		Broadcast:     base.Broadcast,
 		Clientid:      base.Clientid,
 		Defaultroute:  base.Defaultroute,
 		Delegate:      base.Delegate,
@@ -136,9 +145,12 @@ func (d *networkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 		HasPrivateKey: base.HasPrivateKey,
 		Hostname:      base.Hostname,
 		Ip4table:      base.Ip4table,
+		Ip6addrs:      base.Ip6addrs,
 		Ip6assign:     base.Ip6assign,
+		Ip6gw:         base.Ip6gw,
 		Ip6hint:       base.Ip6hint,
 		Ip6ifaceid:    base.Ip6ifaceid,
+		Ip6prefix:     base.Ip6prefix,
 		Ip6table:      base.Ip6table,
 		Ipaddr:        base.Ipaddr,
 		Ipaddrs:       base.Ipaddrs,

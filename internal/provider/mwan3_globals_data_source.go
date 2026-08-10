@@ -31,14 +31,12 @@ func (d *mwan3GlobalsDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 	resp.Schema = dsschema.Schema{
 		Description: "Look up the mwan3 globals.",
 		Attributes: map[string]dsschema.Attribute{
-			"id":             dsComputedString("Stable id."),
-			"managed":        dsManagedAttribute(),
-			"etag":           dsComputedString("Opaque ETag of the resource's current state."),
-			"local_source":   dsComputedString("uci option local_source."),
-			"logging":        dsComputedBool("uci option logging."),
-			"loglevel":       dsComputedString("uci option loglevel."),
-			"mmx_mask":       dsComputedString("uci option mmx_mask."),
-			"rtmon_interval": dsComputedInt64("uci option rtmon_interval."),
+			"id":       dsComputedString("Stable id."),
+			"managed":  dsManagedAttribute(),
+			"etag":     dsComputedString("Opaque ETag of the resource's current state."),
+			"logging":  dsComputedBool("uci option logging."),
+			"loglevel": dsComputedString("uci option loglevel."),
+			"mmx_mask": dsComputedString("uci option mmx_mask."),
 		},
 	}
 }

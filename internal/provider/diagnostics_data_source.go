@@ -194,12 +194,14 @@ func (d *diagnosticsDataSource) Read(ctx context.Context, req datasource.ReadReq
 			Interface: strVal(mp, "interface"),
 		}
 	}
-	// Seeded, not left nil: the framework reflects a nil slice to a null attribute,
-	// so a sweep that found nothing would break length() and for_each on the very
-	// result that means the router is clean. listVal seeds its two siblings the same
-	// way, so all three read as an empty list whether the sweep found nothing or was
-	// never asked for.
-	out.InvalidSections = []invalidSectionModel{}
+	// Seeded only when the sweep ran. A nil slice reflects to a null attribute, and
+	// null has to keep meaning "not looked at": as of uapi 3.0 listVal leaves the two
+	// sibling lists null when absent, which is exactly what a read without validate
+	// returns. With the sweep on, all three are non-null so length() and for_each
+	// work on a clean result.
+	if cfg.Validate.ValueBool() {
+		out.InvalidSections = []invalidSectionModel{}
+	}
 	if arr, ok := obj["invalid_sections"].([]any); ok {
 		for _, e := range arr {
 			m, ok := e.(map[string]any)

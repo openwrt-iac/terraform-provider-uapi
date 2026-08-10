@@ -43,7 +43,6 @@ func (d *usteerConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"load_balancing_threshold":   dsComputedInt64("uci option load_balancing_threshold."),
 			"local_sta_timeout":          dsComputedInt64("uci option local_sta_timeout."),
 			"local_sta_update":           dsComputedInt64("uci option local_sta_update."),
-			"max_assoc_sta":              dsComputedInt64("uci option max_assoc_sta."),
 			"max_neighbor_reports":       dsComputedInt64("uci option max_neighbor_reports."),
 			"max_retry_band":             dsComputedInt64("uci option max_retry_band."),
 			"measurement_report_timeout": dsComputedInt64("uci option measurement_report_timeout."),

@@ -63,7 +63,7 @@ func (r *labSingleResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"secret":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "uci option secret."},
 			"tags":       optionalComputedStringList("uci option tags."),
 			"weight":     optionalComputedInt64("uci option weight."),
-			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{deprecatedAliasRequiresReplace()}, Description: "Create-only kernel name.", DeprecationMessage: "Create-only kernel name."},
+			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Create-only kernel name."},
 		},
 	}
 }
@@ -105,6 +105,7 @@ func (r *labSingleResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -148,6 +149,7 @@ func (r *labSingleResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return

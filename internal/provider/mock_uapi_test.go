@@ -174,7 +174,7 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 			"lock_state":       map[string]any{"global_held": false, "per_package": map[string]any{}},
 			"recent_errors": []any{map[string]any{
 				"ts": 1893456000, "request_id": "req-err-1", "code": "validation_failed",
-				"status": 422, "method": "POST", "path": "/api/v2/firewall/rules", "message": "bad",
+				"status": 422, "method": "POST", "path": "/api/v3/firewall/rules", "message": "bad",
 			}},
 			// Always present, unlike the sweep below.
 			"management_path": map[string]any{

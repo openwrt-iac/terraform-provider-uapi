@@ -24,13 +24,10 @@ type vnstatConfigResource struct{ client *client.Client }
 func NewVnstatConfigResource() resource.Resource { return &vnstatConfigResource{} }
 
 type vnstatConfigModel struct {
-	ID                 types.String `tfsdk:"id"`
-	Managed            types.Bool   `tfsdk:"managed"`
-	ETag               types.String `tfsdk:"etag"`
-	DatabaseDir        types.String `tfsdk:"database_dir"`
-	Interface5minHours types.Int64  `tfsdk:"interface_5min_hours"`
-	Interfaces         types.List   `tfsdk:"interfaces"`
-	MonthRotate        types.Int64  `tfsdk:"month_rotate"`
+	ID         types.String `tfsdk:"id"`
+	Managed    types.Bool   `tfsdk:"managed"`
+	ETag       types.String `tfsdk:"etag"`
+	Interfaces types.List   `tfsdk:"interfaces"`
 }
 
 func (r *vnstatConfigResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -45,33 +42,24 @@ func (r *vnstatConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 	resp.Schema = schema.Schema{
 		Description: "Vnstat config.",
 		Attributes: map[string]schema.Attribute{
-			"id":                   computedIDAttribute(),
-			"managed":              managedAttribute(),
-			"etag":                 etagAttribute(),
-			"database_dir":         deprecatedOptionalComputedString("uci option database_dir.", "Deprecated, removed in v3: nothing reads this. vnstat's database directory is a key of `/etc/vnstat.conf`, which ships from upstream; nothing bridges uci to it."),
-			"interface_5min_hours": deprecatedOptionalComputedInt64("uci option interface_5min_hours.", "Deprecated, removed in v3: nothing reads this. 5-minute retention is a key of `/etc/vnstat.conf`, which ships from upstream; nothing bridges uci to it."),
-			"interfaces":           optionalComputedStringList("Devices vnstat tracks, as the kernel names them (`br-lan`, `eth0`), not uci interface names. The only vnstat option any shipped code reads."),
-			"month_rotate":         deprecatedOptionalComputedInt64("uci option month_rotate.", "Deprecated, removed in v3: nothing reads this. The monthly rollover day is a key of `/etc/vnstat.conf`, which ships from upstream; nothing bridges uci to it."),
+			"id":         computedIDAttribute(),
+			"managed":    managedAttribute(),
+			"etag":       etagAttribute(),
+			"interfaces": optionalComputedStringList("Devices vnstat tracks, as the kernel names them (`br-lan`, `eth0`), not uci interface names. The only vnstat option any shipped code reads."),
 		},
 	}
 }
 
 func (r *vnstatConfigResource) body(ctx context.Context, m vnstatConfigModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
-	putStr(out, "database_dir", m.DatabaseDir)
-	putInt64(out, "interface_5min_hours", m.Interface5minHours)
 	putList(ctx, out, "interfaces", m.Interfaces, diags.d)
-	putInt64(out, "month_rotate", m.MonthRotate)
 	return out
 }
 
 func (r *vnstatConfigResource) read(ctx context.Context, obj map[string]any, m *vnstatConfigModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.DatabaseDir = strVal(obj, "database_dir")
-	m.Interface5minHours = int64Val(obj, "interface_5min_hours")
 	m.Interfaces = diags.list(listVal(ctx, obj, "interfaces"))
-	m.MonthRotate = int64Val(obj, "month_rotate")
 }
 
 func (r *vnstatConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -81,6 +69,7 @@ func (r *vnstatConfigResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -124,6 +113,7 @@ func (r *vnstatConfigResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

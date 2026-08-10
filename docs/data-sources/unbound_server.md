@@ -27,7 +27,6 @@ data "uapi_unbound_server" "example" {}
 - `dnssec_enabled` (Boolean) uci option dnssec_enabled.
 - `domain` (String) uci option domain.
 - `domain_type` (String) uci option domain_type.
-- `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `extended_stats` (Boolean) uci option extended_stats.
 - `hide_binddata` (Boolean) uci option hide_binddata.
@@ -38,7 +37,6 @@ data "uapi_unbound_server" "example" {}
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `manual_conf` (Boolean) uci option manual_conf.
 - `num_threads` (Number) uci option num_threads.
-- `prefetch` (Boolean) uci option prefetch.
 - `protocol` (String) uci option protocol.
 - `query_minimize` (Boolean) uci option query_minimize.
 - `rebind_protection` (String) uci option rebind_protection.

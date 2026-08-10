@@ -35,8 +35,6 @@ data "uapi_dhcp_host" "example" {
 - `instance` (String) uci option instance.
 - `ip` (String) uci option ip.
 - `leasetime` (String) uci option leasetime.
-- `mac` (String) uci option mac.
-- `mac_aliases` (List of String) uci option mac_aliases.
 - `macs` (List of String) MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `name` (String) Hostname dnsmasq answers for this reservation.
