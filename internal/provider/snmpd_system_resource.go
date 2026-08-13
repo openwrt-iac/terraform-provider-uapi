@@ -89,6 +89,7 @@ func (r *snmpdSystemResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -132,6 +133,7 @@ func (r *snmpdSystemResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

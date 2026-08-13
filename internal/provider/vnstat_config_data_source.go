@@ -31,13 +31,10 @@ func (d *vnstatConfigDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 	resp.Schema = dsschema.Schema{
 		Description: "Look up the vnstat config.",
 		Attributes: map[string]dsschema.Attribute{
-			"id":                   dsComputedString("Stable id."),
-			"managed":              dsManagedAttribute(),
-			"etag":                 dsComputedString("Opaque ETag of the resource's current state."),
-			"database_dir":         dsComputedString("uci option database_dir."),
-			"interface_5min_hours": dsComputedInt64("uci option interface_5min_hours."),
-			"interfaces":           dsComputedStringList("Devices vnstat tracks, as the kernel names them (`br-lan`, `eth0`), not uci interface names. The only vnstat option any shipped code reads."),
-			"month_rotate":         dsComputedInt64("uci option month_rotate."),
+			"id":         dsComputedString("Stable id."),
+			"managed":    dsManagedAttribute(),
+			"etag":       dsComputedString("Opaque ETag of the resource's current state."),
+			"interfaces": dsComputedStringList("Devices vnstat tracks, as the kernel names them (`br-lan`, `eth0`), not uci interface names. The only vnstat option any shipped code reads."),
 		},
 	}
 }

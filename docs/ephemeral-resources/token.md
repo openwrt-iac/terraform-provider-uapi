@@ -23,7 +23,7 @@ ephemeral "uapi_token" "deploy" {
 # Use the minted token to configure a second provider instance, scoped to the run.
 provider "uapi" {
   alias    = "scoped"
-  endpoint = "https://router.example.com/api/v2"
+  endpoint = "https://router.example.com/api/v3"
   token    = ephemeral.uapi_token.deploy.token
 }
 ```
@@ -38,7 +38,7 @@ provider "uapi" {
 
 ### Optional
 
-- `allowed_cidrs` (List of String) Source CIDRs the token is restricted to (empty = any).
+- `allowed_cidrs` (List of String) Source CIDRs the token is restricted to (empty = any). IPv4 and IPv6 prefixes are both accepted, and a caller is matched only against entries of its own family, so `0.0.0.0/0` denies every IPv6 caller and `::/0` denies every IPv4 one. On a dual-stack router, "any address" means listing a prefix of each family.
 - `burst` (Number) Per-token burst: token-bucket capacity. Overrides the global burst (default 200). Absent inherits the global.
 - `expires_in_seconds` (Number) Token lifetime in seconds.
 - `rate` (Number) Per-token rate limit: requests per second. Overrides the global rate (default 100). Absent inherits the global.

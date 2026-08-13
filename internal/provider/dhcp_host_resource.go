@@ -23,21 +23,19 @@ type dhcpHostResource struct{ client *client.Client }
 func NewDhcpHostResource() resource.Resource { return &dhcpHostResource{} }
 
 type dhcpHostModel struct {
-	ID         types.String `tfsdk:"id"`
-	Managed    types.Bool   `tfsdk:"managed"`
-	ETag       types.String `tfsdk:"etag"`
-	Broadcast  types.Bool   `tfsdk:"broadcast"`
-	Dns        types.Bool   `tfsdk:"dns"`
-	Duid       types.String `tfsdk:"duid"`
-	Hostid     types.String `tfsdk:"hostid"`
-	Instance   types.String `tfsdk:"instance"`
-	Ip         types.String `tfsdk:"ip"`
-	Leasetime  types.String `tfsdk:"leasetime"`
-	Mac        types.String `tfsdk:"mac"`
-	MacAliases types.List   `tfsdk:"mac_aliases"`
-	Macs       types.List   `tfsdk:"macs"`
-	Name       types.String `tfsdk:"name"`
-	Tag        types.List   `tfsdk:"tag"`
+	ID        types.String `tfsdk:"id"`
+	Managed   types.Bool   `tfsdk:"managed"`
+	ETag      types.String `tfsdk:"etag"`
+	Broadcast types.Bool   `tfsdk:"broadcast"`
+	Dns       types.Bool   `tfsdk:"dns"`
+	Duid      types.String `tfsdk:"duid"`
+	Hostid    types.String `tfsdk:"hostid"`
+	Instance  types.String `tfsdk:"instance"`
+	Ip        types.String `tfsdk:"ip"`
+	Leasetime types.String `tfsdk:"leasetime"`
+	Macs      types.List   `tfsdk:"macs"`
+	Name      types.String `tfsdk:"name"`
+	Tag       types.List   `tfsdk:"tag"`
 }
 
 func (r *dhcpHostResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -52,21 +50,19 @@ func (r *dhcpHostResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	resp.Schema = schema.Schema{
 		Description: "Dhcp host.",
 		Attributes: map[string]schema.Attribute{
-			"id":          optionalComputedIDAttribute(),
-			"managed":     managedAttribute(),
-			"etag":        etagAttribute(),
-			"broadcast":   optionalComputedBool("uci option broadcast."),
-			"dns":         optionalComputedBool("uci option dns."),
-			"duid":        optionalComputedString("uci option duid."),
-			"hostid":      optionalComputedString("uci option hostid."),
-			"instance":    optionalComputedString("uci option instance."),
-			"ip":          optionalComputedString("uci option ip."),
-			"leasetime":   optionalComputedString("uci option leasetime."),
-			"mac":         deprecatedOptionalComputedString("uci option mac.", "Deprecated, removed in v3: use macs. First entry of the uci list mac. macs wins when both are sent."),
-			"mac_aliases": deprecatedOptionalComputedStringList("uci option mac_aliases.", "Deprecated, removed in v3: use macs. Entries of the uci list mac after the first. macs wins when both are sent."),
-			"macs":        optionalComputedStringList("MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty."),
-			"name":        optionalComputedString("Hostname dnsmasq answers for this reservation."),
-			"tag":         optionalComputedStringList("dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar."),
+			"id":        optionalComputedIDAttribute(),
+			"managed":   managedAttribute(),
+			"etag":      etagAttribute(),
+			"broadcast": optionalComputedBool("uci option broadcast."),
+			"dns":       optionalComputedBool("uci option dns."),
+			"duid":      optionalComputedString("uci option duid."),
+			"hostid":    optionalComputedString("uci option hostid."),
+			"instance":  optionalComputedString("uci option instance."),
+			"ip":        optionalComputedString("uci option ip."),
+			"leasetime": optionalComputedString("uci option leasetime."),
+			"macs":      optionalComputedStringList("MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty."),
+			"name":      optionalComputedString("Hostname dnsmasq answers for this reservation."),
+			"tag":       optionalComputedStringList("dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar."),
 		},
 	}
 }
@@ -83,8 +79,6 @@ func (r *dhcpHostResource) body(ctx context.Context, m dhcpHostModel, diags *dia
 	putStr(out, "instance", m.Instance)
 	putStr(out, "ip", m.Ip)
 	putStr(out, "leasetime", m.Leasetime)
-	putStr(out, "mac", m.Mac)
-	putList(ctx, out, "mac_aliases", m.MacAliases, diags.d)
 	putList(ctx, out, "macs", m.Macs, diags.d)
 	putStr(out, "name", m.Name)
 	putList(ctx, out, "tag", m.Tag, diags.d)
@@ -101,8 +95,6 @@ func (r *dhcpHostResource) read(ctx context.Context, obj map[string]any, m *dhcp
 	m.Instance = strVal(obj, "instance")
 	m.Ip = strVal(obj, "ip")
 	m.Leasetime = strVal(obj, "leasetime")
-	m.Mac = strVal(obj, "mac")
-	m.MacAliases = diags.list(listVal(ctx, obj, "mac_aliases"))
 	m.Macs = diags.list(listVal(ctx, obj, "macs"))
 	m.Name = strVal(obj, "name")
 	m.Tag = diags.list(listVal(ctx, obj, "tag"))
@@ -115,6 +107,7 @@ func (r *dhcpHostResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -158,6 +151,7 @@ func (r *dhcpHostResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
@@ -178,6 +172,7 @@ func (r *dhcpHostResource) Delete(ctx context.Context, req resource.DeleteReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+dhcpHostCollection+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", "dhcp host", err)
 	}

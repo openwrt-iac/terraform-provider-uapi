@@ -43,6 +43,28 @@ func newIdempotencyKey() string {
 	return hex.EncodeToString(b[:])
 }
 
+// Warner receives the advisory headers uapi attaches to a response. uapi emits
+// X-Mgmt-Path-Warning when a write touches the interface the request arrived
+// through, which is the one warning an operator has to see before the apply
+// finishes: by the time it takes effect, the router may be unreachable. Logging
+// it is not enough, so the caller supplies a sink that turns it into a
+// diagnostic. Attach one with WithWarner; requests without one just skip it.
+type Warner interface {
+	APIWarning(summary, detail string)
+}
+
+type warnerKey struct{}
+
+// WithWarner attaches a sink for advisory response headers to ctx.
+func WithWarner(ctx context.Context, w Warner) context.Context {
+	return context.WithValue(ctx, warnerKey{}, w)
+}
+
+func warnerFrom(ctx context.Context) Warner {
+	w, _ := ctx.Value(warnerKey{}).(Warner)
+	return w
+}
+
 type Client struct {
 	baseURL   string
 	token     string
@@ -91,10 +113,12 @@ func (e *APIError) Error() string {
 }
 
 // do performs a request, retrying the throttling statuses 423/429 (honoring
-// Retry-After). ifMatch, when set, is sent as the ?if_match= query parameter
-// (uhttpd's CGI env drops the header). POSTs carry a stable Idempotency-Key so a
-// retried create cannot double-apply. Returns the response ETag and, for
-// collection GETs, the X-Next-Cursor for pagination.
+// Retry-After). ifMatch and the POST idempotency key are sent as the ?if_match=
+// and ?idempotency_key= query parameters: uhttpd's CGI layer forwards a fixed
+// header allowlist that neither header is on, so the header form alone never
+// reaches uapi and both guarantees are silently inert. The headers are sent too,
+// for a deployment that does not front uapi with uhttpd. Returns the response
+// ETag and, for collection GETs, the X-Next-Cursor for pagination.
 func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch string) (respBody []byte, status int, etag, nextCursor string, err error) {
 	var payload []byte
 	if body != nil {
@@ -104,20 +128,25 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		}
 	}
 
-	target := c.baseURL + path
-	if ifMatch != "" {
-		sep := "?"
-		if strings.Contains(path, "?") {
-			sep = "&"
-		}
-		target += sep + "if_match=" + url.QueryEscape(ifMatch)
-	}
-
 	// One idempotency key per logical create, reused across this call's retries.
 	idemKey := ""
 	if method == http.MethodPost {
 		idemKey = newIdempotencyKey()
 	}
+
+	target := c.baseURL + path
+	addQuery := func(key, value string) {
+		if value == "" {
+			return
+		}
+		sep := "?"
+		if strings.Contains(target, "?") {
+			sep = "&"
+		}
+		target += sep + key + "=" + url.QueryEscape(value)
+	}
+	addQuery("if_match", ifMatch)
+	addQuery("idempotency_key", idemKey)
 
 	var throttleDeadline time.Time // set on the first 423/429; bounds retry wall-clock
 	for attempt := 0; ; attempt++ {
@@ -174,6 +203,13 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 
 		etag = resp.Header.Get("ETag")
 		nextCursor = resp.Header.Get("X-Next-Cursor")
+		// Surfaced whatever the status: a write that reconfigures the management
+		// path is worth reporting even when it also failed.
+		if mp := resp.Header.Get("X-Mgmt-Path-Warning"); mp != "" {
+			if w := warnerFrom(ctx); w != nil {
+				w.APIWarning("This write affects the interface uapi was reached through", mp)
+			}
+		}
 		// X-Reload-Status is uapi's "did the init-script reload run" signal (ok |
 		// no_reload). 2xx means the write committed, not that the daemon converged;
 		// surface it at debug for "applied but nothing changed" diagnosis.
@@ -239,13 +275,21 @@ func IsNotFound(err error) bool { return statusIs(err, http.StatusNotFound) }
 func IsPreconditionFailed(err error) bool { return statusIs(err, http.StatusPreconditionFailed) }
 
 // IsFieldConflict reports whether err is a 422 validation failure carrying a
-// "conflict" field error: a create whose chosen id or name collides with an
-// existing uci section. uapi returns these as validation_failed (422), not 409.
+// "conflict" field error on the identity fields: a create whose chosen id or
+// name collides with an existing uci section. uapi returns these as
+// validation_failed (422), not 409.
+//
+// The field has to be checked, not just the code. uapi spends "conflict" on more
+// than identity collisions: a bridge VLAN naming a device that does not exist
+// answers `{field: "device", code: "conflict"}`, and reporting that as "a section
+// with this id already exists, import it or choose a different id" sends the
+// reader after a section that was never the problem. Any other field falls
+// through to the server's own message, which says what is actually wrong.
 func IsFieldConflict(err error) bool {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnprocessableEntity {
 		for _, fe := range apiErr.Errors {
-			if fe.Code == "conflict" {
+			if fe.Code == "conflict" && (fe.Field == "id" || fe.Field == "name") {
 				return true
 			}
 		}

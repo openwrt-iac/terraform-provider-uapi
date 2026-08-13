@@ -21,7 +21,7 @@ terraform {
 }
 
 provider "uapi" {
-  endpoint = "https://192.168.1.1/api/v2" # or env UAPI_ENDPOINT / UAPI_BASE
+  endpoint = "https://192.168.1.1/api/v3" # or env UAPI_ENDPOINT / UAPI_BASE
   token    = var.uapi_token               # or env UAPI_TOKEN
 
   # uapi ships a self-signed certificate by default. Set this for a quick start;
@@ -40,6 +40,6 @@ variable "uapi_token" {
 
 ### Optional
 
-- `endpoint` (String) Base URL of the uapi API, including the version prefix, e.g. https://router.example.com/api/v2. May also be set via the UAPI_ENDPOINT or UAPI_BASE environment variable.
+- `endpoint` (String) Base URL of the uapi API, including the version prefix, e.g. https://router.example.com/api/v3. May also be set via the UAPI_ENDPOINT or UAPI_BASE environment variable.
 - `insecure` (Boolean) Skip TLS certificate verification. Needed for uapi's default self-signed certificate; do not use in production. May also be set via UAPI_INSECURE.
 - `token` (String, Sensitive) Bearer token created with `uapi-token create`. May also be set via the UAPI_TOKEN environment variable.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -113,6 +114,37 @@ func TestIfMatchSentAndETagReturned(t *testing.T) {
 	}
 	if etag != `"v2"` {
 		t.Errorf("new etag = %q", etag)
+	}
+}
+
+// uapi spends the "conflict" field code on more than identity collisions, so the
+// field decides whether the id-collision hint applies. A bridge VLAN naming a
+// device that does not exist answers `{field: "device", code: "conflict"}`, and a
+// live run against a real router reported it as "a section with this id already
+// exists", sending the reader after a section that never existed.
+func TestFieldConflictOnlyForIdentityFields(t *testing.T) {
+	for _, tc := range []struct {
+		name, field string
+		want        bool
+	}{
+		{"id collision", "id", true},
+		{"name collision", "name", true},
+		{"missing referenced bridge", "device", false},
+		{"some other field", "interface", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = w.Write([]byte(`{"code":"validation_failed","errors":[{"field":"` +
+					tc.field + `","code":"conflict","message":"x"}]}`))
+			}))
+			defer srv.Close()
+
+			_, _, err := testClient(srv.URL).Post(context.Background(), "/x", map[string]any{}, "")
+			if got := IsFieldConflict(err); got != tc.want {
+				t.Errorf("IsFieldConflict on field %q = %v, want %v", tc.field, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -242,13 +274,19 @@ func TestGetListPaginates(t *testing.T) {
 	}
 }
 
+// The query form is what has to be asserted: uhttpd's CGI layer forwards a fixed
+// header allowlist that Idempotency-Key is not on, so a header-only key never
+// reaches uapi and a retried create double-applies. Asserting the header alone
+// passed for three minors while the guarantee was inert in production.
 func TestPostSendsIdempotencyKey(t *testing.T) {
-	var postKey, getKey string
+	var postKey, postQuery, getKey, getQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			postKey = r.Header.Get("Idempotency-Key")
+			postQuery = r.URL.Query().Get("idempotency_key")
 		} else {
 			getKey = r.Header.Get("Idempotency-Key")
+			getQuery = r.URL.Query().Get("idempotency_key")
 		}
 		_, _ = w.Write([]byte(`{"id":"r_1"}`))
 	}))
@@ -257,10 +295,92 @@ func TestPostSendsIdempotencyKey(t *testing.T) {
 	c := testClient(srv.URL)
 	_, _, _ = c.Post(context.Background(), "/firewall/rules", map[string]any{}, "")
 	_, _, _, _ = c.GetObject(context.Background(), "/firewall/rules/r_1")
-	if len(postKey) != 32 {
-		t.Errorf("POST should carry a 16-byte hex Idempotency-Key, got %q", postKey)
+	if len(postQuery) != 32 {
+		t.Errorf("POST should carry a 16-byte hex ?idempotency_key=, got %q", postQuery)
 	}
-	if getKey != "" {
-		t.Errorf("GET should not carry an Idempotency-Key, got %q", getKey)
+	if postKey != postQuery {
+		t.Errorf("header and query must carry the same key, got %q and %q", postKey, postQuery)
+	}
+	if getKey != "" || getQuery != "" {
+		t.Errorf("GET should not carry an idempotency key, got %q and %q", getKey, getQuery)
+	}
+}
+
+// Both guarded parameters on one request must compose into a valid query string,
+// which the shared sep logic exists to get right.
+func TestIfMatchAndIdempotencyKeyCompose(t *testing.T) {
+	var q url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q = r.URL.Query()
+		_, _ = w.Write([]byte(`{"id":"r_1"}`))
+	}))
+	defer srv.Close()
+
+	c := testClient(srv.URL)
+	_, _, _ = c.Post(context.Background(), "/firewall/rules", map[string]any{}, `W/"abc"`)
+	if got := q.Get("if_match"); got != `W/"abc"` {
+		t.Errorf("if_match should survive escaping, got %q", got)
+	}
+	if len(q.Get("idempotency_key")) != 32 {
+		t.Errorf("idempotency_key should be present alongside if_match, got %q", q.Get("idempotency_key"))
+	}
+}
+
+// warnRecorder captures what the client reports through the Warner sink.
+type warnRecorder struct{ summaries, details []string }
+
+func (w *warnRecorder) APIWarning(summary, detail string) {
+	w.summaries = append(w.summaries, summary)
+	w.details = append(w.details, detail)
+}
+
+// uapi sets X-Mgmt-Path-Warning when a write touches the interface the caller
+// arrived through. Dropping it means an operator only finds out when the router
+// stops answering, so the client has to hand it to the caller. The header value
+// is uapi's real wire format, observed on a router: it names the subject and the
+// watched fields the write changed, not a prose sentence.
+func TestWriteSurfacesMgmtPathWarning(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Mgmt-Path-Warning", "interface=wan changed=netmask")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"lan"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok", true, "test")
+	rec := &warnRecorder{}
+	ctx := WithWarner(context.Background(), rec)
+
+	if _, _, err := c.Put(ctx, "/network/interfaces/lan", map[string]any{"proto": "dhcp"}, ""); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if len(rec.summaries) != 1 {
+		t.Fatalf("expected 1 warning, got %d", len(rec.summaries))
+	}
+	if !strings.Contains(rec.details[0], "interface=wan changed=netmask") {
+		t.Errorf("warning lost the server's detail: %q", rec.details[0])
+	}
+
+	// No sink attached must not panic: most calls do not set one.
+	if _, _, err := c.Put(context.Background(), "/network/interfaces/lan", map[string]any{}, ""); err != nil {
+		t.Fatalf("put without a warner: %v", err)
+	}
+}
+
+// A response without the header must produce no warning at all.
+func TestWriteWithoutWarningHeaderIsSilent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"lan"}`))
+	}))
+	defer srv.Close()
+
+	rec := &warnRecorder{}
+	c := New(srv.URL, "tok", true, "test")
+	if _, _, err := c.Put(WithWarner(context.Background(), rec), "/x/y", map[string]any{}, ""); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if len(rec.summaries) != 0 {
+		t.Fatalf("expected no warning, got %v", rec.summaries)
 	}
 }

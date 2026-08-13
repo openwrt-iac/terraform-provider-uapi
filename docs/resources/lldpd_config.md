@@ -25,7 +25,6 @@ resource "uapi_lldpd_config" "example" {
 - `enable_cdp` (Boolean) uci option enable_cdp.
 - `enable_edp` (Boolean) uci option enable_edp.
 - `enable_fdp` (Boolean) uci option enable_fdp.
-- `enable_lldpmed` (Boolean, Deprecated) uci option enable_lldpmed.
 - `enable_sonmp` (Boolean) uci option enable_sonmp.
 - `interface` (List of String) Network interface this entry applies to.
 - `lldp_capabilities` (Boolean) uci option lldp_capabilities.

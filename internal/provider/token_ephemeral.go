@@ -69,7 +69,7 @@ func (e *tokenEphemeral) Schema(_ context.Context, _ ephemeral.SchemaRequest, re
 			"allowed_cidrs": ephschema.ListAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Source CIDRs the token is restricted to (empty = any).",
+				Description: "Source CIDRs the token is restricted to (empty = any). IPv4 and IPv6 prefixes are both accepted, and a caller is matched only against entries of its own family, so `0.0.0.0/0` denies every IPv6 caller and `::/0` denies every IPv4 one. On a dual-stack router, \"any address\" means listing a prefix of each family.",
 			},
 			"rate": ephschema.Int64Attribute{
 				Optional:    true,

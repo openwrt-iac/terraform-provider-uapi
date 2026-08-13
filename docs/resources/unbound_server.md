@@ -28,7 +28,6 @@ resource "uapi_unbound_server" "example" {
 - `dnssec_enabled` (Boolean) uci option dnssec_enabled.
 - `domain` (String) uci option domain.
 - `domain_type` (String) uci option domain_type.
-- `enabled` (Boolean, Deprecated) Whether the entry is active.
 - `extended_stats` (Boolean) uci option extended_stats.
 - `hide_binddata` (Boolean) uci option hide_binddata.
 - `interface_auto` (Boolean) uci option interface_auto.
@@ -36,7 +35,6 @@ resource "uapi_unbound_server" "example" {
 - `localservice` (Boolean) uci option localservice.
 - `manual_conf` (Boolean) uci option manual_conf.
 - `num_threads` (Number) uci option num_threads.
-- `prefetch` (Boolean, Deprecated) uci option prefetch.
 - `protocol` (String) uci option protocol.
 - `query_minimize` (Boolean) uci option query_minimize.
 - `rebind_protection` (String) uci option rebind_protection.

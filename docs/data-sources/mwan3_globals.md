@@ -23,9 +23,7 @@ data "uapi_mwan3_globals" "example" {}
 
 - `etag` (String) Opaque ETag of the resource's current state.
 - `id` (String) Stable id.
-- `local_source` (String) uci option local_source.
 - `logging` (Boolean) uci option logging.
 - `loglevel` (String) uci option loglevel.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `mmx_mask` (String) uci option mmx_mask.
-- `rtmon_interval` (Number) uci option rtmon_interval.

@@ -6,6 +6,91 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-08-13
+
+Tracks uapi 3.0.0. **Requires uapi >= 3.0.0**, and provider 2.x cannot talk to a
+3.0 router: a uapi installation serves exactly one API major. Read the
+"Migrating from provider 2.x to 3.0" guide before upgrading; it gives the order,
+and most of the work is edits you can make and apply while still on 2.5.x.
+
+### Upgrade note
+
+- **The endpoint moves to `/api/v3`.** Point `endpoint` at the new prefix.
+- **`uapi_vnstat_interface` is removed.** The `vnstat/interfaces` endpoint is gone:
+  it wrote a uci section vnstat never reads. Use `uapi_vnstat_config.interfaces`,
+  which is the list the daemon actually uses, and `terraform state rm` the old
+  resources rather than destroying them.
+- **`uapi_network_interface.ipaddr` is read-only**, a view of the first `ipaddrs`
+  entry. Set `ipaddrs` instead, even for a single address. This also retires the
+  provider-side machinery that kept the pair consistent through 2.5.x.
+- **`uapi_network_interface.name` is removed.** The deprecation window opened in
+  2.2.0 and closes here; use `id`.
+- **`uapi_dhcp_host.mac` and `mac_aliases` are removed.** Use `macs`.
+- **`uapi_firewall_redirect`'s match selectors are scalars**, not one-element lists:
+  `src_ip`, `src_port`, `src_dport`, `src_dip`, `dest_ip` and `dest_port`. Change
+  `src_dport = ["8443"]` to `src_dport = "8443"`, and so on. `proto` stays a list.
+  firewall4 parses a `config redirect` option as a scalar, and through 2.x these
+  were arrays capped at one entry, so a second value was an apply-time `422`; as
+  scalars the same mistake is a plan-time type error (openwrt-iac/uapi#148).
+- **28 attributes that wrote a uci option nothing reads are removed**: all 18
+  collector toggles on `uapi_prometheus_node_exporter_lua_config`,
+  `uapi_vnstat_config.database_dir` / `interface_5min_hours` / `month_rotate`,
+  `uapi_mwan3_globals.local_source` / `rtmon_interval`,
+  `uapi_unbound_server.enabled` / `prefetch`, `uapi_usteer_config.max_assoc_sta`,
+  and `uapi_lldpd_config.enable_lldpmed`. Provider 2.5.0 warned about each of them
+  at plan time. Removing them from configuration changes nothing on the router.
+
+### Changed
+- **An absent uci list now reads as null rather than an empty list.** uapi 3.0 makes
+  that distinction on the wire and the provider follows it, because unset is not the
+  same as set-to-empty. On the first plan after upgrading, a list attribute you have
+  never configured may show as moving from `[]` to null; it converges in one apply
+  and no resource is recreated.
+- `uapi_network_interface` gains `broadcast`, `ip6addrs`, `ip6gw` and `ip6prefix`,
+  so an IPv6-addressed static interface is expressible.
+
+### Added
+- uapi's `X-Mgmt-Path-Warning` is now surfaced as a Terraform warning. uapi sets it
+  when a write touches the interface the request arrived through, and the provider
+  was discarding it, so the first sign was the router no longer answering. It now
+  appears against the resource on the apply that causes it, carrying uapi's own
+  explanation. It is advisory: the write proceeds.
+
+  uapi 3.0 widened the header past `network/interfaces` (openwrt-iac/uapi#132, filed
+  after a `network/bridge_vlans` write took a test router off the network with no
+  warning available). The provider reads it from every write response, so it covers
+  whatever uapi emits it on.
+
+### Fixed
+- A create refused for any `conflict` field error reported it as an id collision.
+  The hint told the reader to `terraform import` the section or pick a different
+  `id`, but uapi spends that code on more than identity: a bridge VLAN naming a
+  device that does not exist answers `{field: "device", code: "conflict"}`, and the
+  advice sent the reader after a section that never existed. The hint is now
+  limited to the `id` and `name` fields; every other conflict shows uapi's own
+  message, which says what is actually wrong.
+- The idempotency key on a create never reached uapi, so a retried `POST` could
+  double-create. It was sent as the `Idempotency-Key` header only, and uhttpd's CGI
+  layer forwards a fixed header allowlist that the header is not on, exactly the
+  reason `If-Match` has been sent as `?if_match=` since 1.0. Both now go on the
+  query string as well. uapi 3.0.0-rc3 declaring these fallbacks as spec
+  parameters is what surfaced it; the unit test asserted the header, which passed
+  while the guarantee was inert against a real router.
+
+### Notes
+- The generated resources now come from uapi's split request and response schemas.
+  The response supplies the attribute set, the request supplies required-ness and,
+  by what it omits, which fields are writable at all. That is how `ipaddr` became
+  computed without a hand-written exception.
+- The acceptance fixture for `uapi_network_bridge_vlan` no longer targets `br-lan`.
+  Creating a bridge VLAN on the management bridge enables VLAN filtering on it and
+  takes a live target off the network mid-suite, which is how the warning gap above
+  was found. It now creates its own portless bridge instead of naming one it hopes
+  exists, and the `uapi_network_wireguard_peer` fixture carries a real 44-char key
+  and the `addresses` a wireguard interface requires. Both were accepted by the fake
+  and refused by a real router, which is the third instance of that class in this
+  suite.
+
 ## [2.5.1] - 2026-08-10
 
 Documentation only. No schema, behaviour or dependency change, so upgrading from
@@ -124,7 +209,7 @@ as well as 2.4.1.
   briefly rejected with a `422` before fixing it upstream
   (openwrt-iac/uapi#65). Both directions now work, and an update that touches
   neither still round-trips the address rather than clearing it, which remains
-  gated on openwrt-iac/uapi#3.
+  gated on openwrt-iac/uapi#16.
 - `uapi_network_interface.ipaddr` and `ipaddrs` documentation now explains that they
   are one uci option and that you should set one or the other, replacing the
   placeholder `uci option ipaddr.` rows.
@@ -244,7 +329,7 @@ caller-owned, non-defaulted fields can be cleared by removing them from config.
   with `netmask` or `gateway` in state but not in config will plan those to null on
   the first plan, then converge on apply. Interfaces that set them in config see no
   change. (`ipaddr`/`ipaddrs`/`dns` are not yet clearable this way; tracked
-  upstream at openwrt-iac/uapi#3.)
+  upstream at openwrt-iac/uapi#16.)
 
 ## [2.2.1] - 2026-06-18
 

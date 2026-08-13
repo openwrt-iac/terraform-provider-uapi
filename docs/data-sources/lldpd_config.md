@@ -24,7 +24,6 @@ data "uapi_lldpd_config" "example" {}
 - `enable_cdp` (Boolean) uci option enable_cdp.
 - `enable_edp` (Boolean) uci option enable_edp.
 - `enable_fdp` (Boolean) uci option enable_fdp.
-- `enable_lldpmed` (Boolean) uci option enable_lldpmed.
 - `enable_sonmp` (Boolean) uci option enable_sonmp.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `id` (String) Stable id.

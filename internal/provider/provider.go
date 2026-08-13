@@ -50,7 +50,7 @@ func (p *uapiProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			"endpoint": schema.StringAttribute{
 				Optional: true,
 				Description: "Base URL of the uapi API, including the version prefix, " +
-					"e.g. https://router.example.com/api/v2. May also be set via the " +
+					"e.g. https://router.example.com/api/v3. May also be set via the " +
 					"UAPI_ENDPOINT or UAPI_BASE environment variable.",
 			},
 			"token": schema.StringAttribute{

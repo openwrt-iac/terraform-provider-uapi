@@ -38,12 +38,12 @@ type firewallRedirectModel struct {
 type firewallRedirectMatch struct {
 	SrcZone  types.String `tfsdk:"src_zone"`
 	DestZone types.String `tfsdk:"dest_zone"`
-	SrcIP    types.List   `tfsdk:"src_ip"`
-	SrcPort  types.List   `tfsdk:"src_port"`
-	SrcDport types.List   `tfsdk:"src_dport"`
-	SrcDip   types.List   `tfsdk:"src_dip"`
-	DestIP   types.List   `tfsdk:"dest_ip"`
-	DestPort types.List   `tfsdk:"dest_port"`
+	SrcIP    types.String `tfsdk:"src_ip"`
+	SrcPort  types.String `tfsdk:"src_port"`
+	SrcDport types.String `tfsdk:"src_dport"`
+	SrcDip   types.String `tfsdk:"src_dip"`
+	DestIP   types.String `tfsdk:"dest_ip"`
+	DestPort types.String `tfsdk:"dest_port"`
 	Proto    types.List   `tfsdk:"proto"`
 	Family   types.String `tfsdk:"family"`
 	Mark     types.String `tfsdk:"mark"`
@@ -76,12 +76,12 @@ func (r *firewallRedirectResource) Schema(_ context.Context, _ resource.SchemaRe
 				Attributes: map[string]schema.Attribute{
 					"src_zone":  schema.StringAttribute{Required: true, Description: "Source firewall zone name."},
 					"dest_zone": optionalComputedString("Destination firewall zone name."),
-					"src_ip":    optionalComputedStringList("Source IP addresses or CIDRs."),
-					"src_port":  optionalComputedStringList("Source ports."),
-					"src_dport": optionalComputedStringList("With target DNAT, the incoming (destination) port or range to redirect. With target SNAT, the source port to rewrite to. One value only."),
-					"src_dip":   optionalComputedStringList("With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the address to rewrite the source to, and required. One value only."),
-					"dest_ip":   optionalComputedStringList("Internal destination address to rewrite to. One value only."),
-					"dest_port": optionalComputedStringList("Internal destination port or range to rewrite to. One value only."),
+					"src_ip":    optionalComputedString("Source IP addresses or CIDRs."),
+					"src_port":  optionalComputedString("Source ports."),
+					"src_dport": optionalComputedString("With target DNAT, the incoming (destination) port or range to redirect. With target SNAT, the source port to rewrite to."),
+					"src_dip":   optionalComputedString("With target DNAT, the external destination address to match, which also selects the address used for NAT reflection. With target SNAT, the address to rewrite the source to, and required."),
+					"dest_ip":   optionalComputedString("Internal destination address to rewrite to."),
+					"dest_port": optionalComputedString("Internal destination port or range to rewrite to."),
 					"proto":     optionalComputedStringList("Protocols to match, by name or number (`tcp`, `udp`, `gre`, `sctp`, `47`) or a wildcard (`all`, `any`, `tcpudp`). Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those."),
 					"family":    optionalComputedString("Address family: any, ipv4, or ipv6."),
 					"mark":      optionalComputedString("Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate."),
@@ -106,12 +106,12 @@ func (r *firewallRedirectResource) body(ctx context.Context, m firewallRedirectM
 	if m.Match != nil {
 		putStr(match, "src_zone", m.Match.SrcZone)
 		putStr(match, "dest_zone", m.Match.DestZone)
-		putList(ctx, match, "src_ip", m.Match.SrcIP, diags.d)
-		putList(ctx, match, "src_port", m.Match.SrcPort, diags.d)
-		putList(ctx, match, "src_dport", m.Match.SrcDport, diags.d)
-		putList(ctx, match, "src_dip", m.Match.SrcDip, diags.d)
-		putList(ctx, match, "dest_ip", m.Match.DestIP, diags.d)
-		putList(ctx, match, "dest_port", m.Match.DestPort, diags.d)
+		putStr(match, "src_ip", m.Match.SrcIP)
+		putStr(match, "src_port", m.Match.SrcPort)
+		putStr(match, "src_dport", m.Match.SrcDport)
+		putStr(match, "src_dip", m.Match.SrcDip)
+		putStr(match, "dest_ip", m.Match.DestIP)
+		putStr(match, "dest_port", m.Match.DestPort)
 		putList(ctx, match, "proto", m.Match.Proto, diags.d)
 		putStr(match, "family", m.Match.Family)
 		putStr(match, "mark", m.Match.Mark)
@@ -136,12 +136,12 @@ func (r *firewallRedirectResource) read(ctx context.Context, obj map[string]any,
 	nm := &firewallRedirectMatch{}
 	nm.SrcZone = strVal(nested, "src_zone")
 	nm.DestZone = strVal(nested, "dest_zone")
-	nm.SrcIP = diags.list(listVal(ctx, nested, "src_ip"))
-	nm.SrcPort = diags.list(listVal(ctx, nested, "src_port"))
-	nm.SrcDport = diags.list(listVal(ctx, nested, "src_dport"))
-	nm.SrcDip = diags.list(listVal(ctx, nested, "src_dip"))
-	nm.DestIP = diags.list(listVal(ctx, nested, "dest_ip"))
-	nm.DestPort = diags.list(listVal(ctx, nested, "dest_port"))
+	nm.SrcIP = strVal(nested, "src_ip")
+	nm.SrcPort = strVal(nested, "src_port")
+	nm.SrcDport = strVal(nested, "src_dport")
+	nm.SrcDip = strVal(nested, "src_dip")
+	nm.DestIP = strVal(nested, "dest_ip")
+	nm.DestPort = strVal(nested, "dest_port")
 	nm.Proto = diags.list(listVal(ctx, nested, "proto"))
 	nm.Family = strVal(nested, "family")
 	nm.Mark = strVal(nested, "mark")
@@ -155,6 +155,7 @@ func (r *firewallRedirectResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, true)
 	if resp.Diagnostics.HasError() {
 		return
@@ -198,6 +199,7 @@ func (r *firewallRedirectResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds, false)
 	if resp.Diagnostics.HasError() {
 		return
@@ -218,6 +220,7 @@ func (r *firewallRedirectResource) Delete(ctx context.Context, req resource.Dele
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+firewallRedirectCollection+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", "firewall redirect", err)
 	}

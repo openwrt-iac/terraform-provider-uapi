@@ -29,26 +29,8 @@ type prometheusNodeExporterLuaConfigModel struct {
 	ID              types.String `tfsdk:"id"`
 	Managed         types.Bool   `tfsdk:"managed"`
 	ETag            types.String `tfsdk:"etag"`
-	Boottime        types.Bool   `tfsdk:"boottime"`
-	Cpu             types.Bool   `tfsdk:"cpu"`
-	Diskstats       types.Bool   `tfsdk:"diskstats"`
-	Edac            types.Bool   `tfsdk:"edac"`
-	Entropy         types.Bool   `tfsdk:"entropy"`
-	Filesystem      types.Bool   `tfsdk:"filesystem"`
-	Hwmon           types.Bool   `tfsdk:"hwmon"`
 	ListenInterface types.String `tfsdk:"listen_interface"`
-	ListenIpv6      types.Bool   `tfsdk:"listen_ipv6"`
 	ListenPort      types.Int64  `tfsdk:"listen_port"`
-	Loadavg         types.Bool   `tfsdk:"loadavg"`
-	Meminfo         types.Bool   `tfsdk:"meminfo"`
-	Netdev          types.Bool   `tfsdk:"netdev"`
-	Netstat         types.Bool   `tfsdk:"netstat"`
-	Stat            types.Bool   `tfsdk:"stat"`
-	Textfile        types.Bool   `tfsdk:"textfile"`
-	ThermalZone     types.Bool   `tfsdk:"thermal_zone"`
-	Time            types.Bool   `tfsdk:"time"`
-	Uname           types.Bool   `tfsdk:"uname"`
-	Vmstat          types.Bool   `tfsdk:"vmstat"`
 }
 
 func (r *prometheusNodeExporterLuaConfigResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -66,78 +48,24 @@ func (r *prometheusNodeExporterLuaConfigResource) Schema(_ context.Context, _ re
 			"id":               computedIDAttribute(),
 			"managed":          managedAttribute(),
 			"etag":             etagAttribute(),
-			"boottime":         deprecatedOptionalComputedBool("uci option boottime.", "Deprecated, removed in v3: nothing reads this. The boottime collector is enabled by its .lua file being present, not by uci."),
-			"cpu":              deprecatedOptionalComputedBool("uci option cpu.", "Deprecated, removed in v3: nothing reads this. The cpu collector is enabled by its .lua file being present, not by uci."),
-			"diskstats":        deprecatedOptionalComputedBool("uci option diskstats.", "Deprecated, removed in v3: nothing reads this. The diskstats collector is enabled by its .lua file being present, not by uci."),
-			"edac":             deprecatedOptionalComputedBool("uci option edac.", "Deprecated, removed in v3: nothing reads this. The edac collector is enabled by its .lua file being present, not by uci."),
-			"entropy":          deprecatedOptionalComputedBool("uci option entropy.", "Deprecated, removed in v3: nothing reads this. The entropy collector is enabled by its .lua file being present, not by uci."),
-			"filesystem":       deprecatedOptionalComputedBool("uci option filesystem.", "Deprecated, removed in v3: nothing reads this. The filesystem collector is enabled by its .lua file being present, not by uci."),
-			"hwmon":            deprecatedOptionalComputedBool("uci option hwmon.", "Deprecated, removed in v3: nothing reads this. The hwmon collector is enabled by its .lua file being present, not by uci."),
 			"listen_interface": optionalComputedString("uci option listen_interface."),
-			"listen_ipv6":      deprecatedOptionalComputedBool("uci option listen_ipv6.", "Deprecated, removed in v3: nothing reads this. The IPv6 bind is derived from listen_interface."),
 			"listen_port":      optionalComputedInt64("uci option listen_port."),
-			"loadavg":          deprecatedOptionalComputedBool("uci option loadavg.", "Deprecated, removed in v3: nothing reads this. The loadavg collector is enabled by its .lua file being present, not by uci."),
-			"meminfo":          deprecatedOptionalComputedBool("uci option meminfo.", "Deprecated, removed in v3: nothing reads this. The meminfo collector is enabled by its .lua file being present, not by uci."),
-			"netdev":           deprecatedOptionalComputedBool("uci option netdev.", "Deprecated, removed in v3: nothing reads this. The netdev collector is enabled by its .lua file being present, not by uci."),
-			"netstat":          deprecatedOptionalComputedBool("uci option netstat.", "Deprecated, removed in v3: nothing reads this. The netstat collector is enabled by its .lua file being present, not by uci."),
-			"stat":             deprecatedOptionalComputedBool("uci option stat.", "Deprecated, removed in v3: nothing reads this. The stat collector is enabled by its .lua file being present, not by uci."),
-			"textfile":         deprecatedOptionalComputedBool("uci option textfile.", "Deprecated, removed in v3: nothing reads this. The textfile collector is enabled by its .lua file being present, not by uci."),
-			"thermal_zone":     deprecatedOptionalComputedBool("uci option thermal_zone.", "Deprecated, removed in v3: nothing reads this. The thermal_zone collector is enabled by its .lua file being present, not by uci."),
-			"time":             deprecatedOptionalComputedBool("uci option time.", "Deprecated, removed in v3: nothing reads this. The time collector is enabled by its .lua file being present, not by uci."),
-			"uname":            deprecatedOptionalComputedBool("uci option uname.", "Deprecated, removed in v3: nothing reads this. The uname collector is enabled by its .lua file being present, not by uci."),
-			"vmstat":           deprecatedOptionalComputedBool("uci option vmstat.", "Deprecated, removed in v3: nothing reads this. The vmstat collector is enabled by its .lua file being present, not by uci."),
 		},
 	}
 }
 
 func (r *prometheusNodeExporterLuaConfigResource) body(ctx context.Context, m prometheusNodeExporterLuaConfigModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
-	putBool(out, "boottime", m.Boottime)
-	putBool(out, "cpu", m.Cpu)
-	putBool(out, "diskstats", m.Diskstats)
-	putBool(out, "edac", m.Edac)
-	putBool(out, "entropy", m.Entropy)
-	putBool(out, "filesystem", m.Filesystem)
-	putBool(out, "hwmon", m.Hwmon)
 	putStr(out, "listen_interface", m.ListenInterface)
-	putBool(out, "listen_ipv6", m.ListenIpv6)
 	putInt64(out, "listen_port", m.ListenPort)
-	putBool(out, "loadavg", m.Loadavg)
-	putBool(out, "meminfo", m.Meminfo)
-	putBool(out, "netdev", m.Netdev)
-	putBool(out, "netstat", m.Netstat)
-	putBool(out, "stat", m.Stat)
-	putBool(out, "textfile", m.Textfile)
-	putBool(out, "thermal_zone", m.ThermalZone)
-	putBool(out, "time", m.Time)
-	putBool(out, "uname", m.Uname)
-	putBool(out, "vmstat", m.Vmstat)
 	return out
 }
 
 func (r *prometheusNodeExporterLuaConfigResource) read(ctx context.Context, obj map[string]any, m *prometheusNodeExporterLuaConfigModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.Boottime = boolVal(obj, "boottime")
-	m.Cpu = boolVal(obj, "cpu")
-	m.Diskstats = boolVal(obj, "diskstats")
-	m.Edac = boolVal(obj, "edac")
-	m.Entropy = boolVal(obj, "entropy")
-	m.Filesystem = boolVal(obj, "filesystem")
-	m.Hwmon = boolVal(obj, "hwmon")
 	m.ListenInterface = strVal(obj, "listen_interface")
-	m.ListenIpv6 = boolVal(obj, "listen_ipv6")
 	m.ListenPort = int64Val(obj, "listen_port")
-	m.Loadavg = boolVal(obj, "loadavg")
-	m.Meminfo = boolVal(obj, "meminfo")
-	m.Netdev = boolVal(obj, "netdev")
-	m.Netstat = boolVal(obj, "netstat")
-	m.Stat = boolVal(obj, "stat")
-	m.Textfile = boolVal(obj, "textfile")
-	m.ThermalZone = boolVal(obj, "thermal_zone")
-	m.Time = boolVal(obj, "time")
-	m.Uname = boolVal(obj, "uname")
-	m.Vmstat = boolVal(obj, "vmstat")
 }
 
 func (r *prometheusNodeExporterLuaConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -147,6 +75,7 @@ func (r *prometheusNodeExporterLuaConfigResource) Create(ctx context.Context, re
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -190,6 +119,7 @@ func (r *prometheusNodeExporterLuaConfigResource) Update(ctx context.Context, re
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

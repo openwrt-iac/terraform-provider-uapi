@@ -2,18 +2,18 @@
 page_title: "Firewall rules, NAT, redirects, and forwardings"
 subcategory: "Guides"
 description: |-
-  Worked examples for the firewall resources, the three different match shapes, and the traps that make a router silently discard a rule.
+  Worked examples for the firewall resources, the match shapes that differ between them, and the traps that make a router silently discard a rule.
 ---
 
 # Firewall rules, NAT, redirects, and forwardings
 
-The firewall resources spell their selectors three different ways, which is the
-single most common authoring mistake:
+The firewall resources do not all spell their selectors the same way, which is the
+single most common authoring mistake. Only `uapi_firewall_rule` takes lists:
 
 | Resource | Selectors | Address / port types |
 |---|---|---|
 | `uapi_firewall_rule` | nested `match = { ... }` | **lists** |
-| `uapi_firewall_redirect` | nested `match = { ... }` | **lists, but at most one value each** |
+| `uapi_firewall_redirect` | nested `match = { ... }` | **scalars** (only `proto` is a list) |
 | `uapi_firewall_nat` | nested `match = { ... }` | **scalars** (only `proto` is a list) |
 | `uapi_firewall_forwarding` | flat, no `match` | scalars |
 
@@ -123,7 +123,7 @@ To masquerade all egress traffic, write an explicit empty block, `match = {}`.
 uapi accepts a NAT section with no match at all, but the provider's schema
 requires the block, so the empty form is how you say "match everything".
 
-## Port forward / DNAT (nested match, one value per list)
+## Port forward / DNAT (nested match, scalars)
 
 Forward `wan` TCP 8443 to an internal host on 443:
 
@@ -133,16 +133,18 @@ resource "uapi_firewall_redirect" "https" {
   match = {
     src_zone  = "wan"
     proto     = ["tcp"]
-    src_dport = ["8443"]            # incoming (destination) port to redirect
-    dest_ip   = ["192.168.1.50"]    # internal target
-    dest_port = ["443"]             # internal port
+    src_dport = "8443"              # incoming (destination) port to redirect
+    dest_ip   = "192.168.1.50"      # internal target
+    dest_port = "443"               # internal port
   }
 }
 ```
 
-The match fields stay lists on the wire, but a redirect accepts **at most one
-value** in each: fw4 treats them as scalars on a `config redirect` and drops any
-section that writes a uci list. A second value is a `422`.
+These are **scalars**, not lists, as of uapi 3.0. firewall4 parses a
+`config redirect` option as a scalar and drops any section that writes a uci list.
+Through 2.x they were arrays capped at one entry, so a second value was an
+apply-time `422`; as scalars the same mistake is a plan-time type error. Only
+`proto` remains a list.
 
 `match.src_dip` is the external destination address. On a DNAT it is matched
 against, and it also selects the address used for NAT reflection. On an SNAT
@@ -154,15 +156,14 @@ resource "uapi_firewall_redirect" "snat_legacy" {
   match = {
     src_zone  = "lan"
     dest_zone = "wan"               # required, and cannot be the "*" wildcard
-    src_dip   = ["203.0.113.7"]     # required on SNAT
+    src_dip   = "203.0.113.7"       # required on SNAT
     proto     = ["tcp"]
   }
 }
 ```
 
-For new configuration prefer `uapi_firewall_nat` for source NAT. It is where
-LuCI migrates these sections, and its scalar match is a closer fit to what fw4
-parses.
+For new configuration prefer `uapi_firewall_nat` for source NAT. It is where LuCI
+migrates these sections.
 
 ## `target` is case-sensitive
 

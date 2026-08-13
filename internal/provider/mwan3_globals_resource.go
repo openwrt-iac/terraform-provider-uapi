@@ -24,14 +24,12 @@ type mwan3GlobalsResource struct{ client *client.Client }
 func NewMwan3GlobalsResource() resource.Resource { return &mwan3GlobalsResource{} }
 
 type mwan3GlobalsModel struct {
-	ID            types.String `tfsdk:"id"`
-	Managed       types.Bool   `tfsdk:"managed"`
-	ETag          types.String `tfsdk:"etag"`
-	LocalSource   types.String `tfsdk:"local_source"`
-	Logging       types.Bool   `tfsdk:"logging"`
-	Loglevel      types.String `tfsdk:"loglevel"`
-	MmxMask       types.String `tfsdk:"mmx_mask"`
-	RtmonInterval types.Int64  `tfsdk:"rtmon_interval"`
+	ID       types.String `tfsdk:"id"`
+	Managed  types.Bool   `tfsdk:"managed"`
+	ETag     types.String `tfsdk:"etag"`
+	Logging  types.Bool   `tfsdk:"logging"`
+	Loglevel types.String `tfsdk:"loglevel"`
+	MmxMask  types.String `tfsdk:"mmx_mask"`
 }
 
 func (r *mwan3GlobalsResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -46,36 +44,30 @@ func (r *mwan3GlobalsResource) Schema(_ context.Context, _ resource.SchemaReques
 	resp.Schema = schema.Schema{
 		Description: "Mwan3 globals.",
 		Attributes: map[string]schema.Attribute{
-			"id":             computedIDAttribute(),
-			"managed":        managedAttribute(),
-			"etag":           etagAttribute(),
-			"local_source":   deprecatedOptionalComputedString("uci option local_source.", "Deprecated, removed in v3: nothing reads this. The live knob is `source_routing`, a boolean about route-line parsing, not an interface name, so there is nothing to rename this to."),
-			"logging":        optionalComputedBool("uci option logging."),
-			"loglevel":       optionalComputedString("uci option loglevel."),
-			"mmx_mask":       optionalComputedString("uci option mmx_mask."),
-			"rtmon_interval": deprecatedOptionalComputedInt64("uci option rtmon_interval.", "Deprecated, removed in v3: nothing reads this. `mwan3rtmon` is driven by `ip monitor route`, so there is no polling interval to set."),
+			"id":       computedIDAttribute(),
+			"managed":  managedAttribute(),
+			"etag":     etagAttribute(),
+			"logging":  optionalComputedBool("uci option logging."),
+			"loglevel": optionalComputedString("uci option loglevel."),
+			"mmx_mask": optionalComputedString("uci option mmx_mask."),
 		},
 	}
 }
 
 func (r *mwan3GlobalsResource) body(ctx context.Context, m mwan3GlobalsModel, diags *diagsink) map[string]any {
 	out := map[string]any{}
-	putStr(out, "local_source", m.LocalSource)
 	putBool(out, "logging", m.Logging)
 	putStr(out, "loglevel", m.Loglevel)
 	putStr(out, "mmx_mask", m.MmxMask)
-	putInt64(out, "rtmon_interval", m.RtmonInterval)
 	return out
 }
 
 func (r *mwan3GlobalsResource) read(ctx context.Context, obj map[string]any, m *mwan3GlobalsModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.LocalSource = strVal(obj, "local_source")
 	m.Logging = boolVal(obj, "logging")
 	m.Loglevel = strVal(obj, "loglevel")
 	m.MmxMask = strVal(obj, "mmx_mask")
-	m.RtmonInterval = int64Val(obj, "rtmon_interval")
 }
 
 func (r *mwan3GlobalsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -85,6 +77,7 @@ func (r *mwan3GlobalsResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -128,6 +121,7 @@ func (r *mwan3GlobalsResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

@@ -22,10 +22,7 @@ resource "uapi_vnstat_config" "example" {
 
 ### Optional
 
-- `database_dir` (String, Deprecated) uci option database_dir.
-- `interface_5min_hours` (Number, Deprecated) uci option interface_5min_hours.
 - `interfaces` (List of String) Devices vnstat tracks, as the kernel names them (`br-lan`, `eth0`), not uci interface names. The only vnstat option any shipped code reads.
-- `month_rotate` (Number, Deprecated) uci option month_rotate.
 
 ### Read-Only
 

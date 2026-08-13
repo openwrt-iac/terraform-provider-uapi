@@ -84,9 +84,9 @@ Rule of thumb: if the field is a *section* reference, use `.id`; if it names a
 kernel device, use the device's `name` (or the literal kernel name for pre-existing
 devices).
 
-## `sqm_queue` / `vnstat_interface` take a network *interface* name
+## `sqm_queue` takes a network *interface* name
 
-`uapi_sqm_queue.interface` and `uapi_vnstat_interface.interface` take a **network
+`uapi_sqm_queue.interface` takes a **network
 interface name** (a `network/interfaces` reference), not a kernel device. Passing a
 kernel device like `br-lan.32` or `eth0` returns `422 ... does not exist`. Reference
 a managed interface by its `.id`, or a pre-existing one by its name:

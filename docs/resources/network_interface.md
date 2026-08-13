@@ -29,6 +29,7 @@ resource "uapi_network_interface" "example" {
 
 - `addresses` (List of String) uci option addresses.
 - `auto` (Boolean) uci option auto.
+- `broadcast` (String) uci option broadcast.
 - `clientid` (String) uci option clientid.
 - `defaultroute` (Boolean) uci option defaultroute.
 - `delegate` (Boolean) uci option delegate.
@@ -39,16 +40,17 @@ resource "uapi_network_interface" "example" {
 - `hostname` (String) uci option hostname.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `ip4table` (String) uci option ip4table.
+- `ip6addrs` (List of String) uci option ip6addrs.
 - `ip6assign` (Number) uci option ip6assign.
+- `ip6gw` (String) uci option ip6gw.
 - `ip6hint` (String) uci option ip6hint.
 - `ip6ifaceid` (String) uci option ip6ifaceid.
+- `ip6prefix` (String) uci option ip6prefix.
 - `ip6table` (String) uci option ip6table.
-- `ipaddr` (String) Static IPv4 address, the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`) filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees. Use `ipaddrs` for a multi-address interface.
-- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). `ipaddr` is the single-address view of the first entry, and both names are filled from the same key, so they always agree. A write should carry one or the other: an update lets `ipaddrs` take precedence, while a create rejects a pair that disagrees.
+- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.
 - `listen_port` (Number) uci option listen_port.
 - `metric` (Number) uci option metric.
 - `mtu` (Number) uci option mtu.
-- `name` (String, Deprecated) DEPRECATED in 2.2.0: use `id` instead (the universal section-name input across every resource). Both are accepted during the deprecation window; if both are supplied they must match. `name` is scheduled for removal in v3. See docs/deprecations.md.
 - `netmask` (String) uci option netmask.
 - `nohostroute` (Boolean) uci option nohostroute.
 - `peerdns` (Boolean) uci option peerdns.
@@ -60,6 +62,7 @@ resource "uapi_network_interface" "example" {
 
 - `etag` (String) Opaque ETag of the resource's current state, used for If-Match optimistic concurrency.
 - `has_private_key` (Boolean) Whether a private key is configured.
+- `ipaddr` (String) Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 
 ## Import

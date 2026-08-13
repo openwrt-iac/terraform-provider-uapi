@@ -36,7 +36,6 @@ type usteerConfigModel struct {
 	LoadBalancingThreshold   types.Int64  `tfsdk:"load_balancing_threshold"`
 	LocalStaTimeout          types.Int64  `tfsdk:"local_sta_timeout"`
 	LocalStaUpdate           types.Int64  `tfsdk:"local_sta_update"`
-	MaxAssocSta              types.Int64  `tfsdk:"max_assoc_sta"`
 	MaxNeighborReports       types.Int64  `tfsdk:"max_neighbor_reports"`
 	MaxRetryBand             types.Int64  `tfsdk:"max_retry_band"`
 	MeasurementReportTimeout types.Int64  `tfsdk:"measurement_report_timeout"`
@@ -85,7 +84,6 @@ func (r *usteerConfigResource) Schema(_ context.Context, _ resource.SchemaReques
 			"load_balancing_threshold":   optionalComputedInt64("uci option load_balancing_threshold."),
 			"local_sta_timeout":          optionalComputedInt64("uci option local_sta_timeout."),
 			"local_sta_update":           optionalComputedInt64("uci option local_sta_update."),
-			"max_assoc_sta":              deprecatedOptionalComputedInt64("uci option max_assoc_sta.", "Deprecated, removed in v3: nothing reads this. usteer's init forwards a fixed list of uci options to the daemon over ubus and this is not on it; the daemon's own `max_assoc` knob is not bridged from uci at all."),
 			"max_neighbor_reports":       optionalComputedInt64("uci option max_neighbor_reports."),
 			"max_retry_band":             optionalComputedInt64("uci option max_retry_band."),
 			"measurement_report_timeout": optionalComputedInt64("uci option measurement_report_timeout."),
@@ -123,7 +121,6 @@ func (r *usteerConfigResource) body(ctx context.Context, m usteerConfigModel, di
 	putInt64(out, "load_balancing_threshold", m.LoadBalancingThreshold)
 	putInt64(out, "local_sta_timeout", m.LocalStaTimeout)
 	putInt64(out, "local_sta_update", m.LocalStaUpdate)
-	putInt64(out, "max_assoc_sta", m.MaxAssocSta)
 	putInt64(out, "max_neighbor_reports", m.MaxNeighborReports)
 	putInt64(out, "max_retry_band", m.MaxRetryBand)
 	putInt64(out, "measurement_report_timeout", m.MeasurementReportTimeout)
@@ -161,7 +158,6 @@ func (r *usteerConfigResource) read(ctx context.Context, obj map[string]any, m *
 	m.LoadBalancingThreshold = int64Val(obj, "load_balancing_threshold")
 	m.LocalStaTimeout = int64Val(obj, "local_sta_timeout")
 	m.LocalStaUpdate = int64Val(obj, "local_sta_update")
-	m.MaxAssocSta = int64Val(obj, "max_assoc_sta")
 	m.MaxNeighborReports = int64Val(obj, "max_neighbor_reports")
 	m.MaxRetryBand = int64Val(obj, "max_retry_band")
 	m.MeasurementReportTimeout = int64Val(obj, "measurement_report_timeout")
@@ -193,6 +189,7 @@ func (r *usteerConfigResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -236,6 +233,7 @@ func (r *usteerConfigResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

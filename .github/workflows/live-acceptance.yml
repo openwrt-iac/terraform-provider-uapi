@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       endpoint:
-        description: "uapi v2 endpoint, e.g. https://router.example.com/api/v2"
+        description: "uapi v3 endpoint, e.g. https://router.example.com/api/v3"
         required: true
 
 permissions:

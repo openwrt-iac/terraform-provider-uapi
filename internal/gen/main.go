@@ -44,11 +44,19 @@ func main() {
 
 	var resCtors, dsCtors []string
 	for _, d := range descriptors {
-		sch, ok := doc.Components.Schemas[d.Schema]
+		// uapi 3.0 splits every resource in two. The response carries every field
+		// (it is a strict superset of the request), so it supplies the attribute
+		// set; the request supplies required-ness and, by what it omits, which
+		// fields the caller may write at all.
+		res, ok := doc.Components.Schemas[d.Schema+"Response"]
 		if !ok {
-			fail("schema %q not in spec", d.Schema)
+			fail("schema %qResponse not in spec", d.Schema)
 		}
-		r := buildResource(d, sch.Properties, sch.Required)
+		req, ok := doc.Components.Schemas[d.Schema+"Request"]
+		if !ok {
+			fail("schema %qRequest not in spec: a resource with no request schema is read-only or removed, and needs no descriptor", d.Schema)
+		}
+		r := buildResource(d, res.Properties, req.Properties, req.Required)
 		writeGo(fmt.Sprintf("internal/provider/%s_resource.go", d.Type), renderResource(r))
 		resCtors = append(resCtors, "New"+r.Pascal+"Resource")
 		writeExample("resources/uapi_"+d.Type, r)
@@ -69,9 +77,7 @@ type field struct {
 	GoType     string // "types.String" | "types.Int64" | "types.Bool" | "types.List"
 	Kind       string // "required" | "optcomp" | "optclear" | "writeonly" | "createonly" | "computedbool" | "computedstring"
 	Desc       string
-	Deprecated bool   // spec `deprecated: true`: emit a DeprecationMessage
-	DeprecMsg  string // the warning text, resolved from the spec (see deprecationMessage)
-	Mirror     string // wire name of the attribute this one mirrors (see descriptor.Mirrors)
+	Deprecated bool // spec `deprecated: true`: emit a DeprecationMessage
 }
 
 type nested struct {
@@ -91,24 +97,11 @@ type resModel struct {
 	Nested     *nested
 	GenDS      bool
 	Runtime    string
-	Mirrors    [][2]string
 }
 
 func (r resModel) hasCreateOnly() bool {
 	for _, f := range r.Fields {
 		if f.Kind == "createonly" {
-			return true
-		}
-	}
-	return false
-}
-
-// hasStrictCreateOnly reports whether any create-only field is NOT a deprecated
-// alias, i.e. emits stringplanmodifier.RequiresReplace() (deprecated aliases use
-// the provider-package deprecatedAliasRequiresReplace() instead).
-func (r resModel) hasStrictCreateOnly() bool {
-	for _, f := range r.Fields {
-		if f.Kind == "createonly" && !f.Deprecated {
 			return true
 		}
 	}
@@ -136,7 +129,10 @@ func (r resModel) dsFields() []field {
 	return out
 }
 
-func buildResource(d descriptor, props map[string]specProp, required []string) resModel {
+// buildResource takes the response properties as the attribute set, plus the
+// request properties and its required array. A response field absent from the
+// request is not writable, whatever its flags say, so it is emitted computed.
+func buildResource(d descriptor, props, writable map[string]specProp, required []string) resModel {
 	r := resModel{
 		Type: d.Type, Pascal: pascal(d.Type), Camel: camel(d.Type),
 		Collection: d.Collection, Kind: d.Kind, Label: d.Label,
@@ -167,6 +163,11 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 		if typeOf(p) == "object" {
 			continue // nested (match) comes from the descriptor, not the spec
 		}
+		// Not in the request schema: the caller cannot set it, so it is computed
+		// regardless of whether the response bothered to flag it readOnly.
+		if _, ok := writable[n]; !ok {
+			p.ReadOnly = true
+		}
 		f := field{Name: n, GoName: pascal(n), Desc: d.Desc(n), Deprecated: p.Deprecated}
 		// createonly fields (e.g. an interface `name`): caller-supplied at create,
 		// immutable, never returned, rejected on PUT/PATCH. Use the spec's own
@@ -181,10 +182,16 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 		}
 		switch {
 		case p.ReadOnly:
-			if typeOf(p) == "boolean" {
+			// Only bool and string have a computed emission. A read-only list or
+			// integer would silently become a computed string, so refuse instead:
+			// today's read-only set is has_* booleans plus network_interface.ipaddr.
+			switch typeOf(p) {
+			case "boolean":
 				f.GoType, f.Kind = "types.Bool", "computedbool"
-			} else {
+			case "string":
 				f.GoType, f.Kind = "types.String", "computedstring"
+			default:
+				fail("read-only field %q on %s has type %q, which has no computed emission; add one in resAttr", n, d.Type, typeOf(p))
 			}
 		case p.WriteOnly:
 			f.GoType, f.Kind = "types.String", "writeonly"
@@ -205,14 +212,12 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 		// createonly carries its own message (it reuses the description, which is
 		// written as a notice); every other kind resolves one here. Kinds beyond
 		// these two paths would drop the flag silently, so fail loudly instead.
+		// uapi 3.0 removed every field it had deprecated, so no emission path is
+		// carried for one. Restoring it means re-adding the deprecatedOptionalComputed*
+		// helpers and the resAttr branch that calls them (both removed in provider
+		// 3.0.0, see git history for the shape). Fail rather than drop the flag.
 		if f.Deprecated {
-			switch f.Kind {
-			case "createonly":
-			case "optcomp":
-				f.DeprecMsg = deprecationMessage(p)
-			default:
-				fail("deprecated field %q has kind %q with no DeprecationMessage path; add one in resAttr", n, f.Kind)
-			}
+			fail("field %q on %s is deprecated, but the DeprecationMessage emission was removed in 3.0.0; restore the deprecatedOptionalComputed* helpers and the resAttr branch", n, d.Type)
 		}
 		// optclear clears by omission only because collections use PUT (full
 		// replace) so an absent field is dropped. A singleton's PATCH merge keeps
@@ -226,34 +231,7 @@ func buildResource(d descriptor, props map[string]specProp, required []string) r
 		r.Fields = append(r.Fields, f)
 	}
 	r.Nested = d.Nested
-	r.Mirrors = d.Mirrors
-	// Point each side of a mirrored pair at the other. The pair must be plain
-	// optcomp: a mirrored field is by definition server-filled, so it cannot be
-	// required, write-only, create-only or clear-on-omit, and emitting the mirror
-	// plan modifier over one of those shapes would silently drop that behaviour.
-	for _, m := range r.Mirrors {
-		for i, name := range m {
-			f := r.fieldByName(name)
-			if f == nil {
-				fail("resource %q mirrors %q, which is not a field on it", d.Type, name)
-			}
-			if f.Kind != "optcomp" {
-				fail("resource %q mirrors %q but its kind is %q; mirrored fields must be optcomp", d.Type, name, f.Kind)
-			}
-			f.Mirror = m[1-i]
-		}
-	}
 	return r
-}
-
-// fieldByName returns a pointer into r.Fields so callers can annotate in place.
-func (r *resModel) fieldByName(name string) *field {
-	for i := range r.Fields {
-		if r.Fields[i].Name == name {
-			return &r.Fields[i]
-		}
-	}
-	return nil
 }
 
 func typeOf(p specProp) string {
@@ -276,18 +254,6 @@ func typeOf(p specProp) string {
 		}
 	}
 	return "string"
-}
-
-// deprecationMessage resolves the plan-time warning for a deprecated field. Most
-// of uapi's notices are written into the description already, so they are reused
-// verbatim; the rest get the reason the 2.5.0 audit gave for the whole set, which
-// is more useful than repeating the word "deprecated".
-func deprecationMessage(p specProp) string {
-	d := strings.TrimSpace(p.Description)
-	if strings.HasPrefix(strings.ToLower(d), "deprecated") {
-		return d
-	}
-	return "Deprecated by uapi and scheduled for removal in v3: no OpenWrt component reads this uci option, so setting it has never had any effect."
 }
 
 func goType(p specProp) string {

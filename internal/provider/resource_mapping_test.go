@@ -109,9 +109,9 @@ func TestFirewallRuleReadIgnoresUnknownFields(t *testing.T) {
 	if !m.Match.DestZone.IsNull() {
 		t.Errorf("dest_zone should be null, got %v", m.Match.DestZone)
 	}
-	// Missing list comes back as an empty, non-null list.
-	if m.Match.SrcIP.IsNull() || len(m.Match.SrcIP.Elements()) != 0 {
-		t.Errorf("src_ip should be empty list, got %v", m.Match.SrcIP)
+	// An absent list reads null as of uapi 3.0, not an empty list.
+	if !m.Match.SrcIP.IsNull() {
+		t.Errorf("absent src_ip should be null, got %v", m.Match.SrcIP)
 	}
 }
 

@@ -21,26 +21,8 @@ data "uapi_prometheus_node_exporter_lua_config" "example" {}
 
 ### Read-Only
 
-- `boottime` (Boolean) uci option boottime.
-- `cpu` (Boolean) uci option cpu.
-- `diskstats` (Boolean) uci option diskstats.
-- `edac` (Boolean) uci option edac.
-- `entropy` (Boolean) uci option entropy.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `filesystem` (Boolean) uci option filesystem.
-- `hwmon` (Boolean) uci option hwmon.
 - `id` (String) Stable id.
 - `listen_interface` (String) uci option listen_interface.
-- `listen_ipv6` (Boolean) uci option listen_ipv6.
 - `listen_port` (Number) uci option listen_port.
-- `loadavg` (Boolean) uci option loadavg.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `meminfo` (Boolean) uci option meminfo.
-- `netdev` (Boolean) uci option netdev.
-- `netstat` (Boolean) uci option netstat.
-- `stat` (Boolean) uci option stat.
-- `textfile` (Boolean) uci option textfile.
-- `thermal_zone` (Boolean) uci option thermal_zone.
-- `time` (Boolean) uci option time.
-- `uname` (Boolean) uci option uname.
-- `vmstat` (Boolean) uci option vmstat.

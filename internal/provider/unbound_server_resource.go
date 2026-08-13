@@ -33,7 +33,6 @@ type unboundServerModel struct {
 	DnssecEnabled    types.Bool   `tfsdk:"dnssec_enabled"`
 	Domain           types.String `tfsdk:"domain"`
 	DomainType       types.String `tfsdk:"domain_type"`
-	Enabled          types.Bool   `tfsdk:"enabled"`
 	ExtendedStats    types.Bool   `tfsdk:"extended_stats"`
 	HideBinddata     types.Bool   `tfsdk:"hide_binddata"`
 	InterfaceAuto    types.Bool   `tfsdk:"interface_auto"`
@@ -41,7 +40,6 @@ type unboundServerModel struct {
 	Localservice     types.Bool   `tfsdk:"localservice"`
 	ManualConf       types.Bool   `tfsdk:"manual_conf"`
 	NumThreads       types.Int64  `tfsdk:"num_threads"`
-	Prefetch         types.Bool   `tfsdk:"prefetch"`
 	Protocol         types.String `tfsdk:"protocol"`
 	QueryMinimize    types.Bool   `tfsdk:"query_minimize"`
 	RebindProtection types.String `tfsdk:"rebind_protection"`
@@ -71,7 +69,6 @@ func (r *unboundServerResource) Schema(_ context.Context, _ resource.SchemaReque
 			"dnssec_enabled":    optionalComputedBool("uci option dnssec_enabled."),
 			"domain":            optionalComputedString("uci option domain."),
 			"domain_type":       optionalComputedString("uci option domain_type."),
-			"enabled":           deprecatedOptionalComputedBool("Whether the entry is active.", "Deprecated, removed in v3: nothing reads this. `enabled` is read only on `config zone`; the daemon itself is enabled through procd."),
 			"extended_stats":    optionalComputedBool("uci option extended_stats."),
 			"hide_binddata":     optionalComputedBool("uci option hide_binddata."),
 			"interface_auto":    optionalComputedBool("uci option interface_auto."),
@@ -79,7 +76,6 @@ func (r *unboundServerResource) Schema(_ context.Context, _ resource.SchemaReque
 			"localservice":      optionalComputedBool("uci option localservice."),
 			"manual_conf":       optionalComputedBool("uci option manual_conf."),
 			"num_threads":       optionalComputedInt64("uci option num_threads."),
-			"prefetch":          deprecatedOptionalComputedBool("uci option prefetch.", "Deprecated, removed in v3: nothing reads this. The only similar option is `prefetch_root`, a different feature; unbound's own `prefetch:` directive is derived from `recursion`, which this resource already exposes."),
 			"protocol":          optionalComputedString("uci option protocol."),
 			"query_minimize":    optionalComputedBool("uci option query_minimize."),
 			"rebind_protection": optionalComputedString("uci option rebind_protection."),
@@ -98,7 +94,6 @@ func (r *unboundServerResource) body(ctx context.Context, m unboundServerModel, 
 	putBool(out, "dnssec_enabled", m.DnssecEnabled)
 	putStr(out, "domain", m.Domain)
 	putStr(out, "domain_type", m.DomainType)
-	putBool(out, "enabled", m.Enabled)
 	putBool(out, "extended_stats", m.ExtendedStats)
 	putBool(out, "hide_binddata", m.HideBinddata)
 	putBool(out, "interface_auto", m.InterfaceAuto)
@@ -106,7 +101,6 @@ func (r *unboundServerResource) body(ctx context.Context, m unboundServerModel, 
 	putBool(out, "localservice", m.Localservice)
 	putBool(out, "manual_conf", m.ManualConf)
 	putInt64(out, "num_threads", m.NumThreads)
-	putBool(out, "prefetch", m.Prefetch)
 	putStr(out, "protocol", m.Protocol)
 	putBool(out, "query_minimize", m.QueryMinimize)
 	putStr(out, "rebind_protection", m.RebindProtection)
@@ -125,7 +119,6 @@ func (r *unboundServerResource) read(ctx context.Context, obj map[string]any, m 
 	m.DnssecEnabled = boolVal(obj, "dnssec_enabled")
 	m.Domain = strVal(obj, "domain")
 	m.DomainType = strVal(obj, "domain_type")
-	m.Enabled = boolVal(obj, "enabled")
 	m.ExtendedStats = boolVal(obj, "extended_stats")
 	m.HideBinddata = boolVal(obj, "hide_binddata")
 	m.InterfaceAuto = boolVal(obj, "interface_auto")
@@ -133,7 +126,6 @@ func (r *unboundServerResource) read(ctx context.Context, obj map[string]any, m 
 	m.Localservice = boolVal(obj, "localservice")
 	m.ManualConf = boolVal(obj, "manual_conf")
 	m.NumThreads = int64Val(obj, "num_threads")
-	m.Prefetch = boolVal(obj, "prefetch")
 	m.Protocol = strVal(obj, "protocol")
 	m.QueryMinimize = boolVal(obj, "query_minimize")
 	m.RebindProtection = strVal(obj, "rebind_protection")
@@ -149,6 +141,7 @@ func (r *unboundServerResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return
@@ -192,6 +185,7 @@ func (r *unboundServerResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds)
 	if resp.Diagnostics.HasError() {
 		return

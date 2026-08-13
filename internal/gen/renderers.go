@@ -28,36 +28,6 @@ func resAttr(f field) string {
 			return fmt.Sprintf("%q: schema.StringAttribute{Required: true, Description: %q},", f.Name, f.Desc)
 		}
 	case "optcomp":
-		// Deprecated but still writable: same shape, plus the warning Terraform
-		// raises at plan time. A field cannot be both deprecated and mirrored today.
-		if f.DeprecMsg != "" {
-			if f.Mirror != "" {
-				fail("field %q is both deprecated and mirrored; no emission covers that", f.Name)
-			}
-			switch f.GoType {
-			case "types.List":
-				return fmt.Sprintf("%q: deprecatedOptionalComputedStringList(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
-			case "types.Int64":
-				return fmt.Sprintf("%q: deprecatedOptionalComputedInt64(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
-			case "types.Bool":
-				return fmt.Sprintf("%q: deprecatedOptionalComputedBool(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
-			default:
-				return fmt.Sprintf("%q: deprecatedOptionalComputedString(%q, %q),", f.Name, f.Desc, f.DeprecMsg)
-			}
-		}
-		// A mirrored pair needs the sibling-aware plan modifier instead of a plain
-		// UseStateForUnknown, which would promise a value that changes whenever the
-		// sibling does. Only string and list sides exist today.
-		if f.Mirror != "" {
-			switch f.GoType {
-			case "types.List":
-				return fmt.Sprintf("%q: mirroredStringList(%q, %q),", f.Name, f.Desc, f.Mirror)
-			case "types.String":
-				return fmt.Sprintf("%q: mirroredString(%q, %q),", f.Name, f.Desc, f.Mirror)
-			default:
-				fail("mirrored field %q has unsupported type %s", f.Name, f.GoType)
-			}
-		}
 		switch f.GoType {
 		case "types.List":
 			return fmt.Sprintf("%q: optionalComputedStringList(%q),", f.Name, f.Desc)
@@ -79,18 +49,9 @@ func resAttr(f field) string {
 	case "writeonly":
 		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
 	case "createonly":
-		// A deprecated create-only field is assumed to alias the section id (the
-		// only one today is network_interface.name): relax replacement so dropping
-		// it to migrate to id is non-destructive (deprecatedAliasRequiresReplace).
-		// A future deprecated create-only field that does NOT alias the id must not
-		// reuse this path. A non-deprecated create-only field stays strictly immutable.
-		mod := "stringplanmodifier.RequiresReplace()"
-		dep := ""
-		if f.Deprecated {
-			mod = "deprecatedAliasRequiresReplace()"
-			dep = fmt.Sprintf(" DeprecationMessage: %q,", f.Desc)
-		}
-		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{%s}, Description: %q,%s},", f.Name, mod, f.Desc, dep)
+		// Caller-supplied at create, immutable, never returned, rejected on
+		// PUT/PATCH. Changing it is a new section, so it forces replacement.
+		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: %q},", f.Name, f.Desc)
 	case "computedbool":
 		return fmt.Sprintf("%q: schema.BoolAttribute{Computed: true, Description: %q},", f.Name, f.Desc)
 	default: // computedstring
@@ -174,7 +135,7 @@ func renderResource(r resModel) string {
 		// stringplanmodifier is only referenced by a strict (non-deprecated)
 		// create-only field's RequiresReplace(); a deprecated alias uses the
 		// provider-package deprecatedAliasRequiresReplace() instead.
-		if r.hasStrictCreateOnly() {
+		if r.hasCreateOnly() {
 			p("\t%q", "github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier")
 		}
 	}
@@ -355,6 +316,7 @@ func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[4]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Post(ctx, "/"+%[2]s, body, "")
@@ -383,6 +345,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Put(ctx, "/"+%[2]s+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
@@ -396,6 +359,7 @@ func (r *%[1]sResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	var state %[1]sModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
+	ctx = client.WithWarner(ctx, newDiagsink(&resp.Diagnostics))
 	if err := r.client.Delete(ctx, "/"+%[2]s+"/"+state.ID.ValueString(), state.ETag.ValueString()); err != nil {
 		writeErr(&resp.Diagnostics, "deleting", %[3]q, err)
 	}
@@ -417,6 +381,7 @@ func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[4]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, "")
@@ -445,6 +410,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() { return }
 	ds := newDiagsink(&resp.Diagnostics)
+	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
 	obj, etag, err := r.client.Patch(ctx, %[2]s, body, state.ETag.ValueString())

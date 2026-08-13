@@ -37,7 +37,6 @@ func (d *lldpdConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"enable_cdp":        dsComputedBool("uci option enable_cdp."),
 			"enable_edp":        dsComputedBool("uci option enable_edp."),
 			"enable_fdp":        dsComputedBool("uci option enable_fdp."),
-			"enable_lldpmed":    dsComputedBool("uci option enable_lldpmed."),
 			"enable_sonmp":      dsComputedBool("uci option enable_sonmp."),
 			"interface":         dsComputedStringList("Network interface this entry applies to."),
 			"lldp_capabilities": dsComputedBool("uci option lldp_capabilities."),

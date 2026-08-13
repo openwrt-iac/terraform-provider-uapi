@@ -60,26 +60,28 @@ hand-written specials are skipped by the generator and edited directly.
 ## Conventions that prevent bugs
 
 - **Server-defaulted fields are `Optional + Computed`** with `UseStateForUnknown` (see the `optionalComputed*` helpers). Omitting them must not produce a perpetual diff against the value uapi fills in. New fields that the API defaults or normalizes follow this pattern; only genuinely caller-owned fields are plain `Required`/`Optional`.
-- **Clear-on-omit fields are plain `Optional`** (the `optclear` kind -> `optionalString`, no Computed). Driven solely by the spec's `x-uapi-clear-on-omit` flag (uapi >= 2.2.3), which uapi sets only on caller-owned fields whose `fromUci` reads back null when absent (`section.X ?? null`, nullable type). Removing such a field from config clears the uci option (the value plans to null and the collection PUT drops it). Do NOT make a server-defaulted field clear-on-omit (perpetual non-converging diff); the spec flag and uapi's lint enforce the split. Today: `network_interface.netmask` and `gateway`.
+- **Clear-on-omit fields are plain `Optional`** (the `optclear` kind -> `optionalString`, no Computed). Driven solely by the spec's `x-uapi-clear-on-omit` flag (uapi >= 2.2.3), which uapi sets only on caller-owned fields whose `fromUci` reads back null when absent (`section.X ?? null`, nullable type). Removing such a field from config clears the uci option (the value plans to null and the collection PUT drops it). Do NOT make a server-defaulted field clear-on-omit (perpetual non-converging diff); the spec flag and uapi's lint enforce the split. Today, all on `network_interface`: `netmask`, `gateway`, `broadcast`, `ip6gw`, `ip6prefix`.
 - **`body()` sends only known, non-null attributes.** Unknown computed values are omitted so the server applies its default. The `putX` helpers enforce this.
 - **Updates use `PUT` (full replace),** matching Terraform's "plan is the complete desired state". `PATCH` (merge) is only for the `system` singleton.
 - **`id` is settable at create on collections (uapi >= 2.2.0).** `optionalComputedIDAttribute` makes it `Optional + Computed` with `RequiresReplace` + `UseStateForUnknown`: set it to choose the uci section name, omit it for a server ULID. It is sent create-only (`if create { putStr(out, "id", ...) }`, never on PUT/PATCH). Singletons keep the plain computed `id` (`computedIDAttribute`).
 
-## Forward compatibility (the uapi v1 contract)
+## Forward compatibility (the uapi major contract)
 
-uapi keeps `/api/v1/` additive: it may add response fields, optional request fields, resources,
-error codes, and enum values within v1, and only bumps to `/api/v2/` for breaking changes. The
+uapi keeps a major additive: within `/api/v3/` it may add response fields, optional request fields,
+resources, error codes, and enum values, and only bumps the major for breaking changes (its own
+`docs/versioning.md` enumerates what counts, with named carve-outs). One installation serves exactly
+one major, so a provider major talks to exactly one uapi major. The
 provider depends on that, so preserve these invariants:
 
 - **Read responses into a map and pick known keys.** Never switch to strict struct decoding that
-  errors on unknown fields; uapi adds response fields within v1 and they must be ignored.
+  errors on unknown fields; uapi adds response fields within a major and they must be ignored.
 - **No client-side enum validation.** `target`, `proto`, `encryption`, and friends are plain
-  strings validated server-side, so uapi can add allowed values within v1 without a provider
+  strings validated server-side, so uapi can add allowed values within a major without a provider
   release. Schema descriptions list current values for humans only; do not add enum validators.
 - **Branch on HTTP status, not the error `code` string.** `code`/`message` are surfaced in
   diagnostics, but control flow (e.g. 404 -> RemoveResource) keys off the status only.
 - **Keep the client API-version-agnostic.** The major version lives in the user-supplied
-  `endpoint` path; do not hardcode `/api/v1`.
+  `endpoint` path; do not hardcode `/api/v3`.
 
 **Version numbering:** the provider mirrors uapi. Provider `x.y.*` covers exactly the surface of
 uapi `x.y.*` (major and minor track uapi; patch is the provider's own bugfix line). Tag releases
