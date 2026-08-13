@@ -124,10 +124,11 @@ terraform init -upgrade
 terraform plan
 ```
 
-Use **3.0.1 or later**. Two attributes changed their Terraform type, not just their
-API shape: `uapi_firewall_redirect`'s match selectors became strings, and
-`uapi_dhcp_host.tag` became a list back in 2.5.0. State written before those
-changes is migrated automatically on the first plan.
+Use **3.0.1 or later**. Two attributes changed between a list and a scalar, which
+is the one shape change Terraform cannot decode across: `uapi_firewall_redirect`'s
+match selectors became strings, and `uapi_dhcp_host.tag` became a list back in
+2.5.0. State written before those changes is migrated automatically on the first
+plan.
 
 Provider 3.0.0 itself shipped without those migrations, so a plan on 3.0.0 with
 redirects in state fails to decode prior state and stops before showing a diff,

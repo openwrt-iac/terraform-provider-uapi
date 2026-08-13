@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -152,32 +153,49 @@ func TestUpgradeDhcpHost_tagListIsNoop(t *testing.T) {
 	}
 }
 
-// uapi 2.5.0 corrected two attributes from boolean to string, and shipped no
-// version bump, so prior state holds a real bool where the schema now says
-// string: the same undecodable-state failure as #28, one release earlier.
-func TestUpgradeBoolToStringAttributes(t *testing.T) {
-	t.Run("system.urandom_seed", func(t *testing.T) {
-		s := runUpgrade(t, &systemResource{},
-			`{"id":"system","etag":"\"v1\"","hostname":"router","urandom_seed":true}`)
-		if got := attrString(t, s, "urandom_seed"); got != "<null>" {
-			t.Errorf("urandom_seed = %q, want <null>: a bool encodes no path", got)
+// uci stores multiple tags as one space-separated option and uapi answers with the
+// split list, so a 2.4.x state can hold "lan guest" in a single string.
+func TestUpgradeDhcpHost_tagSpaceSeparated(t *testing.T) {
+	s := runUpgrade(t, &dhcpHostResource{}, `{"id":"h1","managed":true,"etag":"\"v1\"",
+		"ip":"192.168.1.5","macs":["02:00:00:00:00:01"],"tag":"lan guest"}`)
+	p := tftypes.NewAttributePath().WithAttributeName("tag")
+	raw, _, _ := tftypes.WalkAttributePath(s.Raw, p)
+	var list []tftypes.Value
+	if err := raw.(tftypes.Value).As(&list); err != nil {
+		t.Fatalf("tag is not a list: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("tag = %v, want two tags split out of the scalar", list)
+	}
+	for i, want := range []string{"lan", "guest"} {
+		var got string
+		if err := list[i].As(&got); err != nil || got != want {
+			t.Errorf("tag[%d] = %q, want %q", i, got, want)
 		}
-		if got := attrString(t, s, "hostname"); got != "router" {
-			t.Errorf("hostname = %q, want router: other attributes must survive", got)
-		}
-	})
-	t.Run("lldpd_config.lldp_description", func(t *testing.T) {
-		s := runUpgrade(t, &lldpdConfigResource{},
-			`{"id":"lldpd","etag":"\"v1\"","lldp_description":false}`)
-		if got := attrString(t, s, "lldp_description"); got != "<null>" {
-			t.Errorf("lldp_description = %q, want <null>", got)
-		}
-	})
-	t.Run("a real string is left alone", func(t *testing.T) {
-		s := runUpgrade(t, &systemResource{},
-			`{"id":"system","etag":"\"v1\"","urandom_seed":"/etc/urandom.seed"}`)
-		if got := attrString(t, s, "urandom_seed"); got != "/etc/urandom.seed" {
-			t.Errorf("urandom_seed = %q, want the stored path", got)
-		}
-	})
+	}
+}
+
+// Truncating a multi-value selector is correct but must not be silent.
+func TestUpgradeFirewallRedirect_warnsOnTruncation(t *testing.T) {
+	r := &firewallRedirectResource{}
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	resp := &resource.UpgradeStateResponse{State: tfsdk.State{
+		Schema: schemaResp.Schema,
+		Raw:    tftypes.NewValue(schemaResp.Schema.Type().TerraformType(ctx), nil),
+	}}
+	r.UpgradeState(ctx)[0].StateUpgrader(ctx, resource.UpgradeStateRequest{
+		RawState: &tfprotov6.RawState{JSON: []byte(`{"id":"r1","managed":true,"etag":"\"v1\"","target":"DNAT",
+			"match":{"src_zone":"wan","dest_ip":["192.168.1.50","192.168.1.51"]}}`)},
+	}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("upgrade failed: %v", resp.Diagnostics.Errors())
+	}
+	if resp.Diagnostics.WarningsCount() != 1 {
+		t.Fatalf("expected one truncation warning, got %d", resp.Diagnostics.WarningsCount())
+	}
+	if got := resp.Diagnostics.Warnings()[0].Detail(); !strings.Contains(got, "match.dest_ip held 2 values") {
+		t.Errorf("warning should name the field and count, got %q", got)
+	}
 }

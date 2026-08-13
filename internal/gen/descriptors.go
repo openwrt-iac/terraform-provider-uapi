@@ -208,7 +208,7 @@ var descriptors = []descriptor{
 	{Type: "system_timeserver", Schema: "SystemTimeservers", Collection: "system/timeservers", Kind: "collection", Label: "system timeserver", GenDataSource: true},
 	{Type: "system", Schema: "System", Collection: "system", Kind: "singleton", Label: "system settings", GenDataSource: true, Descs: map[string]string{
 		"urandom_seed": "Path the entropy seed is saved to and restored from. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.",
-	}, SchemaVersion: 1},
+	}},
 	{Type: "unbound_server", Schema: "UnboundServer", Collection: "unbound/server", Kind: "singleton", Label: "unbound server", GenDataSource: true},
 	{Type: "unbound_srv", Schema: "UnboundSrv", Collection: "unbound/srv", Kind: "singleton", Label: "unbound srv options", GenDataSource: true},
 	{Type: "unbound_ext", Schema: "UnboundExt", Collection: "unbound/ext", Kind: "singleton", Label: "unbound ext config", GenDataSource: true},
@@ -217,7 +217,7 @@ var descriptors = []descriptor{
 	}},
 	{Type: "lldpd_config", Schema: "LldpdConfig", Collection: "lldpd/config", Kind: "singleton", Label: "lldpd config", GenDataSource: true, Descs: map[string]string{
 		"lldp_description": "System description advertised in LLDP frames. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.",
-	}, SchemaVersion: 1},
+	}},
 	{Type: "prometheus_node_exporter_lua_config", Schema: "PrometheusNodeExporterLuaConfig", Collection: "prometheus_node_exporter_lua/config", Kind: "singleton", Label: "prometheus node_exporter config", GenDataSource: true},
 	// mwan3 (added in uapi 2.0.0-rc3)
 	{Type: "mwan3_interface", Schema: "Mwan3Interfaces", Collection: "mwan3/interfaces", Kind: "collection", Label: "mwan3 interface", GenDataSource: true},

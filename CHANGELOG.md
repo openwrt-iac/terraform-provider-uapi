@@ -20,28 +20,25 @@ configuration change: the state migration runs automatically on the first plan.
   the new schema and failed with a schema mismatch that named neither the field nor
   the remedy.
 
-  Four resources now declare schema version 1 and migrate prior state. The set
-  comes from comparing every generated attribute's Terraform type across v1.2.0,
-  v2.4.1, v2.5.1 and v3.0.0, rather than from the resources that were reported:
+  Two resources now declare schema version 1 and migrate prior state:
 
-  - `uapi_firewall_redirect` (3.0.0): each of the six match selectors collapses to
-    its first element. Lossless, since a longer list never reached the router.
-  - `uapi_dhcp_host` (2.5.0): `tag` becomes a list if it was stored as a string.
-  - `uapi_system` (2.5.0): `urandom_seed` is dropped if it was stored as a boolean.
-  - `uapi_lldpd_config` (2.5.0): `lldp_description` likewise.
+  - `uapi_firewall_redirect` (3.0.0): each of the six `match` selectors collapses to
+    its first element. A longer list never reached the router, since firewall4
+    discarded any redirect writing a uci list, and the upgrade warns if it drops one.
+  - `uapi_dhcp_host` (2.5.0): `tag` becomes a list if it was stored as a string,
+    splitting on whitespace the way uci stores and uapi returns it.
 
-  The last two are dropped rather than converted because the old value cannot be
-  translated: `urandom_seed` is the path the seed is written to, and
-  `lldp_description` is the description advertised in LLDP frames, so a stored
-  `true` never encoded either. Both are Optional+Computed, so the refresh that
-  precedes the next plan fills in what the router actually holds.
-
-  Three of the four were latent since **2.5.0**, which made those type changes with
-  no version bump either.
+  Only the list/scalar boundary needs an upgrader. Terraform's passthrough decoder
+  coerces between JSON scalars, so a stored `true` reads back into a string
+  attribute as `"true"` and `"64"` into a number: the two bool-to-string
+  corrections in 2.5.0 (`system.urandom_seed`, `lldpd_config.lldp_description`) and
+  the 48 string-to-number changes in 2.0.0 were never undecodable, and are left
+  alone rather than routed through a hand-written upgrade path. Measured against
+  `tfprotov6.RawState.Unmarshal`, not assumed.
 
   Version-0 state is ambiguous, since the provider never stamped a version before
-  this release: it may hold the old shape or the new one. Every upgrader normalizes
-  rather than converts, so state written by 3.0.0 passes through untouched.
+  this release: it may hold the old shape or the new one. Both upgraders normalize
+  rather than convert, so state written by 3.0.0 passes through untouched.
 
 ### Notes
 - If you already hit this on 3.0.0, the recovery is `terraform state rm` for **every**
@@ -49,9 +46,9 @@ configuration change: the state migration runs automatically on the first plan.
   time fails: each import re-reads the whole state file, so any remaining undecodable
   entry fails the import too, and a loop in the obvious order reports failure for all
   but the last. Upgrading to 3.0.1 avoids the recovery entirely.
-- Type-shape changes now require a `SchemaVersion` bump in `descriptors.go` plus a
-  `StateUpgrader`; the generator emits the version and `state_upgrades.go` holds the
-  migrations.
+- A type change that crosses the list/scalar boundary now requires a `SchemaVersion`
+  bump in `descriptors.go` plus a `StateUpgrader`; the generator emits the version
+  and `state_upgrades.go` holds the migrations.
 
 ## [3.0.0] - 2026-08-13
 
