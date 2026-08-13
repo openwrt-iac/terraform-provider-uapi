@@ -188,6 +188,9 @@ func renderResource(r resModel) string {
 	p("func (r *%sResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {", r.Camel)
 	p("\tresp.Schema = schema.Schema{")
 	p("\t\tDescription: %q,", titleFirst(r.Label)+".")
+	if r.SchemaVersion > 0 {
+		p("\t\tVersion: %d,", r.SchemaVersion)
+	}
 	p("\t\tAttributes: map[string]schema.Attribute{")
 	if r.Kind == "collection" {
 		p("\t\t\t\"id\": optionalComputedIDAttribute(),")

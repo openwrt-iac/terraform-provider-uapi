@@ -49,6 +49,7 @@ func (r *dhcpHostResource) Configure(_ context.Context, req resource.ConfigureRe
 func (r *dhcpHostResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Dhcp host.",
+		Version:     1,
 		Attributes: map[string]schema.Attribute{
 			"id":        optionalComputedIDAttribute(),
 			"managed":   managedAttribute(),

@@ -6,6 +6,53 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-08-13
+
+Fixes an upgrade blocker in 3.0.0. Upgrading from 3.0.0 or from 2.x needs no
+configuration change: the state migration runs automatically on the first plan.
+
+### Fixed
+- **3.0.0 could not read state written by 2.x, and `plan` stopped before producing
+  anything** (#28). `uapi_firewall_redirect.match`'s address and port selectors
+  changed from lists to strings in 3.0.0, correctly, since firewall4 discards a
+  section that writes a uci list on those options. But the resource still declared
+  schema version 0 and shipped no upgrader, so Terraform decoded 2.x state against
+  the new schema and failed with a schema mismatch that named neither the field nor
+  the remedy.
+
+  Four resources now declare schema version 1 and migrate prior state. The set
+  comes from comparing every generated attribute's Terraform type across v1.2.0,
+  v2.4.1, v2.5.1 and v3.0.0, rather than from the resources that were reported:
+
+  - `uapi_firewall_redirect` (3.0.0): each of the six match selectors collapses to
+    its first element. Lossless, since a longer list never reached the router.
+  - `uapi_dhcp_host` (2.5.0): `tag` becomes a list if it was stored as a string.
+  - `uapi_system` (2.5.0): `urandom_seed` is dropped if it was stored as a boolean.
+  - `uapi_lldpd_config` (2.5.0): `lldp_description` likewise.
+
+  The last two are dropped rather than converted because the old value cannot be
+  translated: `urandom_seed` is the path the seed is written to, and
+  `lldp_description` is the description advertised in LLDP frames, so a stored
+  `true` never encoded either. Both are Optional+Computed, so the refresh that
+  precedes the next plan fills in what the router actually holds.
+
+  Three of the four were latent since **2.5.0**, which made those type changes with
+  no version bump either.
+
+  Version-0 state is ambiguous, since the provider never stamped a version before
+  this release: it may hold the old shape or the new one. Every upgrader normalizes
+  rather than converts, so state written by 3.0.0 passes through untouched.
+
+### Notes
+- If you already hit this on 3.0.0, the recovery is `terraform state rm` for **every**
+  affected resource first, then `import` them back. Removing and importing one at a
+  time fails: each import re-reads the whole state file, so any remaining undecodable
+  entry fails the import too, and a loop in the obvious order reports failure for all
+  but the last. Upgrading to 3.0.1 avoids the recovery entirely.
+- Type-shape changes now require a `SchemaVersion` bump in `descriptors.go` plus a
+  `StateUpgrader`; the generator emits the version and `state_upgrades.go` holds the
+  migrations.
+
 ## [3.0.0] - 2026-08-13
 
 Tracks uapi 3.0.0. **Requires uapi >= 3.0.0**, and provider 2.x cannot talk to a

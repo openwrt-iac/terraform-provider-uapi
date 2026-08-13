@@ -97,6 +97,9 @@ type resModel struct {
 	Nested     *nested
 	GenDS      bool
 	Runtime    string
+	// SchemaVersion mirrors the descriptor's; > 0 emits a schema Version and
+	// requires a matching StateUpgrader (see state_upgrades.go).
+	SchemaVersion int
 }
 
 func (r resModel) hasCreateOnly() bool {
@@ -137,6 +140,7 @@ func buildResource(d descriptor, props, writable map[string]specProp, required [
 		Type: d.Type, Pascal: pascal(d.Type), Camel: camel(d.Type),
 		Collection: d.Collection, Kind: d.Kind, Label: d.Label,
 		GenDS: d.GenDataSource, Runtime: d.Runtime,
+		SchemaVersion: d.SchemaVersion,
 	}
 	// required-ness comes from the spec's top-level `required` array (the
 	// unconditional set). `match` is the nested block, handled via d.Nested.
