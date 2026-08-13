@@ -434,6 +434,54 @@ resource "uapi_network_interface" "clr" {
 	})
 }
 
+// Renumbering an interface must not fail the apply. `ipaddr` is derived by uapi
+// from the first `ipaddrs` entry, so a plan that carries the prior `ipaddr`
+// forward while `ipaddrs` changes ends in "Provider produced inconsistent result
+// after apply" (issue #21, reported against 2.4.0). 3.0.0 made `ipaddr`
+// response-only, emitted as a bare Computed attribute with no
+// UseStateForUnknown, so it plans as unknown and any post-apply value satisfies
+// it. Retiring the mirrored-pair machinery deleted the three tests that covered
+// this, so the scenario went uncovered even though the behaviour is what
+// changed: this asserts the outcome the issue reported, not the mechanism.
+func TestAccNetworkInterface_renumberDoesNotFailApply(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "renum" {
+  id      = "renumif"
+  proto   = "static"
+  ipaddrs = ["192.0.2.4"]
+  netmask = "255.255.255.0"
+}`,
+				Check: resource.TestCheckResourceAttr("uapi_network_interface.renum", "ipaddr", "192.0.2.4"),
+			},
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_network_interface" "renum" {
+  id      = "renumif"
+  proto   = "static"
+  ipaddrs = ["192.0.2.1"]
+  netmask = "255.255.255.0"
+}`,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("uapi_network_interface.renum", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.renum", "ipaddrs.0", "192.0.2.1"),
+					// The derived view has to follow the list, not the prior state.
+					resource.TestCheckResourceAttr("uapi_network_interface.renum", "ipaddr", "192.0.2.1"),
+				),
+			},
+		},
+	})
+}
+
 // TestAccCreateCollisionHint covers the N2 UX: a create whose id collides with an
 // existing section returns 422 (validation_failed + conflict field), and writeErr
 // surfaces an actionable "terraform import" hint rather than a bare error.

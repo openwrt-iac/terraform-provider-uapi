@@ -15,6 +15,11 @@ type descriptor struct {
 	Runtime       string   // "" | "interface" | "wireless": adds a computed runtime block to the data source
 	CreateOnly    []string // fields that are create-time only and immutable (Optional + RequiresReplace, sent only on create, never returned), e.g. an interface `name`
 	Descs         map[string]string
+	// SchemaVersion is emitted as the schema's Version. Bump it when an
+	// attribute's Terraform type changes shape (list <-> string), which makes
+	// prior state undecodable, and add the matching StateUpgrader in
+	// state_upgrades.go. Adding or removing an attribute does not need one.
+	SchemaVersion int
 }
 
 // Desc returns a human description for a field (best-effort; docs only). The
@@ -147,7 +152,7 @@ var descriptors = []descriptor{
 		"name": "Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores.",
 	}},
 	{Type: "firewall_rule", Schema: "FirewallRules", Collection: "firewall/rules", Kind: "collection", Label: "firewall rule", GenDataSource: true, Nested: matchFields(false)},
-	{Type: "firewall_redirect", Schema: "FirewallRedirects", Collection: "firewall/redirects", Kind: "collection", Label: "firewall redirect", GenDataSource: true, Nested: matchFields(true)},
+	{Type: "firewall_redirect", Schema: "FirewallRedirects", Collection: "firewall/redirects", Kind: "collection", Label: "firewall redirect", GenDataSource: true, Nested: matchFields(true), SchemaVersion: 1},
 	{Type: "firewall_forwarding", Schema: "FirewallForwardings", Collection: "firewall/forwardings", Kind: "collection", Label: "firewall forwarding", GenDataSource: true},
 	{Type: "firewall_nat", Schema: "FirewallNat", Collection: "firewall/nat", Kind: "collection", Label: "firewall NAT rule", GenDataSource: true, Nested: natMatchFields(), Descs: map[string]string{
 		"target": "What to do with matched traffic: `SNAT` rewrites the source to `snat_ip`/`snat_port`, `MASQUERADE` rewrites it to the outbound interface address, `ACCEPT` exempts it from source NAT. Defaults to `MASQUERADE`.",
@@ -181,7 +186,7 @@ var descriptors = []descriptor{
 		"name": "Hostname dnsmasq answers for this reservation.",
 		"macs": "MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.",
 		"tag":  "dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar.",
-	}},
+	}, SchemaVersion: 1},
 	{Type: "dhcp_server", Schema: "DhcpServers", Collection: "dhcp/servers", Kind: "collection", Label: "dhcp server", GenDataSource: true},
 	{Type: "dhcp_dnsmasq", Schema: "DhcpDnsmasq", Collection: "dhcp/dnsmasq", Kind: "singleton", Label: "dnsmasq settings", GenDataSource: true},
 	{Type: "dhcp_odhcpd", Schema: "DhcpOdhcpd", Collection: "dhcp/odhcpd", Kind: "singleton", Label: "odhcpd settings", GenDataSource: true},

@@ -124,6 +124,21 @@ terraform init -upgrade
 terraform plan
 ```
 
+Use **3.0.1 or later**. Two attributes changed between a list and a scalar, which
+is the one shape change Terraform cannot decode across: `uapi_firewall_redirect`'s
+match selectors became strings, and `uapi_dhcp_host.tag` became a list back in
+2.5.0. State written before those changes is migrated automatically on the first
+plan.
+
+Provider 3.0.0 itself shipped without those migrations, so a plan on 3.0.0 with
+redirects in state fails to decode prior state and stops before showing a diff,
+naming a schema mismatch rather than the attribute. If you are on 3.0.0 and stuck,
+upgrading to 3.0.1 is the whole fix. Recovering without upgrading means
+`terraform state rm` for **every** affected resource first and then importing them
+back, because each import re-reads the entire state file: while any undecodable
+entry remains, the import fails too, so removing and importing one at a time
+reports failure for all but the last.
+
 ## What to expect on that first plan
 
 **Lists you never set may move from `[]` to null.** uapi 3.0 answers null for an

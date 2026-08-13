@@ -60,6 +60,7 @@ func (r *firewallRedirectResource) Configure(_ context.Context, req resource.Con
 func (r *firewallRedirectResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Firewall redirect.",
+		Version:     1,
 		Attributes: map[string]schema.Attribute{
 			"id":              optionalComputedIDAttribute(),
 			"managed":         managedAttribute(),
