@@ -107,6 +107,18 @@ func listVal(ctx context.Context, m map[string]any, key string) (types.List, dia
 	return types.ListValueFrom(ctx, types.StringType, items)
 }
 
+// listValKeepEmpty is listVal for a read that has the planned or prior value at
+// hand. uci cannot store an empty list, so uapi drops a `[]` on write and reads
+// the absent option back as null. Terraform requires the applied value to equal
+// a configured `[]`, so a known empty prior stays: both mean "no entries".
+func listValKeepEmpty(ctx context.Context, m map[string]any, key string, prior types.List) (types.List, diag.Diagnostics) {
+	v, d := listVal(ctx, m, key)
+	if v.IsNull() && !prior.IsNull() && !prior.IsUnknown() && len(prior.Elements()) == 0 {
+		return prior, d
+	}
+	return v, d
+}
+
 func putStr(m map[string]any, key string, v types.String) {
 	if !v.IsNull() && !v.IsUnknown() {
 		m[key] = v.ValueString()

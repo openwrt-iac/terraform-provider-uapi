@@ -131,13 +131,16 @@ func (r *firewallRuleResource) read(ctx context.Context, obj map[string]any, m *
 		nested = map[string]any{}
 	}
 	nm := &firewallRuleMatch{}
+	if m.Match != nil {
+		*nm = *m.Match
+	}
 	nm.SrcZone = strVal(nested, "src_zone")
 	nm.DestZone = strVal(nested, "dest_zone")
-	nm.SrcIP = diags.list(listVal(ctx, nested, "src_ip"))
-	nm.SrcPort = diags.list(listVal(ctx, nested, "src_port"))
-	nm.DestIP = diags.list(listVal(ctx, nested, "dest_ip"))
-	nm.DestPort = diags.list(listVal(ctx, nested, "dest_port"))
-	nm.Proto = diags.list(listVal(ctx, nested, "proto"))
+	nm.SrcIP = diags.list(listValKeepEmpty(ctx, nested, "src_ip", nm.SrcIP))
+	nm.SrcPort = diags.list(listValKeepEmpty(ctx, nested, "src_port", nm.SrcPort))
+	nm.DestIP = diags.list(listValKeepEmpty(ctx, nested, "dest_ip", nm.DestIP))
+	nm.DestPort = diags.list(listValKeepEmpty(ctx, nested, "dest_port", nm.DestPort))
+	nm.Proto = diags.list(listValKeepEmpty(ctx, nested, "proto", nm.Proto))
 	nm.Family = strVal(nested, "family")
 	nm.Mark = strVal(nested, "mark")
 	nm.Dscp = strVal(nested, "dscp")

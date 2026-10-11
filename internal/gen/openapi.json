@@ -2,11 +2,11 @@
 	"openapi": "3.1.0",
 	"info": {
 		"title": "uapi",
-		"version": "3.0.0",
-		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}` (computed; clients ignore for drift detection).\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.wireguard_peers.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: snapshot, validate, commit, reload, restore-on-failure. `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means the init script's reload action **exited 0**. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - the resource has no reload services\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/raspbeguy/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nNothing is announced yet. Removals only happen in a major and only after a window announced in an earlier minor, so this section is where the next one will appear.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/raspbeguy/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/raspbeguy/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/raspbeguy/uapi/tree/main/docs)",
+		"version": "3.1.0",
+		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}` (computed; clients ignore for drift detection).\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.wireguard_peers.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: snapshot, validate, commit, reload, restore-on-failure. `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means the init script's reload action **exited 0**. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - the resource has no reload services\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/openwrt-iac/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nNothing is announced yet. Removals only happen in a major and only after a window announced in an earlier minor, so this section is where the next one will appear.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/openwrt-iac/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/openwrt-iac/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/openwrt-iac/uapi/tree/main/docs)",
 		"contact": {
 			"name": "uapi",
-			"url": "https://github.com/raspbeguy/uapi"
+			"url": "https://github.com/openwrt-iac/uapi"
 		},
 		"license": {
 			"name": "MIT",
@@ -121,6 +121,10 @@
 			"description": "Manage `/etc/dropbear/authorized_keys` entries by stable id."
 		},
 		{
+			"name": "System / Cron jobs",
+			"description": "Manage `/etc/crontabs/root` entries by stable id, one per line. Lines from packages, comments and environment lines stay as they are."
+		},
+		{
 			"name": "Dropbear / Instances",
 			"description": "Per-instance SSH config (`config dropbear`)."
 		},
@@ -135,6 +139,14 @@
 		{
 			"name": "Unbound / Server",
 			"description": "Recursive DNS server singleton (`config unbound`)."
+		},
+		{
+			"name": "Unbound / Srv",
+			"description": "Directives rendered into unbound's `server:` clause (`config unbound_srv`). Requires the separate `unbound-uci-ext` package, which owns the uci-to-conf renderer and the init script this resource reloads; without it the first write returns `503 init_script_missing`."
+		},
+		{
+			"name": "Unbound / Ext",
+			"description": "Clauses rendered outside `server:`, such as `forward-zone:` or `view:` (`config unbound_ext`). Same install dependency as Unbound / Srv: `unbound-uci-ext` provides the renderer and the init script, and without it the first write returns `503 init_script_missing`."
 		},
 		{
 			"name": "Sqm / Queues",
@@ -296,7 +308,8 @@
 				"System",
 				"System / Timeservers",
 				"System / Password",
-				"System / SSH authorized keys"
+				"System / SSH authorized keys",
+				"System / Cron jobs"
 			]
 		},
 		{
@@ -306,6 +319,8 @@
 				"Uhttpd / Instances",
 				"Uhttpd / Certs",
 				"Unbound / Server",
+				"Unbound / Srv",
+				"Unbound / Ext",
 				"Sqm / Queues",
 				"Snmpd / Agents",
 				"Snmpd / Com2secs",
@@ -22848,6 +22863,248 @@
 				]
 			}
 		},
+		"/system/cron_jobs": {
+			"get": {
+				"summary": "List the entries crond runs from /etc/crontabs/root",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/CronJob"
+									}
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					}
+				},
+				"tags": [
+					"System / Cron jobs"
+				]
+			},
+			"post": {
+				"summary": "Add one cron job and reload cron",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CronJobCreateRequest"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Added",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CronJob"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							},
+							"Idempotent-Replayed": {
+								"$ref": "#/components/headers/IdempotentReplayed"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					},
+					"409": {
+						"$ref": "#/components/responses/Conflict"
+					},
+					"412": {
+						"$ref": "#/components/responses/PreconditionFailed"
+					},
+					"422": {
+						"$ref": "#/components/responses/ValidationFailed"
+					},
+					"423": {
+						"$ref": "#/components/responses/Locked"
+					}
+				},
+				"tags": [
+					"System / Cron jobs"
+				],
+				"parameters": [
+					{
+						"name": "idempotency_key",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						},
+						"description": "Equivalent to the `Idempotency-Key` header, which uhttpd's CGI env strips. Replays the cached response for 24 h; the same key with a different body gives 409."
+					}
+				]
+			}
+		},
+		"/system/cron_jobs/{id}": {
+			"parameters": [
+				{
+					"name": "id",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string",
+						"pattern": "^[a-f0-9]{12}$"
+					}
+				}
+			],
+			"get": {
+				"summary": "Get one cron job by stable id",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CronJob"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					}
+				},
+				"tags": [
+					"System / Cron jobs"
+				]
+			},
+			"delete": {
+				"summary": "Remove every line holding this cron job and reload cron",
+				"responses": {
+					"200": {
+						"description": "Removed; the body is the removed job, with crond's state after the reload",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CronJob"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					},
+					"409": {
+						"$ref": "#/components/responses/Conflict"
+					},
+					"412": {
+						"$ref": "#/components/responses/PreconditionFailed"
+					},
+					"422": {
+						"$ref": "#/components/responses/ValidationFailed"
+					},
+					"423": {
+						"$ref": "#/components/responses/Locked"
+					}
+				},
+				"tags": [
+					"System / Cron jobs"
+				]
+			}
+		},
 		"/healthz": {
 			"get": {
 				"summary": "Liveness check (no auth required)",
@@ -23675,7 +23932,8 @@
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"description": "The installed apk version, such as `3.0.0-r1`. Null in the list response, which does not query versions."
 					},
 					"installed": {
 						"type": "boolean"
@@ -23789,6 +24047,70 @@
 					"comment": {
 						"type": "string",
 						"description": "Optional comment (trailing text on the key line)"
+					}
+				}
+			},
+			"CronJob": {
+				"type": "object",
+				"required": [
+					"id",
+					"schedule",
+					"command",
+					"runtime"
+				],
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[a-f0-9]{12}$",
+						"description": "Stable id: sha256 prefix of `<schedule> <command>`. A change to either gives a new id."
+					},
+					"schedule": {
+						"type": "string",
+						"description": "The five time fields as crond reads them, joined by single spaces."
+					},
+					"command": {
+						"type": "string",
+						"description": "The command as crond runs it: lines ending in `\\` joined to the next, cut at the first `#`, surrounding whitespace stripped."
+					},
+					"runtime": {
+						"type": "object",
+						"readOnly": true,
+						"required": [
+							"crond_running",
+							"runs_as_written"
+						],
+						"properties": {
+							"crond_running": {
+								"type": [
+									"boolean",
+									"null"
+								],
+								"description": "Whether procd reports a running crond. False means no entry runs, whatever the file says: the init script does not start crond while `/etc/crontabs` is empty, and stops it when `system.cronloglevel` is invalid. Null when procd could not be asked."
+							},
+							"runs_as_written": {
+								"type": "boolean",
+								"description": "False when crond runs this schedule differently from how it reads, such as minute 75 (every minute), weekday 7 (every day) or `@daily` (never). uapi refuses such a schedule on write, so only another writer can leave one."
+							}
+						}
+					}
+				}
+			},
+			"CronJobCreateRequest": {
+				"type": "object",
+				"required": [
+					"schedule",
+					"command"
+				],
+				"properties": {
+					"schedule": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Five fields separated by single spaces: minute 0-59, hour 0-23, day 1-31, month 1-12 or jan-dec, weekday 0-6 or sun-sat. Each takes lists, ranges and `*`, and a `/step` after `*` or a range. Refused because OpenWrt's busybox crond does not run them as written: weekday 7, `@daily`-style schedules, and `*/N` in the day field (write `1-31/N`)."
+					},
+					"command": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Shell command run as root. Must not contain `#` or control characters, start or end with whitespace, or end with `\\`: crond would cut, strip or join them, and the entry would read back different."
 					}
 				}
 			},
@@ -28111,7 +28433,7 @@
 							"string",
 							"null"
 						],
-						"description": "Hostname dnsmasq answers for this reservation"
+						"description": "Hostname dnsmasq answers for this reservation. A comma, a double quote, a `#` or a control character is refused, because the name goes into dnsmasq's config line."
 					},
 					"macs": {
 						"type": [
@@ -28159,7 +28481,17 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "dnsmasq tags for this reservation; a request must match all of them. A stored `option tag 'a b'` reads back as an array, because dnsmasq word-splits it the same way."
+						"description": "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). A stored `option tag 'a b'` reads back as an array, because dnsmasq word-splits it the same way. A comma, a double quote, a `#` or a control character is refused."
+					},
+					"match_tag": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						},
+						"description": "dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag), the uci `list match_tag`; `!` negates. Only a tag dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does (measured on dnsmasq 2.93). A scalar `option match_tag` reads as null, because dnsmasq ignores it. A comma, a double quote, a `#`, a control character or a blank value is refused."
 					},
 					"dns": {
 						"type": "boolean",
@@ -28216,7 +28548,7 @@
 							"string",
 							"null"
 						],
-						"description": "Hostname dnsmasq answers for this reservation"
+						"description": "Hostname dnsmasq answers for this reservation. A comma, a double quote, a `#` or a control character is refused, because the name goes into dnsmasq's config line."
 					},
 					"macs": {
 						"type": [
@@ -28264,7 +28596,17 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "dnsmasq tags for this reservation; a request must match all of them. A stored `option tag 'a b'` reads back as an array, because dnsmasq word-splits it the same way."
+						"description": "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). A stored `option tag 'a b'` reads back as an array, because dnsmasq word-splits it the same way. A comma, a double quote, a `#` or a control character is refused."
+					},
+					"match_tag": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						},
+						"description": "dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag), the uci `list match_tag`; `!` negates. Only a tag dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does (measured on dnsmasq 2.93). A scalar `option match_tag` reads as null, because dnsmasq ignores it. A comma, a double quote, a `#`, a control character or a blank value is refused."
 					},
 					"dns": {
 						"type": "boolean",

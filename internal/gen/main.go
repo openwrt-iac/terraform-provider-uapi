@@ -6,9 +6,9 @@
 // structure (match), kind, and labels come from the overlay. Run via
 // `go generate ./...`.
 //
-// Specials (packages, password, authorized_keys, leases, leases6, token,
-// whoami, healthz, diagnostics) and the runtime-bearing interface/wireless data
-// sources are hand-written and NOT generated.
+// Specials (packages, password, authorized_keys, cron_jobs, leases, leases6,
+// token, whoami, healthz, diagnostics) and the runtime-bearing interface/wireless
+// data sources are hand-written and NOT generated.
 package main
 
 import (

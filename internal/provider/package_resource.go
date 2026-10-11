@@ -60,7 +60,7 @@ func (r *packageResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"version": schema.StringAttribute{
 				Computed:    true,
-				Description: "Installed package version.",
+				Description: "Installed apk version, such as `3.0.0-r1`.",
 			},
 			"installed": schema.BoolAttribute{
 				Computed:    true,

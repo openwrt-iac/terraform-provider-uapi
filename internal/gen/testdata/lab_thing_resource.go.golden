@@ -119,7 +119,7 @@ func (r *labThingResource) read(ctx context.Context, obj map[string]any, m *labT
 	m.Name = strVal(obj, "name")
 	m.Note = strVal(obj, "note")
 	// secret is write-only: preserve the planned value (the API never returns it).
-	m.Tags = diags.list(listVal(ctx, obj, "tags"))
+	m.Tags = diags.list(listValKeepEmpty(ctx, obj, "tags", m.Tags))
 	m.Weight = int64Val(obj, "weight")
 	// wgname is create-only: preserve the planned value (the API never returns it).
 	nested, _ := obj["match"].(map[string]any)
@@ -127,8 +127,11 @@ func (r *labThingResource) read(ctx context.Context, obj map[string]any, m *labT
 		nested = map[string]any{}
 	}
 	nm := &labThingMatch{}
+	if m.Match != nil {
+		*nm = *m.Match
+	}
 	nm.K = strVal(nested, "k")
-	nm.Vs = diags.list(listVal(ctx, nested, "vs"))
+	nm.Vs = diags.list(listValKeepEmpty(ctx, nested, "vs", nm.Vs))
 	m.Match = nm
 }
 

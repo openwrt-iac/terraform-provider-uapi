@@ -33,7 +33,7 @@ func (d *packageDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"id":        dsIDAttribute(),
 			"managed":   dsManagedAttribute(),
 			"name":      dsComputedString("apk package name."),
-			"version":   dsComputedString("Installed package version."),
+			"version":   dsComputedString("Installed apk version, such as `3.0.0-r1`."),
 			"installed": dsComputedBool("Whether the package is installed."),
 		},
 	}

@@ -29,6 +29,10 @@ type mockUAPI struct {
 	// a router with nothing wrong sends: the key is present and empty, verified
 	// against a real 2.5.0 build.
 	emptySweep bool
+	// crondStopped makes cron job responses report runtime.crond_running false,
+	// which is what uapi sends when the cron init script exited 0 but procd has
+	// no running crond.
+	crondStopped bool
 }
 
 func newMockUAPI() *mockUAPI {
@@ -76,6 +80,20 @@ func mirrorIpaddr(obj map[string]any) {
 func normalizeStored(coll string, obj map[string]any) {
 	if coll == "/network/interfaces" {
 		mirrorIpaddr(obj)
+	}
+	dropEmptyLists(obj)
+	if match, ok := obj["match"].(map[string]any); ok {
+		dropEmptyLists(match)
+	}
+}
+
+// dropEmptyLists reproduces uci, which cannot store an empty list: uapi drops a
+// `[]` on write and reads the absent option back as null.
+func dropEmptyLists(obj map[string]any) {
+	for k, v := range obj {
+		if list, ok := v.([]any); ok && len(list) == 0 {
+			delete(obj, k)
+		}
 	}
 }
 
@@ -138,6 +156,12 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	case strings.HasPrefix(path, "/system/authorized_keys/"):
 		m.handleAuthKeys(w, r, strings.TrimPrefix(path, "/system/authorized_keys/"))
+		return
+	case path == "/system/cron_jobs":
+		m.handleCronJobs(w, r, "")
+		return
+	case strings.HasPrefix(path, "/system/cron_jobs/"):
+		m.handleCronJobs(w, r, strings.TrimPrefix(path, "/system/cron_jobs/"))
 		return
 	case path == "/tokens" && r.Method == http.MethodPost:
 		body := m.decode(r)
@@ -395,6 +419,54 @@ func (m *mockUAPI) handleAuthKeys(w http.ResponseWriter, r *http.Request, id str
 	case id != "" && r.Method == http.MethodDelete:
 		delete(m.store[coll], id)
 		w.WriteHeader(http.StatusNoContent)
+	default:
+		apiErr(w, http.StatusMethodNotAllowed, "method_not_allowed")
+	}
+}
+
+// handleCronJobs keeps the uapi wire shape: a content-derived id, 409 on a
+// duplicate line, and runtime reporting crond's state on every read and write.
+func (m *mockUAPI) handleCronJobs(w http.ResponseWriter, r *http.Request, id string) {
+	coll := "/system/cron_jobs"
+	if m.store[coll] == nil {
+		m.store[coll] = map[string]map[string]any{}
+	}
+	view := func(obj map[string]any) map[string]any {
+		out := map[string]any{"runtime": map[string]any{"crond_running": !m.crondStopped, "runs_as_written": true}}
+		for k, v := range obj {
+			out[k] = v
+		}
+		return out
+	}
+	switch {
+	case id == "" && r.Method == http.MethodPost:
+		body := m.decode(r)
+		schedule, _ := body["schedule"].(string)
+		command, _ := body["command"].(string)
+		sum := sha256.Sum256([]byte(schedule + " " + command))
+		cid := hex.EncodeToString(sum[:])[:12]
+		if m.store[coll][cid] != nil {
+			writeJSON(w, http.StatusConflict, map[string]any{"code": "conflict", "message": "cron job " + cid + " already present"}, "")
+			return
+		}
+		obj := map[string]any{"id": cid, "schedule": schedule, "command": command}
+		m.store[coll][cid] = obj
+		writeJSON(w, http.StatusOK, view(obj), "")
+	case id != "" && r.Method == http.MethodGet:
+		obj := m.store[coll][id]
+		if obj == nil {
+			apiErr(w, http.StatusNotFound, "not_found")
+			return
+		}
+		writeJSON(w, http.StatusOK, view(obj), "")
+	case id != "" && r.Method == http.MethodDelete:
+		obj := m.store[coll][id]
+		if obj == nil {
+			apiErr(w, http.StatusNotFound, "not_found")
+			return
+		}
+		delete(m.store[coll], id)
+		writeJSON(w, http.StatusOK, view(obj), "")
 	default:
 		apiErr(w, http.StatusMethodNotAllowed, "method_not_allowed")
 	}

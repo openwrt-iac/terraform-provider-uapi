@@ -30,4 +30,4 @@ data "uapi_package" "curl" {
 - `installed` (Boolean) Whether the package is installed.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `name` (String) apk package name.
-- `version` (String) Installed package version.
+- `version` (String) Installed apk version, such as `3.0.0-r1`.

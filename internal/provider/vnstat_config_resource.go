@@ -59,7 +59,7 @@ func (r *vnstatConfigResource) body(ctx context.Context, m vnstatConfigModel, di
 func (r *vnstatConfigResource) read(ctx context.Context, obj map[string]any, m *vnstatConfigModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.Interfaces = diags.list(listVal(ctx, obj, "interfaces"))
+	m.Interfaces = diags.list(listValKeepEmpty(ctx, obj, "interfaces", m.Interfaces))
 }
 
 func (r *vnstatConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

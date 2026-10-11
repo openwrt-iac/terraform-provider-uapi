@@ -87,7 +87,7 @@ func (r *networkDeviceResource) read(ctx context.Context, obj map[string]any, m 
 	m.Macaddr = strVal(obj, "macaddr")
 	m.Mtu = int64Val(obj, "mtu")
 	m.Name = strVal(obj, "name")
-	m.Ports = diags.list(listVal(ctx, obj, "ports"))
+	m.Ports = diags.list(listValKeepEmpty(ctx, obj, "ports", m.Ports))
 	m.Type = strVal(obj, "type")
 	m.Vid = int64Val(obj, "vid")
 }

@@ -34,6 +34,7 @@ type dhcpHostModel struct {
 	Ip        types.String `tfsdk:"ip"`
 	Leasetime types.String `tfsdk:"leasetime"`
 	Macs      types.List   `tfsdk:"macs"`
+	MatchTag  types.List   `tfsdk:"match_tag"`
 	Name      types.String `tfsdk:"name"`
 	Tag       types.List   `tfsdk:"tag"`
 }
@@ -62,8 +63,9 @@ func (r *dhcpHostResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"ip":        optionalComputedString("uci option ip."),
 			"leasetime": optionalComputedString("uci option leasetime."),
 			"macs":      optionalComputedStringList("MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty."),
-			"name":      optionalComputedString("Hostname dnsmasq answers for this reservation."),
-			"tag":       optionalComputedStringList("dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar."),
+			"match_tag": optionalComputedStringList("dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it. Only a tag that dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does. A comma, a double quote, a `#`, a control character or a blank value is refused."),
+			"name":      optionalComputedString("Hostname dnsmasq answers for this reservation. A comma, a double quote, a `#` or a control character is refused, because the name goes into dnsmasq's config line."),
+			"tag":       optionalComputedStringList("dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). This does not restrict the reservation: use `match_tag` for that. A response is always a list, including for a section stored as a space-separated scalar. A comma, a double quote, a `#` or a control character is refused."),
 		},
 	}
 }
@@ -81,6 +83,7 @@ func (r *dhcpHostResource) body(ctx context.Context, m dhcpHostModel, diags *dia
 	putStr(out, "ip", m.Ip)
 	putStr(out, "leasetime", m.Leasetime)
 	putList(ctx, out, "macs", m.Macs, diags.d)
+	putList(ctx, out, "match_tag", m.MatchTag, diags.d)
 	putStr(out, "name", m.Name)
 	putList(ctx, out, "tag", m.Tag, diags.d)
 	return out
@@ -96,9 +99,10 @@ func (r *dhcpHostResource) read(ctx context.Context, obj map[string]any, m *dhcp
 	m.Instance = strVal(obj, "instance")
 	m.Ip = strVal(obj, "ip")
 	m.Leasetime = strVal(obj, "leasetime")
-	m.Macs = diags.list(listVal(ctx, obj, "macs"))
+	m.Macs = diags.list(listValKeepEmpty(ctx, obj, "macs", m.Macs))
+	m.MatchTag = diags.list(listValKeepEmpty(ctx, obj, "match_tag", m.MatchTag))
 	m.Name = strVal(obj, "name")
-	m.Tag = diags.list(listVal(ctx, obj, "tag"))
+	m.Tag = diags.list(listValKeepEmpty(ctx, obj, "tag", m.Tag))
 }
 
 func (r *dhcpHostResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

@@ -249,25 +249,73 @@ output "invalid_count" {
 }
 
 // dhcp/hosts.tag is a list as of uapi 2.5.0: a response is always an array, even
-// for a section stored as a space-separated scalar.
+// for a section stored as a space-separated scalar. match_tag (uapi 3.1.0) is a
+// list too, and dnsmasq reads only the list form, so a single tag stays a list.
 func TestAccDhcpHost_tagList(t *testing.T) {
-	m := newMockUAPI()
-	defer m.Close()
+	providerCfg, closer := accTarget(t)
+	defer closer()
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: accProviders(),
 		Steps: []resource.TestStep{{
-			Config: providerHCL(m.URL) + `
+			Config: providerCfg + `
 resource "uapi_dhcp_host" "h" {
-  name = "printer"
-  macs = ["00:11:22:33:44:55"]
-  tag  = ["red", "blue"]
+  name      = "uapiacc-printer"
+  macs      = ["02:00:00:00:31:01"]
+  tag       = ["red", "blue"]
+  match_tag = ["vc"]
 }`,
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "tag.0", "red"),
 				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "tag.1", "blue"),
-				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "macs.0", "00:11:22:33:44:55"),
+				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "match_tag.#", "1"),
+				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "match_tag.0", "vc"),
+				resource.TestCheckResourceAttr("uapi_dhcp_host.h", "macs.0", "02:00:00:00:31:01"),
 			),
 		}},
+	})
+}
+
+// uci cannot store an empty list, so uapi drops `[]` and reads null back. A
+// configured `[]` must still apply cleanly, which is the only way to clear an
+// Optional+Computed list, flat or inside `match`.
+func TestAccEmptyListClears(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	cfg := func(tags, srcIP string) string {
+		return providerCfg + fmt.Sprintf(`
+resource "uapi_dhcp_host" "h" {
+  macs      = ["02:00:00:00:31:02"]
+  tag       = %[1]s
+  match_tag = %[1]s
+}
+
+resource "uapi_firewall_rule" "r" {
+  target = "ACCEPT"
+  match  = {
+    src_zone = "wan"
+    src_ip   = %[2]s
+  }
+}`, tags, srcIP)
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg(`["vc"]`, `["192.0.2.1"]`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_dhcp_host.h", "match_tag.#", "1"),
+					resource.TestCheckResourceAttr("uapi_firewall_rule.r", "match.src_ip.#", "1"),
+				),
+			},
+			{
+				Config: cfg(`[]`, `[]`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_dhcp_host.h", "tag.#", "0"),
+					resource.TestCheckResourceAttr("uapi_dhcp_host.h", "match_tag.#", "0"),
+					resource.TestCheckResourceAttr("uapi_firewall_rule.r", "match.src_ip.#", "0"),
+				),
+			},
+		},
 	})
 }
 
@@ -616,6 +664,77 @@ resource "uapi_authorized_key" "k" {
 				resource.TestCheckResourceAttr("uapi_authorized_key.k", "comment", "me@host"),
 				resource.TestCheckResourceAttrSet("uapi_authorized_key.k", "id"),
 			),
+		}},
+	})
+}
+
+// A cron job has no update: the id is a hash of the line, so a change to either
+// field is a new job. Import recovers both fields, unlike an authorized key.
+func TestAccCronJob(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	cfg := func(command string) string {
+		return providerCfg + fmt.Sprintf(`
+resource "uapi_cron_job" "j" {
+  schedule = "0 4 1 jan *"
+  command  = %q
+}
+
+data "uapi_cron_job" "j" {
+  id = uapi_cron_job.j.id
+}`, command)
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("true uapiacc-one"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestMatchResourceAttr("uapi_cron_job.j", "id", regexp.MustCompile(`^[a-f0-9]{12}$`)),
+					resource.TestCheckResourceAttr("uapi_cron_job.j", "schedule", "0 4 1 jan *"),
+					resource.TestCheckResourceAttr("uapi_cron_job.j", "command", "true uapiacc-one"),
+					resource.TestCheckResourceAttr("data.uapi_cron_job.j", "command", "true uapiacc-one"),
+					resource.TestCheckResourceAttr("data.uapi_cron_job.j", "runtime.crond_running", "true"),
+					resource.TestCheckResourceAttr("data.uapi_cron_job.j", "runtime.runs_as_written", "true"),
+				),
+			},
+			{
+				ResourceName:      "uapi_cron_job.j",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: cfg("true uapiacc-two"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("uapi_cron_job.j", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.TestCheckResourceAttr("uapi_cron_job.j", "command", "true uapiacc-two"),
+			},
+		},
+	})
+}
+
+// uapi answers 409 for a line the crontab already holds, which a second resource
+// with the same schedule and command hits.
+func TestAccCronJob_duplicate(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerCfg + `
+resource "uapi_cron_job" "a" {
+  schedule = "0 4 1 jan *"
+  command  = "true uapiacc-dup"
+}
+
+resource "uapi_cron_job" "b" {
+  schedule = "0 4 1 jan *"
+  command  = "true uapiacc-dup"
+}`,
+			ExpectError: regexp.MustCompile(`already holds this schedule and command`),
 		}},
 	})
 }

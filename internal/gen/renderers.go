@@ -107,7 +107,7 @@ func readStmt(f field, mv, ov string) string {
 	}
 	switch f.GoType {
 	case "types.List":
-		return fmt.Sprintf("%s.%s = diags.list(listVal(ctx, %s, %q))", mv, f.GoName, ov, f.Name)
+		return fmt.Sprintf("%s.%s = diags.list(listValKeepEmpty(ctx, %s, %q, %s.%s))", mv, f.GoName, ov, f.Name, mv, f.GoName)
 	case "types.Int64":
 		return fmt.Sprintf("%s.%s = int64Val(%s, %q)", mv, f.GoName, ov, f.Name)
 	case "types.Bool":
@@ -282,7 +282,10 @@ func renderResource(r resModel) string {
 		nv := pascal(r.Nested.Name)
 		p("\tnested, _ := obj[%q].(map[string]any)", r.Nested.Name)
 		p("\tif nested == nil { nested = map[string]any{} }")
+		// Start from the planned or prior block so a list read has its prior value
+		// to compare against; every field below is then overwritten from obj.
 		p("\tnm := &%s{}", r.Nested.GoType)
+		p("\tif m.%s != nil { *nm = *m.%s }", nv, nv)
 		for _, f := range r.Nested.Fields {
 			p("\t%s", readStmt(f, "nm", "nested"))
 		}

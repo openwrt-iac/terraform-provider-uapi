@@ -128,7 +128,7 @@ func (r *mwan3InterfaceResource) read(ctx context.Context, obj map[string]any, m
 	m.FailureLatency = int64Val(obj, "failure_latency")
 	m.FailureLoss = int64Val(obj, "failure_loss")
 	m.Family = strVal(obj, "family")
-	m.FlushConntrack = diags.list(listVal(ctx, obj, "flush_conntrack"))
+	m.FlushConntrack = diags.list(listValKeepEmpty(ctx, obj, "flush_conntrack", m.FlushConntrack))
 	m.Interval = int64Val(obj, "interval")
 	m.KeepFailureInterval = boolVal(obj, "keep_failure_interval")
 	m.MaxTtl = int64Val(obj, "max_ttl")
@@ -139,7 +139,7 @@ func (r *mwan3InterfaceResource) read(ctx context.Context, obj map[string]any, m
 	m.Reliability = int64Val(obj, "reliability")
 	m.Size = int64Val(obj, "size")
 	m.Timeout = int64Val(obj, "timeout")
-	m.TrackIp = diags.list(listVal(ctx, obj, "track_ip"))
+	m.TrackIp = diags.list(listValKeepEmpty(ctx, obj, "track_ip", m.TrackIp))
 	m.TrackMethod = strVal(obj, "track_method")
 	m.Up = int64Val(obj, "up")
 }

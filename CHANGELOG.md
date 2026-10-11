@@ -6,6 +6,54 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-11
+
+Tracks uapi 3.1.0. The new resource and field require uapi >= 3.1.0. Everything
+else works against uapi 3.0.
+
+### Added
+- `uapi_cron_job` resource and data source, wrapping `system/cron_jobs`: one line of
+  the root crontab (`/etc/crontabs/root`). uapi keeps every other line byte for byte,
+  so the lines that packages such as `acme` add survive. There is no update endpoint,
+  so a change to `schedule` or `command` replaces the job. The id is a hash of the
+  line, so `terraform import` recovers both fields. The data source also exposes
+  `runtime.crond_running` and `runtime.runs_as_written`.
+- The resource warns when procd reports no running crond after a write or a refresh.
+  The cron init script exits 0 even when crond does not start, so a write that
+  answered 200 can still leave every job idle. It also warns when an imported line
+  does not run as written, such as `*/2` in the day field.
+- `uapi_dhcp_host.match_tag`: dnsmasq tags that a request must carry for the
+  reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it.
+
+### Fixed
+- **A configured empty list failed every apply with "Provider produced inconsistent
+  result after apply".** uci cannot store an empty list, so uapi drops `[]` on write
+  and reads the absent option back as null. Terraform requires the applied value to
+  equal the configured `[]`. Because Optional+Computed lists keep their prior value
+  when you remove them from config, `[]` was the only way to clear one, and it always
+  failed. This affected every list attribute since 3.0.0, flat and inside `match`. A
+  read now keeps a configured empty list when uapi answers null.
+- `uapi_dhcp_host.tag` described the wrong direction. It sets tags on a request that
+  the reservation matches (LuCI's Set Tag). It does not restrict the reservation. Use
+  the new `match_tag` for that.
+- `uapi_package.version` documents the full apk version. uapi 3.1.0 fixed a read that
+  cut most versions to the release suffix (`3.0.0-r1` read as `r1`). The value changes
+  on the first refresh after the router upgrade, with no plan diff.
+
+### Notes
+- uapi 3.1.0 refuses three `uapi_dhcp_host` writes that it accepted before. The
+  provider adds no client-side check, so each one is an apply-time `422`:
+  - An `ip` that another reservation holds. dnsmasq stopped on such a pair, so the
+    router lost DNS and DHCP after a write that answered 200.
+  - A comma, a double quote, a `#` or a control character in `name`, `tag` or
+    `match_tag`. These went into dnsmasq's config line, and a newline in `name` added a
+    dnsmasq directive of its own.
+  - A blank value in `match_tag`.
+- If your configuration sets `tag` to limit a reservation to some clients, it did not
+  do that. Move those tags to `match_tag`. Only a tag that dnsmasq sets from the
+  request before it looks up hosts can match, for example a tag from a `config
+  vendorclass` rule. `known` never matches.
+
 ## [3.0.1] - 2026-08-13
 
 Fixes an upgrade blocker in 3.0.0. Upgrading from 3.0.0 or from 2.x needs no

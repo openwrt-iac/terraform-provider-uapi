@@ -88,7 +88,7 @@ func (r *firewallZoneResource) read(ctx context.Context, obj map[string]any, m *
 	m.Masq = boolVal(obj, "masq")
 	m.MtuFix = boolVal(obj, "mtu_fix")
 	m.Name = strVal(obj, "name")
-	m.Network = diags.list(listVal(ctx, obj, "network"))
+	m.Network = diags.list(listValKeepEmpty(ctx, obj, "network", m.Network))
 	m.OutputPolicy = strVal(obj, "output_policy")
 }
 

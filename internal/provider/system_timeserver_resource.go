@@ -76,7 +76,7 @@ func (r *systemTimeserverResource) read(ctx context.Context, obj map[string]any,
 	m.EnableServer = boolVal(obj, "enable_server")
 	m.Enabled = boolVal(obj, "enabled")
 	m.Interface = strVal(obj, "interface")
-	m.Server = diags.list(listVal(ctx, obj, "server"))
+	m.Server = diags.list(listValKeepEmpty(ctx, obj, "server", m.Server))
 	m.UseDhcp = boolVal(obj, "use_dhcp")
 }
 
