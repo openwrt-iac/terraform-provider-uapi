@@ -93,7 +93,7 @@ func (r *labSingleResource) read(ctx context.Context, obj map[string]any, m *lab
 	m.Name = strVal(obj, "name")
 	m.Note = strVal(obj, "note")
 	// secret is write-only: preserve the planned value (the API never returns it).
-	m.Tags = diags.list(listVal(ctx, obj, "tags"))
+	m.Tags = diags.list(listValKeepEmpty(ctx, obj, "tags", m.Tags))
 	m.Weight = int64Val(obj, "weight")
 	// wgname is create-only: preserve the planned value (the API never returns it).
 }

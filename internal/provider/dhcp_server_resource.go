@@ -94,7 +94,7 @@ func (r *dhcpServerResource) body(ctx context.Context, m dhcpServerModel, diags 
 func (r *dhcpServerResource) read(ctx context.Context, obj map[string]any, m *dhcpServerModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.DhcpOption = diags.list(listVal(ctx, obj, "dhcp_option"))
+	m.DhcpOption = diags.list(listValKeepEmpty(ctx, obj, "dhcp_option", m.DhcpOption))
 	m.Dhcpv6 = strVal(obj, "dhcpv6")
 	m.Domain = strVal(obj, "domain")
 	m.Dynamicdhcp = boolVal(obj, "dynamicdhcp")

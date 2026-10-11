@@ -107,7 +107,7 @@ func (r *dhcpDnsmasqResource) body(ctx context.Context, m dhcpDnsmasqModel, diag
 func (r *dhcpDnsmasqResource) read(ctx context.Context, obj map[string]any, m *dhcpDnsmasqModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.Address = diags.list(listVal(ctx, obj, "address"))
+	m.Address = diags.list(listValKeepEmpty(ctx, obj, "address", m.Address))
 	m.Authoritative = boolVal(obj, "authoritative")
 	m.Boguspriv = boolVal(obj, "boguspriv")
 	m.Cachesize = int64Val(obj, "cachesize")
@@ -123,7 +123,7 @@ func (r *dhcpDnsmasqResource) read(ctx context.Context, obj map[string]any, m *d
 	m.Readethers = boolVal(obj, "readethers")
 	m.RebindProtection = boolVal(obj, "rebind_protection")
 	m.Resolvfile = strVal(obj, "resolvfile")
-	m.Server = diags.list(listVal(ctx, obj, "server"))
+	m.Server = diags.list(listValKeepEmpty(ctx, obj, "server", m.Server))
 }
 
 func (r *dhcpDnsmasqResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

@@ -65,7 +65,7 @@ func (r *mwan3PolicyResource) read(ctx context.Context, obj map[string]any, m *m
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
 	m.LastResort = strVal(obj, "last_resort")
-	m.UseMembers = diags.list(listVal(ctx, obj, "use_members"))
+	m.UseMembers = diags.list(listValKeepEmpty(ctx, obj, "use_members", m.UseMembers))
 }
 
 func (r *mwan3PolicyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

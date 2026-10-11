@@ -90,7 +90,7 @@ func (r *networkWireguardPeerResource) body(ctx context.Context, m networkWiregu
 func (r *networkWireguardPeerResource) read(ctx context.Context, obj map[string]any, m *networkWireguardPeerModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.AllowedIps = diags.list(listVal(ctx, obj, "allowed_ips"))
+	m.AllowedIps = diags.list(listValKeepEmpty(ctx, obj, "allowed_ips", m.AllowedIps))
 	m.Description = strVal(obj, "description")
 	m.Disabled = boolVal(obj, "disabled")
 	m.EndpointHost = strVal(obj, "endpoint_host")

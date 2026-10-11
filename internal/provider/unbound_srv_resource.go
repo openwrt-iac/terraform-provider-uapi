@@ -72,10 +72,10 @@ func (r *unboundSrvResource) read(ctx context.Context, obj map[string]any, m *un
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
 	m.Enabled = boolVal(obj, "enabled")
-	m.InterfaceBind = diags.list(listVal(ctx, obj, "interface_bind"))
-	m.InterfaceOutgoing = diags.list(listVal(ctx, obj, "interface_outgoing"))
+	m.InterfaceBind = diags.list(listValKeepEmpty(ctx, obj, "interface_bind", m.InterfaceBind))
+	m.InterfaceOutgoing = diags.list(listValKeepEmpty(ctx, obj, "interface_outgoing", m.InterfaceOutgoing))
 	m.IpTransparent = boolVal(obj, "ip_transparent")
-	m.SrvLine = diags.list(listVal(ctx, obj, "srv_line"))
+	m.SrvLine = diags.list(listValKeepEmpty(ctx, obj, "srv_line", m.SrvLine))
 }
 
 func (r *unboundSrvResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

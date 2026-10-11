@@ -87,7 +87,7 @@ func (r *lldpdConfigResource) read(ctx context.Context, obj map[string]any, m *l
 	m.EnableEdp = boolVal(obj, "enable_edp")
 	m.EnableFdp = boolVal(obj, "enable_fdp")
 	m.EnableSonmp = boolVal(obj, "enable_sonmp")
-	m.Interface = diags.list(listVal(ctx, obj, "interface"))
+	m.Interface = diags.list(listValKeepEmpty(ctx, obj, "interface", m.Interface))
 	m.LldpCapabilities = boolVal(obj, "lldp_capabilities")
 	m.LldpClass = int64Val(obj, "lldp_class")
 	m.LldpDescription = strVal(obj, "lldp_description")

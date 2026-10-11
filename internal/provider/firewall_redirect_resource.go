@@ -128,13 +128,16 @@ func (r *firewallRedirectResource) read(ctx context.Context, obj map[string]any,
 	m.Name = strVal(obj, "name")
 	m.Reflection = boolVal(obj, "reflection")
 	m.ReflectionSrc = strVal(obj, "reflection_src")
-	m.ReflectionZone = diags.list(listVal(ctx, obj, "reflection_zone"))
+	m.ReflectionZone = diags.list(listValKeepEmpty(ctx, obj, "reflection_zone", m.ReflectionZone))
 	m.Target = strVal(obj, "target")
 	nested, _ := obj["match"].(map[string]any)
 	if nested == nil {
 		nested = map[string]any{}
 	}
 	nm := &firewallRedirectMatch{}
+	if m.Match != nil {
+		*nm = *m.Match
+	}
 	nm.SrcZone = strVal(nested, "src_zone")
 	nm.DestZone = strVal(nested, "dest_zone")
 	nm.SrcIP = strVal(nested, "src_ip")
@@ -143,7 +146,7 @@ func (r *firewallRedirectResource) read(ctx context.Context, obj map[string]any,
 	nm.SrcDip = strVal(nested, "src_dip")
 	nm.DestIP = strVal(nested, "dest_ip")
 	nm.DestPort = strVal(nested, "dest_port")
-	nm.Proto = diags.list(listVal(ctx, nested, "proto"))
+	nm.Proto = diags.list(listValKeepEmpty(ctx, nested, "proto", nm.Proto))
 	nm.Family = strVal(nested, "family")
 	nm.Mark = strVal(nested, "mark")
 	m.Match = nm

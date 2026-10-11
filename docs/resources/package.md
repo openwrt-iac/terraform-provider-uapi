@@ -31,7 +31,7 @@ resource "uapi_package" "curl" {
 - `installed` (Boolean) Whether the package is installed.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `pre_existed` (Boolean) Whether the package was already installed before Terraform managed it. When true, `terraform destroy` does NOT uninstall it (it was not installed by this resource).
-- `version` (String) Installed package version.
+- `version` (String) Installed apk version, such as `3.0.0-r1`.
 
 ## Import
 

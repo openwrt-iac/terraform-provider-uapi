@@ -68,7 +68,7 @@ func (r *networkBridgeVlanResource) read(ctx context.Context, obj map[string]any
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
 	m.Device = strVal(obj, "device")
-	m.Ports = diags.list(listVal(ctx, obj, "ports"))
+	m.Ports = diags.list(listValKeepEmpty(ctx, obj, "ports", m.Ports))
 	m.Vlan = int64Val(obj, "vlan")
 }
 

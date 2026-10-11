@@ -274,6 +274,9 @@ func IsNotFound(err error) bool { return statusIs(err, http.StatusNotFound) }
 // IsPreconditionFailed reports whether err is an API 412 (stale If-Match).
 func IsPreconditionFailed(err error) bool { return statusIs(err, http.StatusPreconditionFailed) }
 
+// IsConflict reports whether err is an API 409, such as a duplicate cron job.
+func IsConflict(err error) bool { return statusIs(err, http.StatusConflict) }
+
 // IsFieldConflict reports whether err is a 422 validation failure carrying a
 // "conflict" field error on the identity fields: a create whose chosen id or
 // name collides with an existing uci section. uapi returns these as

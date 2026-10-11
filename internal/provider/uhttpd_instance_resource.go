@@ -120,11 +120,11 @@ func (r *uhttpdInstanceResource) read(ctx context.Context, obj map[string]any, m
 	m.ErrorPage = strVal(obj, "error_page")
 	m.Home = strVal(obj, "home")
 	m.HttpKeepalive = int64Val(obj, "http_keepalive")
-	m.IndexPage = diags.list(listVal(ctx, obj, "index_page"))
+	m.IndexPage = diags.list(listValKeepEmpty(ctx, obj, "index_page", m.IndexPage))
 	m.Key = strVal(obj, "key")
-	m.ListenHttp = diags.list(listVal(ctx, obj, "listen_http"))
-	m.ListenHttps = diags.list(listVal(ctx, obj, "listen_https"))
-	m.LuaPrefix = diags.list(listVal(ctx, obj, "lua_prefix"))
+	m.ListenHttp = diags.list(listValKeepEmpty(ctx, obj, "listen_http", m.ListenHttp))
+	m.ListenHttps = diags.list(listValKeepEmpty(ctx, obj, "listen_https", m.ListenHttps))
+	m.LuaPrefix = diags.list(listValKeepEmpty(ctx, obj, "lua_prefix", m.LuaPrefix))
 	m.MaxConnections = int64Val(obj, "max_connections")
 	m.MaxRequests = int64Val(obj, "max_requests")
 	m.NetworkTimeout = int64Val(obj, "network_timeout")
@@ -133,7 +133,7 @@ func (r *uhttpdInstanceResource) read(ctx context.Context, obj map[string]any, m
 	m.Rfc1918Filter = boolVal(obj, "rfc1918_filter")
 	m.ScriptTimeout = int64Val(obj, "script_timeout")
 	m.TcpKeepalive = int64Val(obj, "tcp_keepalive")
-	m.UcodePrefix = diags.list(listVal(ctx, obj, "ucode_prefix"))
+	m.UcodePrefix = diags.list(listValKeepEmpty(ctx, obj, "ucode_prefix", m.UcodePrefix))
 }
 
 func (r *uhttpdInstanceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

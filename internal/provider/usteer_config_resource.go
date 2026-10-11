@@ -153,7 +153,7 @@ func (r *usteerConfigResource) read(ctx context.Context, obj map[string]any, m *
 	m.BandSteeringThreshold = int64Val(obj, "band_steering_threshold")
 	m.DebugLevel = int64Val(obj, "debug_level")
 	m.Enabled = boolVal(obj, "enabled")
-	m.EventLogTypes = diags.list(listVal(ctx, obj, "event_log_types"))
+	m.EventLogTypes = diags.list(listValKeepEmpty(ctx, obj, "event_log_types", m.EventLogTypes))
 	m.Ipv6 = boolVal(obj, "ipv6")
 	m.LoadBalancingThreshold = int64Val(obj, "load_balancing_threshold")
 	m.LocalStaTimeout = int64Val(obj, "local_sta_timeout")
@@ -177,7 +177,7 @@ func (r *usteerConfigResource) read(ctx context.Context, obj map[string]any, m *
 	m.RoamTriggerSnr = int64Val(obj, "roam_trigger_snr")
 	m.SeenPolicyTimeout = int64Val(obj, "seen_policy_timeout")
 	m.SignalDiffThreshold = int64Val(obj, "signal_diff_threshold")
-	m.SsidList = diags.list(listVal(ctx, obj, "ssid_list"))
+	m.SsidList = diags.list(listValKeepEmpty(ctx, obj, "ssid_list", m.SsidList))
 	m.StaBlockTimeout = int64Val(obj, "sta_block_timeout")
 	m.Syslog = boolVal(obj, "syslog")
 }

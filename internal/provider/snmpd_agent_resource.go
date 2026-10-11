@@ -61,7 +61,7 @@ func (r *snmpdAgentResource) body(ctx context.Context, m snmpdAgentModel, diags 
 func (r *snmpdAgentResource) read(ctx context.Context, obj map[string]any, m *snmpdAgentModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.Agentaddress = diags.list(listVal(ctx, obj, "agentaddress"))
+	m.Agentaddress = diags.list(listValKeepEmpty(ctx, obj, "agentaddress", m.Agentaddress))
 }
 
 func (r *snmpdAgentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

@@ -110,6 +110,7 @@ func (p *uapiProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewPackageResource,
 		NewPackageFeedResource,
 		NewAuthorizedKeyResource,
+		NewCronJobResource,
 		NewSystemPasswordResource,
 	)
 }
@@ -119,6 +120,7 @@ func (p *uapiProvider) DataSources(_ context.Context) []func() datasource.DataSo
 		NewDHCPLeasesDataSource,
 		NewDHCPLeases6DataSource,
 		NewAuthorizedKeyDataSource,
+		NewCronJobDataSource,
 		NewPackageDataSource,
 		NewPackageFeedDataSource,
 		NewWhoamiDataSource,

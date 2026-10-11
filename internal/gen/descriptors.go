@@ -183,9 +183,10 @@ var descriptors = []descriptor{
 	{Type: "wireless_interface", Schema: "WirelessInterfaces", Collection: "wireless/interfaces", Kind: "collection", Label: "wireless interface", GenDataSource: true, Runtime: "wireless"},
 	// dhcp
 	{Type: "dhcp_host", Schema: "DhcpHosts", Collection: "dhcp/hosts", Kind: "collection", Label: "dhcp host", GenDataSource: true, Descs: map[string]string{
-		"name": "Hostname dnsmasq answers for this reservation.",
-		"macs": "MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.",
-		"tag":  "dnsmasq tags for this reservation; a request must match all of them. A response is always a list, including for a section stored as a space-separated scalar.",
+		"name":      "Hostname dnsmasq answers for this reservation. A comma, a double quote, a `#` or a control character is refused, because the name goes into dnsmasq's config line.",
+		"macs":      "MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.",
+		"tag":       "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). This does not restrict the reservation: use `match_tag` for that. A response is always a list, including for a section stored as a space-separated scalar. A comma, a double quote, a `#` or a control character is refused.",
+		"match_tag": "dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it. Only a tag that dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does. A comma, a double quote, a `#`, a control character or a blank value is refused.",
 	}, SchemaVersion: 1},
 	{Type: "dhcp_server", Schema: "DhcpServers", Collection: "dhcp/servers", Kind: "collection", Label: "dhcp server", GenDataSource: true},
 	{Type: "dhcp_dnsmasq", Schema: "DhcpDnsmasq", Collection: "dhcp/dnsmasq", Kind: "singleton", Label: "dnsmasq settings", GenDataSource: true},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -112,5 +113,35 @@ func TestPutHelpers(t *testing.T) {
 	}
 	if _, ok := out["skip_list"]; ok {
 		t.Error("null list should be omitted")
+	}
+}
+
+func TestListValKeepEmpty(t *testing.T) {
+	ctx := context.Background()
+	empty := types.ListValueMust(types.StringType, []attr.Value{})
+	one := types.ListValueMust(types.StringType, []attr.Value{types.StringValue("a")})
+	cases := []struct {
+		name  string
+		obj   map[string]any
+		prior types.List
+		want  types.List
+	}{
+		{"absent keeps a configured empty list", map[string]any{}, empty, empty},
+		{"null keeps a configured empty list", map[string]any{"k": nil}, empty, empty},
+		{"absent with null prior stays null", map[string]any{}, types.ListNull(types.StringType), types.ListNull(types.StringType)},
+		{"absent with unknown prior is null", map[string]any{}, types.ListUnknown(types.StringType), types.ListNull(types.StringType)},
+		{"absent does not keep a non-empty prior", map[string]any{}, one, types.ListNull(types.StringType)},
+		{"a server value wins over an empty prior", map[string]any{"k": []any{"a"}}, empty, one},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, d := listValKeepEmpty(ctx, c.obj, "k", c.prior)
+			if d.HasError() {
+				t.Fatal(d)
+			}
+			if !got.Equal(c.want) {
+				t.Errorf("got %s, want %s", got, c.want)
+			}
+		})
 	}
 }

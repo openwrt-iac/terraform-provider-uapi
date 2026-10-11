@@ -124,13 +124,16 @@ func (r *firewallNatResource) read(ctx context.Context, obj map[string]any, m *f
 		nested = map[string]any{}
 	}
 	nm := &firewallNatMatch{}
+	if m.Match != nil {
+		*nm = *m.Match
+	}
 	nm.SrcZone = strVal(nested, "src_zone")
 	nm.Device = strVal(nested, "device")
 	nm.SrcIP = strVal(nested, "src_ip")
 	nm.SrcPort = strVal(nested, "src_port")
 	nm.DestIP = strVal(nested, "dest_ip")
 	nm.DestPort = strVal(nested, "dest_port")
-	nm.Proto = diags.list(listVal(ctx, nested, "proto"))
+	nm.Proto = diags.list(listValKeepEmpty(ctx, nested, "proto", nm.Proto))
 	nm.Mark = strVal(nested, "mark")
 	nm.Family = strVal(nested, "family")
 	m.Match = nm

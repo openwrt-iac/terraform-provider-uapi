@@ -63,7 +63,7 @@ func (r *unboundExtResource) read(ctx context.Context, obj map[string]any, m *un
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
 	m.Enabled = boolVal(obj, "enabled")
-	m.ExtLine = diags.list(listVal(ctx, obj, "ext_line"))
+	m.ExtLine = diags.list(listValKeepEmpty(ctx, obj, "ext_line", m.ExtLine))
 }
 
 func (r *unboundExtResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

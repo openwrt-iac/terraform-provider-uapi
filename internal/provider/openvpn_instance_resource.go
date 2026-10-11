@@ -258,10 +258,10 @@ func (r *openvpnInstanceResource) read(ctx context.Context, obj map[string]any, 
 	// pkcs12 is write-only: preserve the planned value (the API never returns it).
 	m.Port = int64Val(obj, "port")
 	m.Proto = strVal(obj, "proto")
-	m.Push = diags.list(listVal(ctx, obj, "push"))
-	m.Remote = diags.list(listVal(ctx, obj, "remote"))
+	m.Push = diags.list(listValKeepEmpty(ctx, obj, "push", m.Push))
+	m.Remote = diags.list(listValKeepEmpty(ctx, obj, "remote", m.Remote))
 	m.RemoteCertTls = strVal(obj, "remote_cert_tls")
-	m.Route = diags.list(listVal(ctx, obj, "route"))
+	m.Route = diags.list(listValKeepEmpty(ctx, obj, "route", m.Route))
 	m.RouteGateway = strVal(obj, "route_gateway")
 	m.Rport = int64Val(obj, "rport")
 	m.Server = strVal(obj, "server")
