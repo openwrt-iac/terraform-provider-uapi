@@ -6,6 +6,58 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.2.0] - TBD
+
+Tracks uapi 3.2.0. **Upgrade the provider and uapi together.** Provider 3.1 fails
+against uapi 3.2 when a `uapi_network_interface` changes `proto`. The new attributes
+require uapi >= 3.2.0. Everything else works against uapi 3.0 and 3.1.
+
+### Added
+- `uapi_network_interface.broadcast_flag`, for proto `dhcp`: uci `broadcast` on a dhcp
+  interface, which makes udhcpc ask the server for broadcast replies (`-B`). `broadcast`
+  stays the static broadcast address. uapi read LuCI's `broadcast '1'` on a dhcp
+  interface as an address, so a PUT of such an interface answered 422.
+- `uapi_network_interface.sourcefilter`, for protos `dhcpv6`, `pppoe` and `ppp`. Set it
+  to `false` for a routed `ip6prefix`: the default route from upstream then has no
+  source, and the downstream subnets of the prefix get a default route (#31).
+- `uapi_network_interface.ip6class` and `ip6weight`, for every proto. They complete the
+  prefix assignment options next to `ip6assign` and `ip6hint`.
+- The new attributes are also on the `uapi_network_interface` data source.
+
+### Fixed
+- **A `proto` change on `uapi_network_interface` failed against uapi 3.2 with 422.**
+  The attributes of the old proto are Optional+Computed, so the plan kept their values
+  from the state and the PUT sent them. Static to dhcp sent `ipaddrs` and `ip6addrs`.
+  Dhcp to static sent `hostname`, `clientid` and `peerdns`. Wireguard to another proto
+  sent `addresses`, `listen_port` and `nohostroute`. The plan now sets to null each
+  attribute that the planned `proto` does not take, unless the configuration sets it.
+  The table comes from the uapi spec. An attribute that the old proto did not take,
+  and the new proto takes, plans as unknown: it read null, and the new proto can read
+  a default there, such as `nohostroute = false` on wireguard. When `proto` is unknown
+  at plan time, all of these attributes plan as unknown (#32).
+- A static interface with `ip6hint` failed with "Provider produced inconsistent result
+  after apply", because uapi stored `ip6hint` only on proto `dhcpv6`. uapi 3.2.0 stores
+  the prefix assignment options on every proto (#31).
+- Descriptions: each `uapi_network_interface` attribute that some protos do not take
+  now names the protos that take it. `metric`, `defaultroute`, `delegate`, `ip4table`,
+  `ip6table`, `ip6assign` and `ip6hint` say that they apply to every proto. `clientid`,
+  `reqprefix`, `listen_port`, `broadcast` and `proto` describe what they hold.
+
+### Notes
+- uapi 3.2.0 refuses, with 422 `conflict`, a value for a `uapi_network_interface`
+  attribute that the proto does not take. The provider now reports it at plan time.
+  Before, uapi answered 200: it kept a static address field such as `ipaddrs` on any
+  proto, where netifd ignores it, and dropped every other such field. If your
+  configuration sets such an attribute, remove it or set it to null. An empty list
+  passes, because uapi stores nothing for it. An empty string does not pass: it reads
+  back null, and the apply would fail.
+- `metric`, `defaultroute`, `delegate`, `ip4table` and `ip6table` now apply to every
+  proto. Before, uapi dropped them on some protos and answered 200. `peerdns` and
+  `reqprefix` now also apply to `pppoe` and `ppp`, and `clientid` to `dhcpv6`.
+- On a proto that uapi does not model, such as `6in4`, every attribute applies except
+  `broadcast_flag`. The spec cannot express that exception, so a `broadcast_flag` on
+  such a proto fails at apply, not at plan.
+
 ## [3.1.0] - 2026-10-11
 
 Tracks uapi 3.1.0. The new resource and field require uapi >= 3.1.0. Everything

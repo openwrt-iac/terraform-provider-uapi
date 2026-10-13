@@ -15,14 +15,28 @@ import (
 const labThingCollection = "lab/things"
 
 var (
-	_ resource.Resource                = &labThingResource{}
-	_ resource.ResourceWithConfigure   = &labThingResource{}
-	_ resource.ResourceWithImportState = &labThingResource{}
+	_ resource.Resource                   = &labThingResource{}
+	_ resource.ResourceWithConfigure      = &labThingResource{}
+	_ resource.ResourceWithImportState    = &labThingResource{}
+	_ resource.ResourceWithValidateConfig = &labThingResource{}
+	_ resource.ResourceWithModifyPlan     = &labThingResource{}
 )
 
 type labThingResource struct{ client *client.Client }
 
 func NewLabThingResource() resource.Resource { return &labThingResource{} }
+
+var labThingScope = fieldScope{Field: "name", Rules: []scopeRule{
+	{Values: []string{"off"}, Fields: []string{"flag", "tags"}},
+}}
+
+func (r *labThingResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	labThingScope.validateConfig(ctx, req, resp)
+}
+
+func (r *labThingResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	labThingScope.modifyPlan(ctx, req, resp)
+}
 
 type labThingModel struct {
 	ID         types.String   `tfsdk:"id"`
@@ -62,13 +76,13 @@ func (r *labThingResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"managed":    managedAttribute(),
 			"etag":       etagAttribute(),
 			"clearable":  optionalString("uci option clearable."),
-			"flag":       optionalComputedBool("uci option flag."),
+			"flag":       optionalComputedBool("uci option flag. Applies only to name `on`."),
 			"has_secret": schema.BoolAttribute{Computed: true, Description: "uci option has_secret."},
 			"lockedname": schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Strict create-only name."},
 			"name":       schema.StringAttribute{Required: true, Description: "Optional section name."},
 			"note":       schema.StringAttribute{Computed: true, Description: "uci option note."},
 			"secret":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "uci option secret."},
-			"tags":       optionalComputedStringList("uci option tags."),
+			"tags":       optionalComputedStringList("uci option tags. Applies only to name `on`."),
 			"weight":     optionalComputedInt64("uci option weight."),
 			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Create-only kernel name."},
 			"match": schema.SingleNestedAttribute{

@@ -2,7 +2,8 @@
 // hand-maintained descriptor overlay (descriptors.go) and emits the uniform
 // CRUD/singleton resource and data-source files for the provider, along with a
 // registration file. Field names and types (string/int64/bool/list), plus the
-// writeOnly/readOnly flags, come straight from the spec; required-ness, nested
+// writeOnly/readOnly flags, come straight from the spec, as does the table of
+// fields that a proto does not take (scope.go); required-ness, nested
 // structure (match), kind, and labels come from the overlay. Run via
 // `go generate ./...`.
 //
@@ -21,12 +22,27 @@ import (
 )
 
 type specProp struct {
-	Type         any    `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
-	WriteOnly    bool   `json:"writeOnly"`
-	ReadOnly     bool   `json:"readOnly"`
-	Description  string `json:"description"`
-	Deprecated   bool   `json:"deprecated"`
-	XClearOnOmit bool   `json:"x-uapi-clear-on-omit"`
+	Type         any      `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
+	WriteOnly    bool     `json:"writeOnly"`
+	ReadOnly     bool     `json:"readOnly"`
+	Description  string   `json:"description"`
+	Deprecated   bool     `json:"deprecated"`
+	XClearOnOmit bool     `json:"x-uapi-clear-on-omit"`
+	Enum         []string `json:"enum"`
+}
+
+// specCond is one `allOf` entry of a request schema: `if` names a discriminator
+// field and the values it matches, `then` constrains other fields.
+type specCond struct {
+	If struct {
+		Properties map[string]struct {
+			Const any      `json:"const"`
+			Enum  []string `json:"enum"`
+		} `json:"properties"`
+	} `json:"if"`
+	Then struct {
+		Properties map[string]specProp `json:"properties"`
+	} `json:"then"`
 }
 
 func main() {
@@ -37,6 +53,7 @@ func main() {
 			Schemas map[string]struct {
 				Properties map[string]specProp `json:"properties"`
 				Required   []string            `json:"required"`
+				AllOf      []specCond          `json:"allOf"`
 			} `json:"schemas"`
 		} `json:"components"`
 	}
@@ -57,6 +74,7 @@ func main() {
 			fail("schema %qRequest not in spec: a resource with no request schema is read-only or removed, and needs no descriptor", d.Schema)
 		}
 		r := buildResource(d, res.Properties, req.Properties, req.Required)
+		applyScope(&r, req.AllOf, req.Properties)
 		writeGo(fmt.Sprintf("internal/provider/%s_resource.go", d.Type), renderResource(r))
 		resCtors = append(resCtors, "New"+r.Pascal+"Resource")
 		writeExample("resources/uapi_"+d.Type, r)
@@ -95,6 +113,7 @@ type resModel struct {
 	Label      string
 	Fields     []field
 	Nested     *nested
+	Scope      *scope
 	GenDS      bool
 	Runtime    string
 	// SchemaVersion mirrors the descriptor's; > 0 emits a schema Version and

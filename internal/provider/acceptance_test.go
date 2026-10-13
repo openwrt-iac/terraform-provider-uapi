@@ -530,6 +530,209 @@ resource "uapi_network_interface" "renum" {
 	})
 }
 
+const wgTestKey = "4TMrf9VJAdq0+HDQRFG9uuRYXTtMmu6PrCwpaomeICk="
+
+// A proto switch must apply with the attributes of the old proto removed from
+// the configuration. They are Optional+Computed, so UseStateForUnknown kept
+// their prior values, the PUT sent them, and uapi >= 3.2.0 refused it with 422
+// (#32). The plan after each step must be empty.
+func TestAccNetworkInterface_protoSwitch(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.sw"
+	iface := func(body string) string {
+		return providerCfg + "resource \"uapi_network_interface\" \"sw\" {\n  id = \"uapiacc_sw\"\n" + body + "}\n"
+	}
+	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),
+	}}
+	static := `  proto   = "static"
+  ipaddrs = ["192.0.2.10"]
+`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(`  proto    = "static"
+  ipaddrs  = ["192.0.2.10"]
+  ip6addrs = ["2001:db8:32::10/64"]
+  netmask  = "255.255.255.0"
+`),
+				Check: resource.TestCheckResourceAttr(n, "ip6addrs.0", "2001:db8:32::10/64"),
+			},
+			{
+				Config: iface(`  proto    = "dhcp"
+  hostname = "uapiacc-sw"
+  clientid = "01020000003201"
+  peerdns  = false
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "hostname", "uapiacc-sw"),
+					resource.TestCheckNoResourceAttr(n, "ipaddrs.#"),
+					resource.TestCheckNoResourceAttr(n, "ip6addrs.#"),
+					resource.TestCheckNoResourceAttr(n, "netmask"),
+				),
+			},
+			{
+				Config:           iface(static),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "ipaddrs.0", "192.0.2.10"),
+					resource.TestCheckNoResourceAttr(n, "hostname"),
+					resource.TestCheckNoResourceAttr(n, "clientid"),
+					resource.TestCheckNoResourceAttr(n, "peerdns"),
+				),
+			},
+			{
+				Config: iface(fmt.Sprintf(`  proto       = "wireguard"
+  private_key = %q
+  listen_port = 51998
+  addresses   = ["10.32.0.1/24"]
+`, wgTestKey)),
+				ConfigPlanChecks: inPlace,
+				Check:            resource.TestCheckResourceAttr(n, "listen_port", "51998"),
+			},
+			{
+				Config:           iface(static),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "addresses.#"),
+					resource.TestCheckNoResourceAttr(n, "listen_port"),
+					resource.TestCheckNoResourceAttr(n, "nohostroute"),
+				),
+			},
+		},
+	})
+}
+
+// The options that netifd reads for every proto must apply on each proto and
+// survive a switch. Before uapi 3.2.0 some protos dropped them behind a 200, and
+// uapi stored ip6hint only on dhcpv6, so a static interface failed the apply
+// with an inconsistent result (#31).
+func TestAccNetworkInterface_coreOptions(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.core"
+	iface := func(body string) string {
+		return providerCfg + `resource "uapi_network_interface" "core" {
+  id           = "uapiacc_core"
+  metric       = 20
+  ip4table     = "100"
+  ip6table     = "100"
+  defaultroute = false
+  delegate     = false
+  ip6assign    = 64
+  ip6hint      = "1"
+  ip6class     = ["local"]
+  ip6weight    = 10
+` + body + "}\n"
+	}
+	core := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr(n, "metric", "20"),
+		resource.TestCheckResourceAttr(n, "ip4table", "100"),
+		resource.TestCheckResourceAttr(n, "ip6table", "100"),
+		resource.TestCheckResourceAttr(n, "defaultroute", "false"),
+		resource.TestCheckResourceAttr(n, "delegate", "false"),
+		resource.TestCheckResourceAttr(n, "ip6assign", "64"),
+		resource.TestCheckResourceAttr(n, "ip6hint", "1"),
+		resource.TestCheckResourceAttr(n, "ip6class.0", "local"),
+		resource.TestCheckResourceAttr(n, "ip6weight", "10"),
+	)
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(`  proto   = "static"
+  ipaddrs = ["192.0.2.11"]
+`),
+				Check: core,
+			},
+			{
+				Config: iface(`  proto        = "dhcpv6"
+  sourcefilter = false
+  reqprefix    = "2001:db8::/56"
+  reqaddress   = "try"
+  clientid     = "00030001020000003202"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(core,
+					resource.TestCheckResourceAttr(n, "sourcefilter", "false"),
+					resource.TestCheckResourceAttr(n, "reqprefix", "2001:db8::/56"),
+					resource.TestCheckNoResourceAttr(n, "ipaddrs.#"),
+				),
+			},
+			{
+				Config: iface(`  proto          = "dhcp"
+  broadcast_flag = true
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(core,
+					resource.TestCheckResourceAttr(n, "broadcast_flag", "true"),
+					resource.TestCheckNoResourceAttr(n, "broadcast"),
+					resource.TestCheckNoResourceAttr(n, "sourcefilter"),
+					resource.TestCheckNoResourceAttr(n, "reqprefix"),
+				),
+			},
+		},
+	})
+}
+
+// A value for an attribute that the proto does not take fails the plan, before
+// uapi can refuse the apply.
+func TestAccNetworkInterface_scopeRefusedAtPlan(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerCfg + `
+resource "uapi_network_interface" "bad" {
+  id       = "uapiacc_bad"
+  proto    = "static"
+  ipaddrs  = ["192.0.2.12"]
+  hostname = "uapiacc-bad"
+  dns      = []
+}`,
+			ExpectError: regexp.MustCompile(`proto "static" does not take hostname`),
+		}},
+	})
+}
+
+// When the proto is unknown at plan time, no prior value is safe to send: the
+// scoped attributes plan as unknown, so the PUT leaves out the static address
+// that a switch to dhcp would have carried.
+func TestAccNetworkInterface_unknownProto(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	cfg := func(proto, addrs string) string {
+		return providerCfg + fmt.Sprintf(`
+resource "terraform_data" "proto" {
+  input = %q
+}
+
+resource "uapi_network_interface" "u" {
+  id    = "uapiacc_unk"
+  proto = terraform_data.proto.output
+%s}
+`, proto, addrs)
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("static", "  ipaddrs = [\"192.0.2.13\"]\n"),
+				Check:  resource.TestCheckResourceAttr("uapi_network_interface.u", "ipaddrs.0", "192.0.2.13"),
+			},
+			{
+				Config: cfg("dhcp", ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.u", "proto", "dhcp"),
+					resource.TestCheckNoResourceAttr("uapi_network_interface.u", "ipaddrs.#"),
+				),
+			},
+		},
+	})
+}
+
 // TestAccCreateCollisionHint covers the N2 UX: a create whose id collides with an
 // existing section returns 422 (validation_failed + conflict field), and writeErr
 // surfaces an actionable "terraform import" hint rather than a bare error.

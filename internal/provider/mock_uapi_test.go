@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -75,10 +76,87 @@ func mirrorIpaddr(obj map[string]any) {
 	delete(obj, "ipaddrs")
 }
 
+// ifaceFieldProtos copies uapi's FIELD_PROTOS (src/resources/network.interfaces.uc
+// as of 3.2.0): the protos that take each field, every other field applying to
+// every proto. It is written out here rather than taken from the generated table,
+// so that a misread of the spec's allOf entries fails the suite.
+var ifaceFieldProtos = map[string][]string{
+	"ipaddr": {"static"}, "ipaddrs": {"static"}, "ip6addrs": {"static"},
+	"netmask": {"static"}, "broadcast": {"static"}, "gateway": {"static"}, "ip6gw": {"static"},
+	"ip6prefix":      {"static", "dhcpv6", "wireguard"},
+	"broadcast_flag": {"dhcp"}, "hostname": {"dhcp"},
+	"clientid":     {"dhcp", "dhcpv6"},
+	"reqaddress":   {"dhcpv6"},
+	"reqprefix":    {"dhcpv6", "pppoe", "ppp"},
+	"sourcefilter": {"dhcpv6", "pppoe", "ppp"},
+	"peerdns":      {"dhcp", "dhcpv6", "pppoe", "ppp", "wwan"},
+	"private_key":  {"wireguard"}, "has_private_key": {"wireguard"}, "listen_port": {"wireguard"},
+	"addresses": {"wireguard"}, "nohostroute": {"wireguard"},
+}
+
+var ifaceProtos = []string{"static", "dhcp", "dhcpv6", "pppoe", "none", "ppp", "wwan", "wireguard"}
+
+// ifaceApplies is uapi's applies(). On a proto that uapi does not model, every
+// field applies except `broadcast_flag` and `has_private_key`, which are the
+// dhcp and wireguard readings of their uci options.
+func ifaceApplies(field, proto string) bool {
+	protos, ok := ifaceFieldProtos[field]
+	if !ok || slices.Contains(protos, proto) {
+		return true
+	}
+	return !slices.Contains(ifaceProtos, proto) && field != "broadcast_flag" && field != "has_private_key"
+}
+
+// ifaceScopeErrors is uapi's 422 for a field that the request names with a value
+// and that the proto does not take. null, "" and [] ask for nothing and pass.
+func ifaceScopeErrors(named map[string]any, proto string) []any {
+	var errs []any
+	for k, v := range named {
+		if v == nil || v == "" || k == "ipaddr" || k == "has_private_key" || ifaceApplies(k, proto) {
+			continue
+		}
+		if list, ok := v.([]any); ok && len(list) == 0 {
+			continue
+		}
+		errs = append(errs, map[string]any{"field": k, "code": "conflict",
+			"message": "applies only when proto is " + strings.Join(ifaceFieldProtos[k], ", ")})
+	}
+	return errs
+}
+
+// scopeRefused writes uapi's 422 and reports true when the request names a field
+// that the interface's proto does not take.
+func scopeRefused(w http.ResponseWriter, coll string, named map[string]any, proto any) bool {
+	if coll != "/network/interfaces" {
+		return false
+	}
+	p, _ := proto.(string)
+	errs := ifaceScopeErrors(named, p)
+	if len(errs) == 0 {
+		return false
+	}
+	writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+		"code": "validation_failed", "message": "Request body failed validation", "errors": errs,
+	}, "")
+	return true
+}
+
 // normalizeStored applies the per-collection server-side shaping the provider has
 // to round-trip against.
 func normalizeStored(coll string, obj map[string]any) {
 	if coll == "/network/interfaces" {
+		// toUci drops what the proto does not take, so a read leaves it out.
+		proto, _ := obj["proto"].(string)
+		for k := range obj {
+			if !ifaceApplies(k, proto) {
+				delete(obj, k)
+			}
+		}
+		// fromUci reads an unset nohostroute through strict_bool, so it is false on
+		// wireguard, where the other protos leave it out.
+		if _, ok := obj["nohostroute"]; !ok && proto == "wireguard" {
+			obj["nohostroute"] = false
+		}
 		mirrorIpaddr(obj)
 	}
 	dropEmptyLists(obj)
@@ -262,6 +340,9 @@ func (m *mockUAPI) decode(r *http.Request) map[string]any {
 
 func (m *mockUAPI) handleCollectionCreate(w http.ResponseWriter, r *http.Request, coll string) {
 	body := m.decode(r)
+	if scopeRefused(w, coll, body, body["proto"]) {
+		return
+	}
 	// Caller-supplied section name (settable id, uapi >= 2.2.0): use it and 409
 	// if it collides; otherwise assign a synthetic id.
 	id, _ := body["id"].(string)
@@ -315,6 +396,13 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 			return
 		}
 		body := m.decode(r)
+		proto := body["proto"]
+		if r.Method == http.MethodPatch && proto == nil {
+			proto = obj["proto"]
+		}
+		if scopeRefused(w, coll, body, proto) {
+			return
+		}
 		if r.Method == http.MethodPut {
 			body["id"] = id
 			body["managed"] = obj["managed"]

@@ -27,41 +27,45 @@ data "uapi_network_interface" "example" {
 
 ### Read-Only
 
-- `addresses` (List of String) uci option addresses.
+- `addresses` (List of String) uci option addresses. Applies only to proto `wireguard`.
 - `auto` (Boolean) uci option auto.
-- `broadcast` (String) uci option broadcast.
-- `clientid` (String) uci option clientid.
-- `defaultroute` (Boolean) uci option defaultroute.
-- `delegate` (Boolean) uci option delegate.
+- `broadcast` (String) IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`. Applies only to proto `static`.
+- `broadcast_flag` (Boolean) Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's "Use broadcast flag". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later. Applies only to proto `dhcp`.
+- `clientid` (String) Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`. Applies only to proto `dhcp` and `dhcpv6`.
+- `defaultroute` (Boolean) Whether to install the default route that the protocol provides. Unset means true. Applies to every proto.
+- `delegate` (Boolean) Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto.
 - `device` (String) Underlying device.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `dns` (List of String) uci option dns.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `gateway` (String) uci option gateway.
+- `gateway` (String) uci option gateway. Applies only to proto `static`.
 - `has_private_key` (Boolean) Whether a private key is configured.
-- `hostname` (String) uci option hostname.
-- `ip4table` (String) uci option ip4table.
-- `ip6addrs` (List of String) uci option ip6addrs.
-- `ip6assign` (Number) uci option ip6assign.
-- `ip6gw` (String) uci option ip6gw.
-- `ip6hint` (String) uci option ip6hint.
+- `hostname` (String) uci option hostname. Applies only to proto `dhcp`.
+- `ip4table` (String) Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.
+- `ip6addrs` (List of String) uci option ip6addrs. Applies only to proto `static`.
+- `ip6assign` (Number) Length of the prefix that this interface takes from a delegated or ULA prefix, such as `64`. Applies to every proto.
+- `ip6class` (List of String) Prefix classes that this interface can take its subnet from: `local` for the ULA prefix, or the name of the interface that received the prefix. Unset means any. Needs uapi 3.2.0 or later.
+- `ip6gw` (String) uci option ip6gw. Applies only to proto `static`.
+- `ip6hint` (String) Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto.
 - `ip6ifaceid` (String) uci option ip6ifaceid.
-- `ip6prefix` (String) uci option ip6prefix.
-- `ip6table` (String) uci option ip6table.
+- `ip6prefix` (String) uci option ip6prefix. Applies only to proto `static`, `dhcpv6` and `wireguard`.
+- `ip6table` (String) Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.
+- `ip6weight` (Number) Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later.
 - `ipaddr` (String) Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.
-- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.
-- `listen_port` (Number) uci option listen_port.
+- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`.
+- `listen_port` (Number) UDP port that WireGuard listens on. Null when the interface has none, and WireGuard then picks a random port. Applies only to proto `wireguard`.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `metric` (Number) uci option metric.
+- `metric` (Number) Metric of the routes that this interface installs without a metric of their own. Applies to every proto.
 - `mtu` (Number) uci option mtu.
-- `netmask` (String) uci option netmask.
-- `nohostroute` (Boolean) uci option nohostroute.
-- `peerdns` (Boolean) uci option peerdns.
+- `netmask` (String) uci option netmask. Applies only to proto `static`.
+- `nohostroute` (Boolean) uci option nohostroute. Applies only to proto `wireguard`.
+- `peerdns` (Boolean) uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`.
 - `private_key` (String, Sensitive) Always null; never returned by the API.
-- `proto` (String) Protocol.
-- `reqaddress` (String) uci option reqaddress.
-- `reqprefix` (String) uci option reqprefix.
+- `proto` (String) Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take.
+- `reqaddress` (String) uci option reqaddress. Applies only to proto `dhcpv6`.
+- `reqprefix` (String) Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
 - `runtime` (Attributes) Live ubus-derived runtime state (read-only; reflects actual operation, not config). (see [below for nested schema](#nestedatt--runtime))
+- `sourcefilter` (Boolean) Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
 
 <a id="nestedatt--runtime"></a>
 ### Nested Schema for `runtime`

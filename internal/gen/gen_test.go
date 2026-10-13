@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"go/format"
 	"os"
@@ -51,6 +52,18 @@ func goldenCases() map[string]string {
 	// both, so every field stays writable and the split is exercised without the
 	// golden output changing shape.
 	cr := buildResource(collection, fixtureProps(), fixtureProps(), []string{"name"})
+	// A scope table switching on `name`: `off` takes neither `flag` nor `tags`.
+	// The entry that only requires a field is skipped, as uapi enforces it.
+	scoped := fixtureProps()
+	scoped["name"] = specProp{Type: "string", Enum: []string{"on", "off"}}
+	var conds []specCond
+	if err := json.Unmarshal([]byte(`[
+		{"if": {"properties": {"name": {"const": "on"}}}, "then": {"required": ["weight"]}},
+		{"if": {"properties": {"name": {"enum": ["off"]}}}, "then": {"properties": {"tags": {"type": "null"}, "flag": {"type": "null"}}}}
+	]`), &conds); err != nil {
+		panic(err)
+	}
+	applyScope(&cr, conds, scoped)
 	// clear-on-omit is collection-only (the singleton guard rejects it), so the
 	// singleton fixture must not carry the clearable field.
 	singleProps := fixtureProps()

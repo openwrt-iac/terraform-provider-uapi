@@ -153,9 +153,16 @@ func renderResource(r resModel) string {
 	p("\t_ resource.Resource = &%sResource{}", r.Camel)
 	p("\t_ resource.ResourceWithConfigure = &%sResource{}", r.Camel)
 	p("\t_ resource.ResourceWithImportState = &%sResource{}", r.Camel)
+	if r.Scope != nil {
+		p("\t_ resource.ResourceWithValidateConfig = &%sResource{}", r.Camel)
+		p("\t_ resource.ResourceWithModifyPlan = &%sResource{}", r.Camel)
+	}
 	p(")\n")
 	p("type %sResource struct{ client *client.Client }\n", r.Camel)
 	p("func New%sResource() resource.Resource { return &%sResource{} }\n", r.Pascal, r.Camel)
+	if r.Scope != nil {
+		p("%s", renderScope(r))
+	}
 
 	// model
 	p("type %sModel struct {", r.Camel)
