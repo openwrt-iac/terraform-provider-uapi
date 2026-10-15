@@ -48,15 +48,15 @@ data "uapi_network_interface" "example" {
 - `ip6gw` (String) uci option ip6gw. Applies only to proto `static`.
 - `ip6hint` (String) Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto.
 - `ip6ifaceid` (String) uci option ip6ifaceid.
-- `ip6prefix` (String) uci option ip6prefix. Applies only to proto `static`, `dhcpv6` and `wireguard`.
+- `ip6prefix` (List of String) IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later. Applies only to proto `static`, `dhcpv6` and `wireguard`.
 - `ip6table` (String) Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.
 - `ip6weight` (Number) Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later.
 - `ipaddr` (String) Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.
 - `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`.
-- `listen_port` (Number) UDP port that WireGuard listens on. Null when the interface has none, and WireGuard then picks a random port. Applies only to proto `wireguard`.
+- `listen_port` (Number) UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port. Applies only to proto `wireguard`.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `metric` (Number) Metric of the routes that this interface installs without a metric of their own. Applies to every proto.
-- `mtu` (Number) uci option mtu.
+- `mtu` (Number) MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384.
 - `netmask` (String) uci option netmask. Applies only to proto `static`.
 - `nohostroute` (Boolean) uci option nohostroute. Applies only to proto `wireguard`.
 - `peerdns` (Boolean) uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`.

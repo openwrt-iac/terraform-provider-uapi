@@ -27,6 +27,7 @@ func fixtureProps() map[string]specProp {
 		"wgname":     {Type: "string", Description: "Create-only kernel name.", Deprecated: true},
 		"lockedname": {Type: "string", Description: "Strict create-only name."},
 		"clearable":  {Type: "string", Description: "Clear-on-omit field.", XClearOnOmit: true},
+		"clearlist":  {Type: []any{"array", "string", "null"}, Description: "Clear-on-omit list.", XClearOnOmit: true},
 	}
 }
 
@@ -68,6 +69,7 @@ func goldenCases() map[string]string {
 	// singleton fixture must not carry the clearable field.
 	singleProps := fixtureProps()
 	delete(singleProps, "clearable")
+	delete(singleProps, "clearlist")
 	sr := buildResource(singleton, singleProps, singleProps, nil)
 	return map[string]string{
 		"lab_thing_resource.go.golden":    renderResource(cr),

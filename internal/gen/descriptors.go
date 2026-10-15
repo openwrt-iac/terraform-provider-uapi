@@ -160,7 +160,7 @@ var descriptors = []descriptor{
 	}},
 	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
-	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface",
+	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", SchemaVersion: 1,
 		// Phrased to read correctly on the data source too, where "set one or the
 		// other" would be meaningless: these state a fact about the API rather than
 		// instructing the reader.
@@ -175,7 +175,9 @@ var descriptors = []descriptor{
 			"clientid":       "Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`.",
 			"reqprefix":      "Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`.",
 			"sourcefilter":   "Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later.",
-			"listen_port":    "UDP port that WireGuard listens on. Null when the interface has none, and WireGuard then picks a random port.",
+			"listen_port":    "UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port.",
+			"ip6prefix":      "IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later.",
+			"mtu":            "MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384.",
 			"metric":         "Metric of the routes that this interface installs without a metric of their own. Applies to every proto.",
 			"defaultroute":   "Whether to install the default route that the protocol provides. Unset means true. Applies to every proto.",
 			"delegate":       "Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto.",

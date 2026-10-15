@@ -17,7 +17,7 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 - An OpenWrt router running **uapi >= 3.0.0** (OpenWrt 25.12+), reachable over HTTP(S).
   `uapi_cron_job` and `uapi_dhcp_host.match_tag` need uapi >= 3.1.0. The
   `uapi_network_interface` attributes `broadcast_flag`, `sourcefilter`, `ip6class` and
-  `ip6weight` need uapi >= 3.2.0.
+  `ip6weight`, and the list form of `ip6prefix`, need uapi >= 3.2.0.
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
 - Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
 
@@ -251,11 +251,16 @@ What that means in practice:
   a newer provider (`1.y`) at an older router (`1.z`, z < y) is the unsupported direction: resources
   or fields the provider expects may not exist there.
 - **Exception: provider 3.1 does not work against uapi 3.2 when an interface changes
-  `proto`.** uapi 3.2.0 refuses a `uapi_network_interface` value for an attribute that the
-  proto does not take. It does this under the carve-out of its versioning rules for a write
-  that gave a state no caller can rely on. Provider 3.1 keeps the attributes of the old
-  proto in the plan, so the PUT of a proto switch fails with 422. Upgrade the provider to
-  3.2 when you upgrade uapi to 3.2.
+  `proto` or has an `ip6prefix`.** uapi 3.2.0 uses two carve-outs of its versioning rules:
+  - It refuses a `uapi_network_interface` value for an attribute that the proto does not
+    take, because such a write gave a state no caller can rely on. Provider 3.1 keeps the
+    attributes of the old proto in the plan, so the PUT of a proto switch fails with 422.
+  - It reads `ip6prefix` as a list, because netifd reads it as one. Provider 3.1 models a
+    string, so the plan shows a change on every interface with a prefix, and the apply
+    fails.
+
+  Upgrade the provider to 3.2 when you upgrade uapi to 3.2, and change `ip6prefix` to a list
+  in your configuration.
 - **Forward compatible within a major by construction.** Responses are decoded into a map and only
   known fields are read into state, so response fields a newer uapi adds are ignored, not errors.
 - **Enum values are documented, not enforced client side.** Fields like `target`, `proto`, and

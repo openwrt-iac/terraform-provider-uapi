@@ -94,6 +94,16 @@ func optionalString(desc string) schema.StringAttribute {
 	}
 }
 
+// optionalStringList is the list form of optionalString: clear-on-omit, so
+// removing it from config plans null and the collection PUT drops it.
+func optionalStringList(desc string) schema.ListAttribute {
+	return schema.ListAttribute{
+		ElementType: types.StringType,
+		Optional:    true,
+		Description: desc,
+	}
+}
+
 func optionalComputedBool(desc string) schema.BoolAttribute {
 	return schema.BoolAttribute{
 		Optional:      true,

@@ -733,6 +733,52 @@ resource "uapi_network_interface" "u" {
 	})
 }
 
+// ip6prefix is a list as of uapi 3.2.0 (#34). uapi stores one prefix as a uci
+// option and several as a uci list, and reads both as an array, so the import
+// step reads back the scalar that the second step stored.
+func TestAccNetworkInterface_ip6prefixList(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.p6"
+	iface := func(prefix string) string {
+		return providerCfg + fmt.Sprintf(`resource "uapi_network_interface" "p6" {
+  id       = "uapiacc_p6"
+  proto    = "static"
+  ip6addrs = ["2001:db8:34::1/64"]
+%s}
+`, prefix)
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(`  ip6prefix = ["2001:db8:340::/48", "2001:db8:341::/48"]` + "\n"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "ip6prefix.#", "2"),
+					resource.TestCheckResourceAttr(n, "ip6prefix.0", "2001:db8:340::/48"),
+					resource.TestCheckResourceAttr(n, "ip6prefix.1", "2001:db8:341::/48"),
+				),
+			},
+			{
+				Config: iface(`  ip6prefix = ["2001:db8:340::/48"]` + "\n"),
+				Check:  resource.TestCheckResourceAttr(n, "ip6prefix.#", "1"),
+			},
+			{
+				ResourceName:      n,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: iface(""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),
+				}},
+				Check: resource.TestCheckNoResourceAttr(n, "ip6prefix.#"),
+			},
+		},
+	})
+}
+
 // TestAccCreateCollisionHint covers the N2 UX: a create whose id collides with an
 // existing section returns 422 (validation_failed + conflict field), and writeErr
 // surfaces an actionable "terraform import" hint rather than a bare error.

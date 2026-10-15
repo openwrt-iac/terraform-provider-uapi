@@ -28,9 +28,7 @@ type scopeRule struct {
 }
 
 // excluded returns the fields that value v does not take. A value that no rule
-// names takes every field. uapi does the same for a proto that it does not
-// model, except that it refuses `broadcast_flag`: the spec cannot express that,
-// so the apply reports it.
+// names takes every field.
 func (s fieldScope) excluded(v string) []string {
 	var out []string
 	for _, r := range s.Rules {

@@ -152,6 +152,15 @@ func normalizeStored(coll string, obj map[string]any) {
 				delete(obj, k)
 			}
 		}
+		// A write may still send ip6prefix as a space-separated string, and a read
+		// is always the list of its words.
+		if s, ok := obj["ip6prefix"].(string); ok {
+			words := []any{}
+			for _, w := range strings.Fields(s) {
+				words = append(words, w)
+			}
+			obj["ip6prefix"] = words
+		}
 		// fromUci reads an unset nohostroute through strict_bool, so it is false on
 		// wireguard, where the other protos leave it out.
 		if _, ok := obj["nohostroute"]; !ok && proto == "wireguard" {

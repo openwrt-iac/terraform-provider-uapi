@@ -67,7 +67,7 @@ type networkInterfaceModel struct {
 	Ip6gw         types.String `tfsdk:"ip6gw"`
 	Ip6hint       types.String `tfsdk:"ip6hint"`
 	Ip6ifaceid    types.String `tfsdk:"ip6ifaceid"`
-	Ip6prefix     types.String `tfsdk:"ip6prefix"`
+	Ip6prefix     types.List   `tfsdk:"ip6prefix"`
 	Ip6table      types.String `tfsdk:"ip6table"`
 	Ip6weight     types.Int64  `tfsdk:"ip6weight"`
 	Ipaddr        types.String `tfsdk:"ipaddr"`
@@ -96,6 +96,7 @@ func (r *networkInterfaceResource) Configure(_ context.Context, req resource.Con
 func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Network interface.",
+		Version:     1,
 		Attributes: map[string]schema.Attribute{
 			"id":              optionalComputedIDAttribute(),
 			"managed":         managedAttribute(),
@@ -120,14 +121,14 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"ip6gw":           optionalString("uci option ip6gw. Applies only to proto `static`."),
 			"ip6hint":         optionalComputedString("Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto."),
 			"ip6ifaceid":      optionalComputedString("uci option ip6ifaceid."),
-			"ip6prefix":       optionalString("uci option ip6prefix. Applies only to proto `static`, `dhcpv6` and `wireguard`."),
+			"ip6prefix":       optionalStringList("IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later. Applies only to proto `static`, `dhcpv6` and `wireguard`."),
 			"ip6table":        optionalComputedString("Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto."),
 			"ip6weight":       optionalComputedInt64("Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later."),
 			"ipaddr":          schema.StringAttribute{Computed: true, Description: "Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address."},
 			"ipaddrs":         optionalComputedStringList("Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`."),
-			"listen_port":     optionalComputedInt64("UDP port that WireGuard listens on. Null when the interface has none, and WireGuard then picks a random port. Applies only to proto `wireguard`."),
+			"listen_port":     optionalComputedInt64("UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port. Applies only to proto `wireguard`."),
 			"metric":          optionalComputedInt64("Metric of the routes that this interface installs without a metric of their own. Applies to every proto."),
-			"mtu":             optionalComputedInt64("uci option mtu."),
+			"mtu":             optionalComputedInt64("MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384."),
 			"netmask":         optionalString("uci option netmask. Applies only to proto `static`."),
 			"nohostroute":     optionalComputedBool("uci option nohostroute. Applies only to proto `wireguard`."),
 			"peerdns":         optionalComputedBool("uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`."),
@@ -164,7 +165,7 @@ func (r *networkInterfaceResource) body(ctx context.Context, m networkInterfaceM
 	putStr(out, "ip6gw", m.Ip6gw)
 	putStr(out, "ip6hint", m.Ip6hint)
 	putStr(out, "ip6ifaceid", m.Ip6ifaceid)
-	putStr(out, "ip6prefix", m.Ip6prefix)
+	putList(ctx, out, "ip6prefix", m.Ip6prefix, diags.d)
 	putStr(out, "ip6table", m.Ip6table)
 	putInt64(out, "ip6weight", m.Ip6weight)
 	putList(ctx, out, "ipaddrs", m.Ipaddrs, diags.d)
@@ -205,7 +206,7 @@ func (r *networkInterfaceResource) read(ctx context.Context, obj map[string]any,
 	m.Ip6gw = strVal(obj, "ip6gw")
 	m.Ip6hint = strVal(obj, "ip6hint")
 	m.Ip6ifaceid = strVal(obj, "ip6ifaceid")
-	m.Ip6prefix = strVal(obj, "ip6prefix")
+	m.Ip6prefix = diags.list(listValKeepEmpty(ctx, obj, "ip6prefix", m.Ip6prefix))
 	m.Ip6table = strVal(obj, "ip6table")
 	m.Ip6weight = int64Val(obj, "ip6weight")
 	m.Ipaddr = strVal(obj, "ipaddr")
