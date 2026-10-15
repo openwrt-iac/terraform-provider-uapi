@@ -160,13 +160,33 @@ var descriptors = []descriptor{
 	}},
 	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
-	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface",
+	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", SchemaVersion: 1,
 		// Phrased to read correctly on the data source too, where "set one or the
 		// other" would be meaningless: these state a fact about the API rather than
 		// instructing the reader.
+		// The generator appends "Applies only to proto ..." to each field that the
+		// spec scopes, so these leave the protos out.
 		Descs: map[string]string{
-			"ipaddr":  "Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.",
-			"ipaddrs": "Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.",
+			"ipaddr":         "Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.",
+			"ipaddrs":        "Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.",
+			"proto":          "Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take.",
+			"broadcast":      "IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`.",
+			"broadcast_flag": "Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's \"Use broadcast flag\". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later.",
+			"clientid":       "Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`.",
+			"reqprefix":      "Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`.",
+			"sourcefilter":   "Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later.",
+			"listen_port":    "UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port.",
+			"ip6prefix":      "IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later.",
+			"mtu":            "MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384.",
+			"metric":         "Metric of the routes that this interface installs without a metric of their own. Applies to every proto.",
+			"defaultroute":   "Whether to install the default route that the protocol provides. Unset means true. Applies to every proto.",
+			"delegate":       "Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto.",
+			"ip4table":       "Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.",
+			"ip6table":       "Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.",
+			"ip6assign":      "Length of the prefix that this interface takes from a delegated or ULA prefix, such as `64`. Applies to every proto.",
+			"ip6hint":        "Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto.",
+			"ip6class":       "Prefix classes that this interface can take its subnet from: `local` for the ULA prefix, or the name of the interface that received the prefix. Unset means any. Needs uapi 3.2.0 or later.",
+			"ip6weight":      "Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later.",
 		}},
 	{Type: "network_device", Schema: "NetworkDevices", Collection: "network/devices", Kind: "collection", Label: "network device", GenDataSource: true, Descs: map[string]string{
 		"name": "Device name as netifd and the kernel see it (`br-lan`, `eth0`).",

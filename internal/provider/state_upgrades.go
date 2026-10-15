@@ -17,8 +17,8 @@ import (
 // changed". The passthrough decoder coerces between JSON scalars: a stored `true`
 // reads back into a string attribute as "true", and "64" into a number. Only the
 // list/scalar boundary actually fails, which is why `firewall_redirect` (list ->
-// string) and `dhcp_host.tag` (string -> list) need upgraders and the two
-// bool -> string corrections in 2.5.0 did not. Measured against
+// string), `dhcp_host.tag` and `network_interface.ip6prefix` (string -> list)
+// need upgraders and the two bool -> string corrections in 2.5.0 did not. Measured against
 // tfprotov6.RawState.Unmarshal rather than assumed.
 //
 // Version 0 is ambiguous, which is what these are written around. The provider
@@ -70,6 +70,27 @@ func firstOfList(m map[string]any, key string) (dropped int) {
 	return len(list) - 1
 }
 
+// wordsOfString splits a string-valued key into a list of its words. uci keeps
+// several values in one space-separated option and uapi answers with the split
+// list, so wrapping the whole string would give one bogus entry. A list (state
+// written after the type change) is left alone.
+func wordsOfString(m map[string]any, key string) {
+	s, ok := m[key].(string)
+	if !ok {
+		return
+	}
+	parts := strings.Fields(s)
+	if len(parts) == 0 {
+		delete(m, key)
+		return
+	}
+	out := make([]any, len(parts))
+	for i, p := range parts {
+		out[i] = p
+	}
+	m[key] = out
+}
+
 // redirectMatchScalars are the match selectors that became scalars. `proto` is
 // deliberately absent: it stays a list.
 var redirectMatchScalars = []string{"src_ip", "src_port", "src_dip", "src_dport", "dest_ip", "dest_port"}
@@ -119,25 +140,41 @@ func (r *dhcpHostResource) UpgradeState(context.Context) map[int64]resource.Stat
 				// The opposite direction, and a release earlier: `tag` was a
 				// string through 2.4.x and became a list in 2.5.0, which also
 				// shipped without a version bump.
-				if s, isString := raw["tag"].(string); isString {
-					// uci stores multiple tags as one space-separated option, and
-					// uapi answers with the split list, so the upgrade has to split
-					// too: wrapping the whole string would produce one bogus tag.
-					parts := strings.Fields(s)
-					if len(parts) == 0 {
-						delete(raw, "tag")
-					} else {
-						out := make([]any, len(parts))
-						for i, p := range parts {
-							out[i] = p
-						}
-						raw["tag"] = out
-					}
-				}
+				wordsOfString(raw, "tag")
 				var m dhcpHostModel
 				ds := newDiagsink(&resp.Diagnostics)
 				r.read(ctx, raw, &m, ds)
 				m.ETag = strVal(raw, "etag")
+				resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+			},
+		},
+	}
+}
+
+func (r *networkInterfaceResource) UpgradeState(context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				raw, ok := rawPriorState(req, resp)
+				if !ok {
+					return
+				}
+				// `ip6prefix` was a string through 3.1.x and became a list in 3.2.0,
+				// because netifd reads it as one. A 3.1 refresh against uapi 3.2
+				// formatted the array it got with %v, so the string can carry Go's
+				// brackets: "[2001:db8::/48 2001:db8:1::/48]". No prefix holds one.
+				if s, ok := raw["ip6prefix"].(string); ok {
+					raw["ip6prefix"] = strings.TrimSuffix(strings.TrimPrefix(s, "["), "]")
+				}
+				wordsOfString(raw, "ip6prefix")
+				var m networkInterfaceModel
+				ds := newDiagsink(&resp.Diagnostics)
+				r.read(ctx, raw, &m, ds)
+				m.ETag = strVal(raw, "etag")
+				// read() keeps the write-only key from the model, which starts
+				// empty here. Without this, every wireguard interface would plan a
+				// change to set its key again.
+				m.PrivateKey = strVal(raw, "private_key")
 				resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 			},
 		},

@@ -39,13 +39,17 @@ func resAttr(f field) string {
 			return fmt.Sprintf("%q: optionalComputedString(%q),", f.Name, f.Desc)
 		}
 	case "optclear":
-		// Plain Optional (clear-on-omit). Only strings are flaggable today; the spec
-		// criterion (`section.X ?? null` + nullable type) precludes lists, so fail
-		// loudly rather than emit a wrong shape if a non-string field gets flagged.
-		if f.GoType != "types.String" {
-			fail("optclear field %q has type %q; only types.String is supported (add a helper)", f.Name, f.GoType)
+		// Plain Optional (clear-on-omit): a string, or a list since uapi 3.2.0 made
+		// network_interface.ip6prefix one. Fail loudly on another type rather than
+		// emit a wrong shape.
+		switch f.GoType {
+		case "types.String":
+			return fmt.Sprintf("%q: optionalString(%q),", f.Name, f.Desc)
+		case "types.List":
+			return fmt.Sprintf("%q: optionalStringList(%q),", f.Name, f.Desc)
 		}
-		return fmt.Sprintf("%q: optionalString(%q),", f.Name, f.Desc)
+		fail("optclear field %q has type %q; only types.String and types.List are supported (add a helper)", f.Name, f.GoType)
+		return ""
 	case "writeonly":
 		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
 	case "createonly":
@@ -153,9 +157,16 @@ func renderResource(r resModel) string {
 	p("\t_ resource.Resource = &%sResource{}", r.Camel)
 	p("\t_ resource.ResourceWithConfigure = &%sResource{}", r.Camel)
 	p("\t_ resource.ResourceWithImportState = &%sResource{}", r.Camel)
+	if r.Scope != nil {
+		p("\t_ resource.ResourceWithValidateConfig = &%sResource{}", r.Camel)
+		p("\t_ resource.ResourceWithModifyPlan = &%sResource{}", r.Camel)
+	}
 	p(")\n")
 	p("type %sResource struct{ client *client.Client }\n", r.Camel)
 	p("func New%sResource() resource.Resource { return &%sResource{} }\n", r.Pascal, r.Camel)
+	if r.Scope != nil {
+		p("%s", renderScope(r))
+	}
 
 	// model
 	p("type %sModel struct {", r.Camel)

@@ -6,6 +6,93 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.2.0] - TBD
+
+Tracks uapi 3.2.0. **Upgrade the provider and uapi together.** Provider 3.1 fails
+against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
+`ip6prefix`. The new attributes and the list form of `ip6prefix` require uapi >=
+3.2.0. Everything else works against uapi 3.0 and 3.1.
+
+### Changed
+- **`uapi_network_interface.ip6prefix` is a list of strings** on the resource and the
+  data source, because netifd and LuCI read it as a list (#34). Change
+  `ip6prefix = "2001:db8::/48"` to `ip6prefix = ["2001:db8::/48"]`, or the plan fails
+  with a type error. The state migrates on the first plan: a string becomes the list of
+  its space-separated words. This includes a state that provider 3.1 refreshed against
+  uapi 3.2, which holds the array as text, such as `"[2001:db8::/48]"`. Removing the attribute from the configuration still
+  clears it. uapi stores one prefix as a uci option and several as a uci list, and it
+  reads both as a list.
+
+### Added
+- `uapi_network_interface.broadcast_flag`, for proto `dhcp`: uci `broadcast` on a dhcp
+  interface, which makes udhcpc ask the server for broadcast replies (`-B`). `broadcast`
+  stays the static broadcast address. uapi read LuCI's `broadcast '1'` on a dhcp
+  interface as an address, so a PUT of such an interface answered 422.
+- `uapi_network_interface.sourcefilter`, for protos `dhcpv6`, `pppoe` and `ppp`. Set it
+  to `false` for a routed `ip6prefix`: the default route from upstream then has no
+  source, and the downstream subnets of the prefix get a default route (#31).
+- `uapi_network_interface.ip6class` and `ip6weight`, for every proto. They complete the
+  prefix assignment options next to `ip6assign` and `ip6hint`.
+- The new attributes are also on the `uapi_network_interface` data source.
+
+### Fixed
+- **A `proto` change on `uapi_network_interface` failed against uapi 3.2 with 422.**
+  The attributes of the old proto are Optional+Computed, so the plan kept their values
+  from the state and the PUT sent them. Static to dhcp sent `ipaddrs` and `ip6addrs`.
+  Dhcp to static sent `hostname`, `clientid` and `peerdns`. Wireguard to another proto
+  sent `addresses`, `listen_port` and `nohostroute`. The plan now sets to null each
+  attribute that the planned `proto` does not take, unless the configuration sets it.
+  The table comes from the uapi spec. An attribute that the old proto did not take,
+  and the new proto takes, plans as unknown: it read null, and the new proto can read
+  a default there, such as `nohostroute = false` on wireguard. When `proto` is unknown
+  at plan time, all of these attributes plan as unknown (#32).
+- A static interface with `ip6hint` failed with "Provider produced inconsistent result
+  after apply", because uapi stored `ip6hint` only on proto `dhcpv6`. uapi 3.2.0 stores
+  the prefix assignment options on every proto (#31).
+- Descriptions: each `uapi_network_interface` attribute that some protos do not take
+  now names the protos that take it. `metric`, `defaultroute`, `delegate`, `ip4table`,
+  `ip6table`, `ip6assign` and `ip6hint` say that they apply to every proto. `clientid`,
+  `reqprefix`, `listen_port`, `broadcast` and `proto` describe what they hold.
+
+### Notes
+- uapi 3.2.0 refuses, with 422 `conflict`, a value for a `uapi_network_interface`
+  attribute that the proto does not take. The provider now reports it at plan time.
+  Before, uapi answered 200: it kept a static address field such as `ipaddrs` on any
+  proto, where netifd ignores it, and dropped every other such field. If your
+  configuration sets such an attribute, remove it or set it to null. An empty list
+  passes, because uapi stores nothing for it. An empty string does not pass: it reads
+  back null, and the apply would fail.
+- `metric`, `defaultroute`, `delegate`, `ip4table` and `ip6table` now apply to every
+  proto. Before, uapi dropped them on some protos and answered 200. `peerdns` and
+  `reqprefix` now also apply to `pppoe` and `ppp`, and `clientid` to `dhcpv6`.
+- uapi reads an interface whose proto it does not model, such as a `6in4` tunnel that
+  LuCI created, but refuses every PUT of it with 422 `not_in_enum` on `proto`. The data
+  source can read such an interface. The resource can import it, but any later change
+  fails at apply.
+- uapi 3.2.0 refuses more writes that it accepted before. The provider adds no
+  client-side check, so each one is an apply-time `422`:
+  - `mtu` below 68 on `uapi_network_interface` and `uapi_network_device`. netifd
+    ignores such a value. On proto `ppp` and `pppoe`, `mtu` must also be from 128 to
+    16384, because pppd refuses other values.
+  - `listen_port = -1` on `uapi_network_interface`. uapi reads -1 when uci holds a
+    service name that does not resolve, and wireguard then cannot bring the interface
+    up. Set a port.
+  - `table = 0` on `uapi_network_route` and `lookup = 0` on `uapi_network_rule`,
+    because netifd cannot resolve table 0.
+  - A `uapi_network_rule` `goto` that the kernel refuses: with an action other than
+    goto, or one that does not jump past `priority`.
+- A section that already stores such a value reads it as it is, and uapi refuses every
+  write to that section until the value is fixed. For `mtu` and `table`,
+  `uapi_diagnostics` with `validate = true` lists these sections.
+- uapi 3.2.0 also reads some network values as netifd reads them:
+  - An integer in hex or octal, such as `metric '0x10'`, reads as its value.
+  - A scalar `dns`, `ipaddr`, `ip6addr`, wireguard `addresses`, device or bridge VLAN
+    `ports`, or peer `allowed_ips` with several words reads as one entry per word.
+  - A table name in a route or a rule reads as its id.
+
+  The first refresh after the router upgrade can change these values in state. A plan
+  shows a change only where the configuration differs from the value that netifd uses.
+
 ## [3.1.0] - 2026-10-11
 
 Tracks uapi 3.1.0. The new resource and field require uapi >= 3.1.0. Everything

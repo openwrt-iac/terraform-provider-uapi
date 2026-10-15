@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"go/format"
 	"os"
@@ -26,6 +27,7 @@ func fixtureProps() map[string]specProp {
 		"wgname":     {Type: "string", Description: "Create-only kernel name.", Deprecated: true},
 		"lockedname": {Type: "string", Description: "Strict create-only name."},
 		"clearable":  {Type: "string", Description: "Clear-on-omit field.", XClearOnOmit: true},
+		"clearlist":  {Type: []any{"array", "string", "null"}, Description: "Clear-on-omit list.", XClearOnOmit: true},
 	}
 }
 
@@ -51,10 +53,23 @@ func goldenCases() map[string]string {
 	// both, so every field stays writable and the split is exercised without the
 	// golden output changing shape.
 	cr := buildResource(collection, fixtureProps(), fixtureProps(), []string{"name"})
+	// A scope table switching on `name`: `off` takes neither `flag` nor `tags`.
+	// The entry that only requires a field is skipped, as uapi enforces it.
+	scoped := fixtureProps()
+	scoped["name"] = specProp{Type: "string", Enum: []string{"on", "off"}}
+	var conds []specCond
+	if err := json.Unmarshal([]byte(`[
+		{"if": {"properties": {"name": {"const": "on"}}}, "then": {"required": ["weight"]}},
+		{"if": {"properties": {"name": {"enum": ["off"]}}}, "then": {"properties": {"tags": {"type": "null"}, "flag": {"type": "null"}}}}
+	]`), &conds); err != nil {
+		panic(err)
+	}
+	applyScope(&cr, conds, scoped)
 	// clear-on-omit is collection-only (the singleton guard rejects it), so the
 	// singleton fixture must not carry the clearable field.
 	singleProps := fixtureProps()
 	delete(singleProps, "clearable")
+	delete(singleProps, "clearlist")
 	sr := buildResource(singleton, singleProps, singleProps, nil)
 	return map[string]string{
 		"lab_thing_resource.go.golden":    renderResource(cr),

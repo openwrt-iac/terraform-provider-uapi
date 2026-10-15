@@ -18,6 +18,7 @@ type networkInterfaceDSModel struct {
 	Addresses     types.List                    `tfsdk:"addresses"`
 	Auto          types.Bool                    `tfsdk:"auto"`
 	Broadcast     types.String                  `tfsdk:"broadcast"`
+	BroadcastFlag types.Bool                    `tfsdk:"broadcast_flag"`
 	Clientid      types.String                  `tfsdk:"clientid"`
 	Defaultroute  types.Bool                    `tfsdk:"defaultroute"`
 	Delegate      types.Bool                    `tfsdk:"delegate"`
@@ -30,11 +31,13 @@ type networkInterfaceDSModel struct {
 	Ip4table      types.String                  `tfsdk:"ip4table"`
 	Ip6addrs      types.List                    `tfsdk:"ip6addrs"`
 	Ip6assign     types.Int64                   `tfsdk:"ip6assign"`
+	Ip6class      types.List                    `tfsdk:"ip6class"`
 	Ip6gw         types.String                  `tfsdk:"ip6gw"`
 	Ip6hint       types.String                  `tfsdk:"ip6hint"`
 	Ip6ifaceid    types.String                  `tfsdk:"ip6ifaceid"`
-	Ip6prefix     types.String                  `tfsdk:"ip6prefix"`
+	Ip6prefix     types.List                    `tfsdk:"ip6prefix"`
 	Ip6table      types.String                  `tfsdk:"ip6table"`
+	Ip6weight     types.Int64                   `tfsdk:"ip6weight"`
 	Ipaddr        types.String                  `tfsdk:"ipaddr"`
 	Ipaddrs       types.List                    `tfsdk:"ipaddrs"`
 	ListenPort    types.Int64                   `tfsdk:"listen_port"`
@@ -47,6 +50,7 @@ type networkInterfaceDSModel struct {
 	Proto         types.String                  `tfsdk:"proto"`
 	Reqaddress    types.String                  `tfsdk:"reqaddress"`
 	Reqprefix     types.String                  `tfsdk:"reqprefix"`
+	Sourcefilter  types.Bool                    `tfsdk:"sourcefilter"`
 	Runtime       *networkInterfaceRuntimeModel `tfsdk:"runtime"`
 }
 
@@ -74,38 +78,42 @@ func (d *networkInterfaceDataSource) Schema(_ context.Context, _ datasource.Sche
 			"id":              dsIDAttribute(),
 			"managed":         dsManagedAttribute(),
 			"etag":            dsComputedString("Opaque ETag of the resource's current state."),
-			"addresses":       dsComputedStringList("uci option addresses."),
+			"addresses":       dsComputedStringList("uci option addresses. Applies only to proto `wireguard`."),
 			"auto":            dsComputedBool("uci option auto."),
-			"broadcast":       dsComputedString("uci option broadcast."),
-			"clientid":        dsComputedString("uci option clientid."),
-			"defaultroute":    dsComputedBool("uci option defaultroute."),
-			"delegate":        dsComputedBool("uci option delegate."),
+			"broadcast":       dsComputedString("IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`. Applies only to proto `static`."),
+			"broadcast_flag":  dsComputedBool("Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's \"Use broadcast flag\". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later. Applies only to proto `dhcp`."),
+			"clientid":        dsComputedString("Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`. Applies only to proto `dhcp` and `dhcpv6`."),
+			"defaultroute":    dsComputedBool("Whether to install the default route that the protocol provides. Unset means true. Applies to every proto."),
+			"delegate":        dsComputedBool("Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto."),
 			"device":          dsComputedString("Underlying device."),
 			"disabled":        dsComputedBool("Whether the entry is disabled."),
 			"dns":             dsComputedStringList("uci option dns."),
-			"gateway":         dsComputedString("uci option gateway."),
+			"gateway":         dsComputedString("uci option gateway. Applies only to proto `static`."),
 			"has_private_key": dsComputedBool("Whether a private key is configured."),
-			"hostname":        dsComputedString("uci option hostname."),
-			"ip4table":        dsComputedString("uci option ip4table."),
-			"ip6addrs":        dsComputedStringList("uci option ip6addrs."),
-			"ip6assign":       dsComputedInt64("uci option ip6assign."),
-			"ip6gw":           dsComputedString("uci option ip6gw."),
-			"ip6hint":         dsComputedString("uci option ip6hint."),
+			"hostname":        dsComputedString("uci option hostname. Applies only to proto `dhcp`."),
+			"ip4table":        dsComputedString("Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto."),
+			"ip6addrs":        dsComputedStringList("uci option ip6addrs. Applies only to proto `static`."),
+			"ip6assign":       dsComputedInt64("Length of the prefix that this interface takes from a delegated or ULA prefix, such as `64`. Applies to every proto."),
+			"ip6class":        dsComputedStringList("Prefix classes that this interface can take its subnet from: `local` for the ULA prefix, or the name of the interface that received the prefix. Unset means any. Needs uapi 3.2.0 or later."),
+			"ip6gw":           dsComputedString("uci option ip6gw. Applies only to proto `static`."),
+			"ip6hint":         dsComputedString("Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto."),
 			"ip6ifaceid":      dsComputedString("uci option ip6ifaceid."),
-			"ip6prefix":       dsComputedString("uci option ip6prefix."),
-			"ip6table":        dsComputedString("uci option ip6table."),
+			"ip6prefix":       dsComputedStringList("IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later. Applies only to proto `static`, `dhcpv6` and `wireguard`."),
+			"ip6table":        dsComputedString("Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto."),
+			"ip6weight":       dsComputedInt64("Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later."),
 			"ipaddr":          dsComputedString("Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address."),
-			"ipaddrs":         dsComputedStringList("Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry."),
-			"listen_port":     dsComputedInt64("uci option listen_port."),
-			"metric":          dsComputedInt64("uci option metric."),
-			"mtu":             dsComputedInt64("uci option mtu."),
-			"netmask":         dsComputedString("uci option netmask."),
-			"nohostroute":     dsComputedBool("uci option nohostroute."),
-			"peerdns":         dsComputedBool("uci option peerdns."),
+			"ipaddrs":         dsComputedStringList("Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`."),
+			"listen_port":     dsComputedInt64("UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port. Applies only to proto `wireguard`."),
+			"metric":          dsComputedInt64("Metric of the routes that this interface installs without a metric of their own. Applies to every proto."),
+			"mtu":             dsComputedInt64("MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384."),
+			"netmask":         dsComputedString("uci option netmask. Applies only to proto `static`."),
+			"nohostroute":     dsComputedBool("uci option nohostroute. Applies only to proto `wireguard`."),
+			"peerdns":         dsComputedBool("uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`."),
 			"private_key":     dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
-			"proto":           dsComputedString("Protocol."),
-			"reqaddress":      dsComputedString("uci option reqaddress."),
-			"reqprefix":       dsComputedString("uci option reqprefix."),
+			"proto":           dsComputedString("Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take."),
+			"reqaddress":      dsComputedString("uci option reqaddress. Applies only to proto `dhcpv6`."),
+			"reqprefix":       dsComputedString("Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
+			"sourcefilter":    dsComputedBool("Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
 			"runtime":         networkInterfaceRuntimeAttribute(),
 		},
 	}
@@ -135,6 +143,7 @@ func (d *networkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 		Addresses:     base.Addresses,
 		Auto:          base.Auto,
 		Broadcast:     base.Broadcast,
+		BroadcastFlag: base.BroadcastFlag,
 		Clientid:      base.Clientid,
 		Defaultroute:  base.Defaultroute,
 		Delegate:      base.Delegate,
@@ -147,11 +156,13 @@ func (d *networkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 		Ip4table:      base.Ip4table,
 		Ip6addrs:      base.Ip6addrs,
 		Ip6assign:     base.Ip6assign,
+		Ip6class:      base.Ip6class,
 		Ip6gw:         base.Ip6gw,
 		Ip6hint:       base.Ip6hint,
 		Ip6ifaceid:    base.Ip6ifaceid,
 		Ip6prefix:     base.Ip6prefix,
 		Ip6table:      base.Ip6table,
+		Ip6weight:     base.Ip6weight,
 		Ipaddr:        base.Ipaddr,
 		Ipaddrs:       base.Ipaddrs,
 		ListenPort:    base.ListenPort,
@@ -164,6 +175,7 @@ func (d *networkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 		Proto:         base.Proto,
 		Reqaddress:    base.Reqaddress,
 		Reqprefix:     base.Reqprefix,
+		Sourcefilter:  base.Sourcefilter,
 		Runtime:       parseNetworkInterfaceRuntime(obj),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)

@@ -23,40 +23,44 @@ resource "uapi_network_interface" "example" {
 
 ### Required
 
-- `proto` (String) Protocol.
+- `proto` (String) Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take.
 
 ### Optional
 
-- `addresses` (List of String) uci option addresses.
+- `addresses` (List of String) uci option addresses. Applies only to proto `wireguard`.
 - `auto` (Boolean) uci option auto.
-- `broadcast` (String) uci option broadcast.
-- `clientid` (String) uci option clientid.
-- `defaultroute` (Boolean) uci option defaultroute.
-- `delegate` (Boolean) uci option delegate.
+- `broadcast` (String) IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`. Applies only to proto `static`.
+- `broadcast_flag` (Boolean) Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's "Use broadcast flag". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later. Applies only to proto `dhcp`.
+- `clientid` (String) Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`. Applies only to proto `dhcp` and `dhcpv6`.
+- `defaultroute` (Boolean) Whether to install the default route that the protocol provides. Unset means true. Applies to every proto.
+- `delegate` (Boolean) Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto.
 - `device` (String) Underlying device.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `dns` (List of String) uci option dns.
-- `gateway` (String) uci option gateway.
-- `hostname` (String) uci option hostname.
+- `gateway` (String) uci option gateway. Applies only to proto `static`.
+- `hostname` (String) uci option hostname. Applies only to proto `dhcp`.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
-- `ip4table` (String) uci option ip4table.
-- `ip6addrs` (List of String) uci option ip6addrs.
-- `ip6assign` (Number) uci option ip6assign.
-- `ip6gw` (String) uci option ip6gw.
-- `ip6hint` (String) uci option ip6hint.
+- `ip4table` (String) Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.
+- `ip6addrs` (List of String) uci option ip6addrs. Applies only to proto `static`.
+- `ip6assign` (Number) Length of the prefix that this interface takes from a delegated or ULA prefix, such as `64`. Applies to every proto.
+- `ip6class` (List of String) Prefix classes that this interface can take its subnet from: `local` for the ULA prefix, or the name of the interface that received the prefix. Unset means any. Needs uapi 3.2.0 or later.
+- `ip6gw` (String) uci option ip6gw. Applies only to proto `static`.
+- `ip6hint` (String) Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto.
 - `ip6ifaceid` (String) uci option ip6ifaceid.
-- `ip6prefix` (String) uci option ip6prefix.
-- `ip6table` (String) uci option ip6table.
-- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.
-- `listen_port` (Number) uci option listen_port.
-- `metric` (Number) uci option metric.
-- `mtu` (Number) uci option mtu.
-- `netmask` (String) uci option netmask.
-- `nohostroute` (Boolean) uci option nohostroute.
-- `peerdns` (Boolean) uci option peerdns.
-- `private_key` (String, Sensitive) WireGuard private key. Write-only: never returned by the API.
-- `reqaddress` (String) uci option reqaddress.
-- `reqprefix` (String) uci option reqprefix.
+- `ip6prefix` (List of String) IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later. Applies only to proto `static`, `dhcpv6` and `wireguard`.
+- `ip6table` (String) Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.
+- `ip6weight` (Number) Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later.
+- `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`.
+- `listen_port` (Number) UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port. Applies only to proto `wireguard`.
+- `metric` (Number) Metric of the routes that this interface installs without a metric of their own. Applies to every proto.
+- `mtu` (Number) MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384.
+- `netmask` (String) uci option netmask. Applies only to proto `static`.
+- `nohostroute` (Boolean) uci option nohostroute. Applies only to proto `wireguard`.
+- `peerdns` (Boolean) uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`.
+- `private_key` (String, Sensitive) WireGuard private key. Write-only: never returned by the API. Applies only to proto `wireguard`.
+- `reqaddress` (String) uci option reqaddress. Applies only to proto `dhcpv6`.
+- `reqprefix` (String) Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
+- `sourcefilter` (Boolean) Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
 
 ### Read-Only
 
