@@ -12,6 +12,7 @@ import (
 // such field null, and answers 422 to a value for one.
 type scope struct {
 	Field string
+	Known []string // the request enum: the values that uapi models
 	Rules []scopeRule
 }
 
@@ -70,6 +71,7 @@ func applyScope(r *resModel, conds []specCond, props map[string]specProp) {
 	if len(all) == 0 {
 		fail("%s: discriminator %q has no enum, so the values that take a scoped field are unknown", r.Type, s.Field)
 	}
+	s.Known = all
 	for i := range r.Fields {
 		f := &r.Fields[i]
 		excluded := map[string]bool{}
@@ -134,10 +136,11 @@ func goStrings(xs []string) string {
 // renderScope emits the table and the two methods that apply it: ValidateConfig
 // refuses at plan time what uapi refuses at apply, and ModifyPlan nulls what the
 // planned value does not take. The logic is in the provider's field_scope.go.
+// The table also picks the update method (see crudCollection).
 func renderScope(r resModel) string {
 	var b strings.Builder
 	p := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
-	p("var %sScope = fieldScope{Field: %q, Rules: []scopeRule{", r.Camel, r.Scope.Field)
+	p("var %sScope = fieldScope{Field: %q, Known: %s, Rules: []scopeRule{", r.Camel, r.Scope.Field, goStrings(r.Scope.Known))
 	for _, rule := range r.Scope.Rules {
 		p("\t{Values: %s, Fields: %s},", goStrings(rule.Values), goStrings(rule.Fields))
 	}

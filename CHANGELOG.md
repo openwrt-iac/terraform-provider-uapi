@@ -46,6 +46,13 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
   and the new proto takes, plans as unknown: it read null, and the new proto can read
   a default there, such as `nohostroute = false` on wireguard. When `proto` is unknown
   at plan time, all of these attributes plan as unknown (#32).
+- **An update of a `uapi_network_interface` on a proto that uapi does not model failed
+  with 422 `not_in_enum`.** Such an interface, for example a `6in4` tunnel that LuCI
+  created, imports and reads, but uapi 3.2 refuses a PUT of it. A PUT would also drop
+  the options of the proto's handler that uapi does not model, such as `peeraddr`. An
+  update that keeps such a proto is now a merge PATCH of the changed attributes, and
+  null removes an attribute. A switch away from such a proto is still a PUT, which
+  replaces those options. uapi refuses a switch to such a proto (#35).
 - A static interface with `ip6hint` failed with "Provider produced inconsistent result
   after apply", because uapi stored `ip6hint` only on proto `dhcpv6`. uapi 3.2.0 stores
   the prefix assignment options on every proto (#31).
@@ -65,10 +72,16 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
 - `metric`, `defaultroute`, `delegate`, `ip4table` and `ip6table` now apply to every
   proto. Before, uapi dropped them on some protos and answered 200. `peerdns` and
   `reqprefix` now also apply to `pppoe` and `ppp`, and `clientid` to `dhcpv6`.
-- uapi reads an interface whose proto it does not model, such as a `6in4` tunnel that
-  LuCI created, but refuses every PUT of it with 422 `not_in_enum` on `proto`. The data
-  source can read such an interface. The resource can import it, but any later change
-  fails at apply.
+- uapi 3.2.0 changes the ETag of every interface once at the upgrade, and of some
+  routes, rules, devices, bridge VLANs and wireguard peers. A normal plan reads the new
+  ETag first, so nothing fails. An apply with `-refresh=false`, or of a plan saved
+  before the upgrade, answers 412 for such a resource. Run a plan with refresh after
+  the upgrade.
+- A PUT of a wireguard interface writes `nohostroute '0'` to uci when the option was
+  unset, because uapi reads an unset `nohostroute` as false and the provider sends the
+  value from its state. The value has no effect. uapi 3.2.0 stopped writing it on a
+  PATCH that does not name the field, which covers the update of an interface on a
+  proto that uapi does not model.
 - uapi 3.2.0 refuses more writes that it accepted before. The provider adds no
   client-side check, so each one is an apply-time `422`:
   - `mtu` below 68 on `uapi_network_interface` and `uapi_network_device`. netifd

@@ -26,7 +26,7 @@ type labThingResource struct{ client *client.Client }
 
 func NewLabThingResource() resource.Resource { return &labThingResource{} }
 
-var labThingScope = fieldScope{Field: "name", Rules: []scopeRule{
+var labThingScope = fieldScope{Field: "name", Known: []string{"on", "off"}, Rules: []scopeRule{
 	{Values: []string{"off"}, Fields: []string{"flag", "tags"}},
 }}
 
@@ -209,7 +209,15 @@ func (r *labThingResource) Update(ctx context.Context, req resource.UpdateReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	obj, etag, err := r.client.Put(ctx, "/"+labThingCollection+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
+	itemPath := "/" + labThingCollection + "/" + plan.ID.ValueString()
+	var obj map[string]any
+	var etag string
+	var err error
+	if labThingScope.patches(plan.Name, state.Name) {
+		obj, etag, err = r.client.Patch(ctx, itemPath, mergeDelta(body, r.body(ctx, state, ds, false)), state.ETag.ValueString())
+	} else {
+		obj, etag, err = r.client.Put(ctx, itemPath, body, state.ETag.ValueString())
+	}
 	if err != nil {
 		writeErr(&resp.Diagnostics, "updating", "lab thing", err)
 		return

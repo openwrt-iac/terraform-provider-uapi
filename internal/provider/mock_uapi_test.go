@@ -125,10 +125,19 @@ func ifaceScopeErrors(named map[string]any, proto string) []any {
 }
 
 // scopeRefused writes uapi's 422 and reports true when the request names a field
-// that the interface's proto does not take.
+// that the interface's proto does not take. The type gate also refuses a named
+// proto outside the request enum, so only a PATCH that leaves `proto` out
+// reaches an interface on a proto that uapi does not model.
 func scopeRefused(w http.ResponseWriter, coll string, named map[string]any, proto any) bool {
 	if coll != "/network/interfaces" {
 		return false
+	}
+	if p, ok := named["proto"].(string); ok && !slices.Contains(ifaceProtos, p) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"code": "validation_failed", "message": "Request body failed validation",
+			"errors": []any{map[string]any{"field": "proto", "code": "not_in_enum", "message": "must be one of the modelled protos"}},
+		}, "")
+		return true
 	}
 	p, _ := proto.(string)
 	errs := ifaceScopeErrors(named, p)
@@ -418,8 +427,13 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 			normalizeStored(coll, body)
 			m.store[coll][id] = body
 		} else {
+			// RFC 7396: null removes the key.
 			for k, v := range body {
-				obj[k] = v
+				if v == nil {
+					delete(obj, k)
+				} else {
+					obj[k] = v
+				}
 			}
 			normalizeStored(coll, obj)
 		}

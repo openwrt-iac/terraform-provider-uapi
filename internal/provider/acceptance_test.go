@@ -779,6 +779,85 @@ func TestAccNetworkInterface_ip6prefixList(t *testing.T) {
 	})
 }
 
+// An interface on a proto that uapi does not model, such as a 6in4 tunnel that
+// LuCI created, imports and updates (#35). uapi refuses a PUT there, and a PUT
+// would drop the options of the proto's handler, so an update is a merge PATCH
+// of the changes. A switch to a modelled proto is a PUT, which replaces them.
+func TestAccNetworkInterface_unmodelledProto(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/network/interfaces", "t6in4", map[string]any{
+		"proto": "6in4", "peeraddr": "192.0.2.1", "ip6prefix": []any{"2001:db8:46::/48"},
+	})
+	const n = "uapi_network_interface.tun"
+	tun := func(body string) string {
+		return providerHCL(m.URL) + "resource \"uapi_network_interface\" \"tun\" {\n  id = \"t6in4\"\n" + body + "}\n"
+	}
+	stored := func(key string, want any) resource.TestCheckFunc {
+		return func(*terraform.State) error {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			got, ok := m.store["/network/interfaces"]["t6in4"][key]
+			if want == nil && ok {
+				return fmt.Errorf("stored %s = %v, want it removed", key, got)
+			}
+			if want != nil && got != want {
+				return fmt.Errorf("stored %s = %v, want %v", key, got, want)
+			}
+			return nil
+		}
+	}
+	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),
+	}}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: tun(`  proto     = "6in4"
+  ip6prefix = ["2001:db8:46::/48"]
+`),
+				ResourceName:       n,
+				ImportState:        true,
+				ImportStateId:      "t6in4",
+				ImportStatePersist: true,
+			},
+			{
+				Config: tun(`  proto     = "6in4"
+  ip6prefix = ["2001:db8:46::/48"]
+  mtu       = 1400
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "mtu", "1400"),
+					stored("peeraddr", "192.0.2.1"),
+				),
+			},
+			{
+				Config: tun(`  proto = "6in4"
+  mtu   = 1400
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "ip6prefix.#"),
+					stored("ip6prefix", nil),
+					stored("peeraddr", "192.0.2.1"),
+				),
+			},
+			{
+				Config: tun(`  proto   = "static"
+  ipaddrs = ["192.0.2.46"]
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "proto", "static"),
+					stored("peeraddr", nil),
+				),
+			},
+		},
+	})
+}
+
 // TestAccCreateCollisionHint covers the N2 UX: a create whose id collides with an
 // existing section returns 422 (validation_failed + conflict field), and writeErr
 // surfaces an actionable "terraform import" hint rather than a bare error.

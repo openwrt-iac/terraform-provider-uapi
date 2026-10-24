@@ -24,7 +24,7 @@ type networkInterfaceResource struct{ client *client.Client }
 
 func NewNetworkInterfaceResource() resource.Resource { return &networkInterfaceResource{} }
 
-var networkInterfaceScope = fieldScope{Field: "proto", Rules: []scopeRule{
+var networkInterfaceScope = fieldScope{Field: "proto", Known: []string{"static", "dhcp", "dhcpv6", "pppoe", "none", "ppp", "wwan", "wireguard"}, Rules: []scopeRule{
 	{Values: []string{"dhcp", "dhcpv6", "pppoe", "none", "ppp", "wwan", "wireguard"}, Fields: []string{"broadcast", "gateway", "ip6addrs", "ip6gw", "ipaddrs", "netmask"}},
 	{Values: []string{"dhcp", "pppoe", "none", "ppp", "wwan"}, Fields: []string{"ip6prefix"}},
 	{Values: []string{"static", "dhcpv6", "pppoe", "none", "ppp", "wwan", "wireguard"}, Fields: []string{"broadcast_flag", "hostname"}},
@@ -133,7 +133,7 @@ func (r *networkInterfaceResource) Schema(_ context.Context, _ resource.SchemaRe
 			"nohostroute":     optionalComputedBool("uci option nohostroute. Applies only to proto `wireguard`."),
 			"peerdns":         optionalComputedBool("uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`."),
 			"private_key":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "WireGuard private key. Write-only: never returned by the API. Applies only to proto `wireguard`."},
-			"proto":           schema.StringAttribute{Required: true, Description: "Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take."},
+			"proto":           schema.StringAttribute{Required: true, Description: "Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto."},
 			"reqaddress":      optionalComputedString("uci option reqaddress. Applies only to proto `dhcpv6`."),
 			"reqprefix":       optionalComputedString("Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
 			"sourcefilter":    optionalComputedBool("Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
@@ -280,7 +280,15 @@ func (r *networkInterfaceResource) Update(ctx context.Context, req resource.Upda
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	obj, etag, err := r.client.Put(ctx, "/"+networkInterfaceCollection+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
+	itemPath := "/" + networkInterfaceCollection + "/" + plan.ID.ValueString()
+	var obj map[string]any
+	var etag string
+	var err error
+	if networkInterfaceScope.patches(plan.Proto, state.Proto) {
+		obj, etag, err = r.client.Patch(ctx, itemPath, mergeDelta(body, r.body(ctx, state, ds, false)), state.ETag.ValueString())
+	} else {
+		obj, etag, err = r.client.Put(ctx, itemPath, body, state.ETag.ValueString())
+	}
 	if err != nil {
 		writeErr(&resp.Diagnostics, "updating", "network interface", err)
 		return

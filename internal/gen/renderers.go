@@ -327,6 +327,21 @@ func crudCollection(r resModel) string {
 	c := r.Camel
 	coll := c + "Collection"
 	createArg, updateArg := bodyCreateArgs(r)
+	write := fmt.Sprintf("obj, etag, err := r.client.Put(ctx, \"/\"+%s+\"/\"+plan.ID.ValueString(), body, state.ETag.ValueString())", coll)
+	if r.Scope != nil {
+		// uapi refuses a PUT with a discriminator outside the request enum, such as
+		// a proto it does not model, and a PUT would drop the options of that
+		// proto's handler. A merge PATCH of the changes keeps them.
+		write = fmt.Sprintf(`itemPath := "/"+%[1]s+"/"+plan.ID.ValueString()
+	var obj map[string]any
+	var etag string
+	var err error
+	if %[2]sScope.patches(plan.%[3]s, state.%[3]s) {
+		obj, etag, err = r.client.Patch(ctx, itemPath, mergeDelta(body, r.body(ctx, state, ds%[4]s)), state.ETag.ValueString())
+	} else {
+		obj, etag, err = r.client.Put(ctx, itemPath, body, state.ETag.ValueString())
+	}`, coll, c, pascal(r.Scope.Field), updateArg)
+	}
 	return fmt.Sprintf(`
 func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan %[1]sModel
@@ -365,7 +380,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
-	obj, etag, err := r.client.Put(ctx, "/"+%[2]s+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
+	%[6]s
 	if err != nil { writeErr(&resp.Diagnostics, "updating", %[3]q, err); return }
 	r.read(ctx, obj, &plan, ds)
 	plan.ETag = types.StringValue(etag)
@@ -385,7 +400,7 @@ func (r *%[1]sResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 func (r *%[1]sResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importByID(ctx, r.client, %[2]s, %[3]q, req, resp)
 }
-`, c, coll, r.Label, createArg, updateArg)
+`, c, coll, r.Label, createArg, updateArg, write)
 }
 
 func crudSingleton(r resModel) string {

@@ -18,6 +18,7 @@ import (
 // a value for such a field and leaves it out of a read.
 type fieldScope struct {
 	Field string
+	Known []string // the request enum: the values that uapi models
 	Rules []scopeRule
 }
 
@@ -37,6 +38,16 @@ func (s fieldScope) excluded(v string) []string {
 		}
 	}
 	return out
+}
+
+// patches reports whether an update is a merge PATCH rather than a PUT: the
+// value stays the same, and uapi does not model it. uapi refuses a PUT with
+// such a value, and a PUT would drop the options of its handler, such as the
+// `peeraddr` of a 6in4 tunnel. A switch keeps the PUT: uapi refuses a switch to
+// such a value whatever the method, and a switch away replaces those options.
+func (s fieldScope) patches(planned, prior types.String) bool {
+	return !planned.IsNull() && !planned.IsUnknown() && planned.Equal(prior) &&
+		!slices.Contains(s.Known, planned.ValueString())
 }
 
 func (s fieldScope) scoped() []string {

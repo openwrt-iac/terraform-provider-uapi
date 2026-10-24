@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -145,6 +146,27 @@ func boolValDefault(m map[string]any, key string) types.Bool {
 		return types.BoolValue(false)
 	}
 	return v
+}
+
+// mergeDelta is the RFC 7396 merge patch that turns the prior request body
+// into the planned one: each key whose value changed, and null for each key
+// that the planned body no longer has. body() leaves out null and unknown
+// values alike, so a planned unknown would read as a removal. A PATCH is only
+// sent when the discriminator is unchanged, and the plan modifiers then leave
+// no sent attribute unknown.
+func mergeDelta(planned, prior map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range planned {
+		if !reflect.DeepEqual(v, prior[k]) {
+			out[k] = v
+		}
+	}
+	for k := range prior {
+		if _, ok := planned[k]; !ok {
+			out[k] = nil
+		}
+	}
+	return out
 }
 
 func putList(ctx context.Context, m map[string]any, key string, v types.List, diags *diag.Diagnostics) {

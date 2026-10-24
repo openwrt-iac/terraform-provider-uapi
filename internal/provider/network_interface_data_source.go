@@ -110,7 +110,7 @@ func (d *networkInterfaceDataSource) Schema(_ context.Context, _ datasource.Sche
 			"nohostroute":     dsComputedBool("uci option nohostroute. Applies only to proto `wireguard`."),
 			"peerdns":         dsComputedBool("uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`."),
 			"private_key":     dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
-			"proto":           dsComputedString("Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take."),
+			"proto":           dsComputedString("Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto."),
 			"reqaddress":      dsComputedString("uci option reqaddress. Applies only to proto `dhcpv6`."),
 			"reqprefix":       dsComputedString("Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
 			"sourcefilter":    dsComputedBool("Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
