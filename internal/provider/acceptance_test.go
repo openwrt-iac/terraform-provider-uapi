@@ -402,16 +402,6 @@ func TestAccWireless_importKeepsUnconfiguredOptions(t *testing.T) {
 		"r0kh": []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"},
 		"r1kh": []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"},
 	})
-	stored := func(coll, id, key string, want any) resource.TestCheckFunc {
-		return func(*terraform.State) error {
-			m.mu.Lock()
-			defer m.mu.Unlock()
-			if got := m.store[coll][id][key]; fmt.Sprint(got) != fmt.Sprint(want) {
-				return fmt.Errorf("stored %s.%s = %v, want %v", id, key, got, want)
-			}
-			return nil
-		}
-	}
 	cfg := func(channel, ssid string) string {
 		return providerHCL(m.URL) + `
 resource "uapi_wireless_device" "radio0" {
@@ -452,22 +442,22 @@ data "uapi_wireless_interface" "home" {
 }`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "path", "platform/soc/18000000.wifi"),
-					stored("/wireless/devices", "radio0", "channel", float64(6)),
-					stored("/wireless/devices", "radio0", "path", "platform/soc/18000000.wifi"),
-					stored("/wireless/devices", "radio0", "legacy_rates", true),
-					stored("/wireless/devices", "radio0", "macaddr", "02:00:00:00:01:00"),
-					stored("/wireless/interfaces", "default_radio0", "ssid", "home2"),
-					stored("/wireless/interfaces", "default_radio0", "encryption", "psk2+ccmp"),
-					stored("/wireless/interfaces", "default_radio0", "ieee80211r", true),
-					stored("/wireless/interfaces", "default_radio0", "ft_psk_generate_local", true),
-					stored("/wireless/interfaces", "default_radio0", "mobility_domain", "4f57"),
-					stored("/wireless/interfaces", "default_radio0", "nasid", "ap1"),
-					stored("/wireless/interfaces", "default_radio0", "reassociation_deadline", 20000),
-					stored("/wireless/interfaces", "default_radio0", "r0_key_lifetime", 10000),
-					stored("/wireless/interfaces", "default_radio0", "r1_key_holder", "020000000100"),
-					stored("/wireless/interfaces", "default_radio0", "pmk_r1_push", true),
-					stored("/wireless/interfaces", "default_radio0", "r0kh", []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"}),
-					stored("/wireless/interfaces", "default_radio0", "r1kh", []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"}),
+					m.checkStored("/wireless/devices", "radio0", "channel", float64(6)),
+					m.checkStored("/wireless/devices", "radio0", "path", "platform/soc/18000000.wifi"),
+					m.checkStored("/wireless/devices", "radio0", "legacy_rates", true),
+					m.checkStored("/wireless/devices", "radio0", "macaddr", "02:00:00:00:01:00"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ssid", "home2"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "encryption", "psk2+ccmp"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ieee80211r", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ft_psk_generate_local", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "mobility_domain", "4f57"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "nasid", "ap1"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "reassociation_deadline", float64(20000)),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r0_key_lifetime", float64(10000)),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r1_key_holder", "020000000100"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "pmk_r1_push", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r0kh", []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"}),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r1kh", []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"}),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r0kh", "true"),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r1kh", "true"),
 					resource.TestCheckNoResourceAttr("uapi_wireless_interface.home", "r0kh"),
@@ -924,18 +914,7 @@ func TestAccNetworkInterface_unmodelledProto(t *testing.T) {
 		return providerHCL(m.URL) + "resource \"uapi_network_interface\" \"tun\" {\n  id = \"t6in4\"\n" + body + "}\n"
 	}
 	stored := func(key string, want any) resource.TestCheckFunc {
-		return func(*terraform.State) error {
-			m.mu.Lock()
-			defer m.mu.Unlock()
-			got, ok := m.store["/network/interfaces"]["t6in4"][key]
-			if want == nil && ok {
-				return fmt.Errorf("stored %s = %v, want it removed", key, got)
-			}
-			if want != nil && got != want {
-				return fmt.Errorf("stored %s = %v, want %v", key, got, want)
-			}
-			return nil
-		}
+		return m.checkStored("/network/interfaces", "t6in4", key, want)
 	}
 	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 		plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),

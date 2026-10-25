@@ -43,7 +43,8 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
 - `r0kh` and `r1kh` hold shared keys, so they are write-only and sensitive, like `key`:
   uapi never returns them, `has_r0kh` and `has_r1kh` say whether they are set, and the
   state keeps the configured value. Removing them from the configuration keeps the entries
-  on the router, since uapi keeps them when a PUT leaves them out. The generator now emits a
+  on the router, since uapi keeps them when a PUT leaves them out. Set them to `[]` to
+  remove the entries. The generator now emits a
   write-only list attribute for them.
 
 ### Fixed
@@ -55,7 +56,8 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
   with 422 when `encryption` carried a cipher, such as LuCI's `psk2+ccmp`. uapi 3.2.0
   models these options (openwrt-iac/uapi#238), and the new attributes are Optional+Computed,
   so a configuration that omits them keeps the imported values. Against uapi 3.1, the
-  update still removes them.
+  update still removes them. uapi 3.2.0 still does not model `num_global_macaddr` on a
+  radio, or the 802.11k and 802.11v options of an SSID, so an update still removes those.
 - **A `proto` change on `uapi_network_interface` failed against uapi 3.2 with 422.**
   The attributes of the old proto are Optional+Computed, so the plan kept their values
   from the state and the PUT sent them. Static to dhcp sent `ipaddrs` and `ip6addrs`.
