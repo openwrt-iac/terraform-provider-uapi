@@ -28,11 +28,15 @@ resource "uapi_wireless_interface" "example" {
 ### Optional
 
 - `disabled` (Boolean) Whether the entry is disabled.
-- `encryption` (String) uci option encryption.
+- `encryption` (String) Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`.
+- `ft_over_ds` (Boolean) Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later.
+- `ft_psk_generate_local` (Boolean) Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk, psk2 or psk-mixed, and false otherwise. Needs uapi 3.2.0 or later.
 - `hidden` (Boolean) uci option hidden.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
+- `ieee80211r` (Boolean) Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later.
 - `isolate` (Boolean) uci option isolate.
 - `key` (String, Sensitive) Encryption passphrase. Write-only: never returned by the API.
+- `mobility_domain` (String) 802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later.
 - `mode` (String) uci option mode.
 - `network` (String) uci option network.
 - `ssid` (String) uci option ssid.

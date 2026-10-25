@@ -29,13 +29,17 @@ data "uapi_wireless_interface" "example" {
 
 - `device` (String) Underlying device.
 - `disabled` (Boolean) Whether the entry is disabled.
-- `encryption` (String) uci option encryption.
+- `encryption` (String) Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`.
 - `etag` (String) Opaque ETag of the resource's current state.
+- `ft_over_ds` (Boolean) Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later.
+- `ft_psk_generate_local` (Boolean) Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk, psk2 or psk-mixed, and false otherwise. Needs uapi 3.2.0 or later.
 - `has_key` (Boolean) Whether a key is configured (the value is never returned).
 - `hidden` (Boolean) uci option hidden.
+- `ieee80211r` (Boolean) Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later.
 - `isolate` (Boolean) uci option isolate.
 - `key` (String, Sensitive) Always null; never returned by the API.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
+- `mobility_domain` (String) 802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later.
 - `mode` (String) uci option mode.
 - `network` (String) uci option network.
 - `runtime` (Attributes) Live iwinfo-derived runtime state (read-only). (see [below for nested schema](#nestedatt--runtime))

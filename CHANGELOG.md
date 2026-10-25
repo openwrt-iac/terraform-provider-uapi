@@ -34,8 +34,20 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
 - `uapi_network_interface.ip6class` and `ip6weight`, for every proto. They complete the
   prefix assignment options next to `ip6assign` and `ip6hint`.
 - The new attributes are also on the `uapi_network_interface` data source.
+- `uapi_wireless_device.path`, `phy` and `radio`, which bind a radio to its hardware, and
+  `cell_density` and `legacy_rates`. `uapi_wireless_interface.ieee80211r`, `ft_over_ds`,
+  `ft_psk_generate_local` and `mobility_domain`, LuCI's 802.11r settings. They are also on
+  the data sources.
 
 ### Fixed
+- **The first update of an imported `uapi_wireless_device` removed its `path`, and the
+  radio stayed down** (#37). An update is a PUT, and uapi removes the options that the
+  resource does not model. Without `path`, OpenWrt finds no phy for the radio. The update
+  of an imported `uapi_wireless_interface` also removed its 802.11r options, and it failed
+  with 422 when `encryption` carried a cipher, such as LuCI's `psk2+ccmp`. uapi 3.2.0
+  models these options (openwrt-iac/uapi#238), and the new attributes are Optional+Computed,
+  so a configuration that omits them keeps the imported values. Against uapi 3.1, the
+  update still removes them.
 - **A `proto` change on `uapi_network_interface` failed against uapi 3.2 with 422.**
   The attributes of the old proto are Optional+Computed, so the plan kept their values
   from the state and the PUT sent them. Static to dhcp sent `ipaddrs` and `ip6addrs`.

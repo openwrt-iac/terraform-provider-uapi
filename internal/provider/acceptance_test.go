@@ -380,6 +380,81 @@ resource "uapi_wireless_interface" "w" {
 	})
 }
 
+// An imported radio and SSID keep the options their configuration does not set when
+// another attribute changes: the update is a PUT, and uapi removes what it omits. A
+// radio without its path is not bound to its phy and stays down (uapi#238).
+func TestAccWireless_importKeepsUnconfiguredOptions(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/wireless/devices", "radio0", map[string]any{
+		"type": "mac80211", "path": "platform/soc/18000000.wifi", "band": "2g", "channel": 1,
+		"htmode": "HT40", "cell_density": 0, "legacy_rates": true,
+	})
+	m.seedUnmanaged("/wireless/interfaces", "default_radio0", map[string]any{
+		"device": "radio0", "network": "lan", "mode": "ap", "ssid": "home", "encryption": "psk2+ccmp",
+		"key": "supersecret", "ieee80211r": true, "ft_over_ds": false, "ft_psk_generate_local": true,
+		"mobility_domain": "4f57",
+	})
+	stored := func(coll, id, key string, want any) resource.TestCheckFunc {
+		return func(*terraform.State) error {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if got := m.store[coll][id][key]; got != want {
+				return fmt.Errorf("stored %s.%s = %v, want %v", id, key, got, want)
+			}
+			return nil
+		}
+	}
+	cfg := func(channel, ssid string) string {
+		return providerHCL(m.URL) + `
+resource "uapi_wireless_device" "radio0" {
+  id      = "radio0"
+  type    = "mac80211"
+  channel = ` + channel + `
+}
+
+resource "uapi_wireless_interface" "home" {
+  id     = "default_radio0"
+  device = "radio0"
+  ssid   = "` + ssid + `"
+  key    = "supersecret"
+}`
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg("1", "home"),
+				ResourceName:       "uapi_wireless_device.radio0",
+				ImportState:        true,
+				ImportStateId:      "radio0",
+				ImportStatePersist: true,
+			},
+			{
+				Config:             cfg("1", "home"),
+				ResourceName:       "uapi_wireless_interface.home",
+				ImportState:        true,
+				ImportStateId:      "default_radio0",
+				ImportStatePersist: true,
+			},
+			{
+				Config: cfg("6", "home2"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "path", "platform/soc/18000000.wifi"),
+					stored("/wireless/devices", "radio0", "channel", float64(6)),
+					stored("/wireless/devices", "radio0", "path", "platform/soc/18000000.wifi"),
+					stored("/wireless/devices", "radio0", "legacy_rates", true),
+					stored("/wireless/interfaces", "default_radio0", "ssid", "home2"),
+					stored("/wireless/interfaces", "default_radio0", "encryption", "psk2+ccmp"),
+					stored("/wireless/interfaces", "default_radio0", "ieee80211r", true),
+					stored("/wireless/interfaces", "default_radio0", "ft_psk_generate_local", true),
+					stored("/wireless/interfaces", "default_radio0", "mobility_domain", "4f57"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccSystem_singleton(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

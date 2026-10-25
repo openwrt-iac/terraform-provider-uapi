@@ -28,11 +28,16 @@ resource "uapi_wireless_device" "example" {
 ### Optional
 
 - `band` (String) uci option band.
+- `cell_density` (Number) Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later.
 - `channel` (Number) uci option channel.
 - `country` (String) uci option country.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `htmode` (String) uci option htmode.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
+- `legacy_rates` (Boolean) Whether the legacy 802.11b rates are allowed. Defaults to false. Needs uapi 3.2.0 or later.
+- `path` (String) Device path of the phy under /sys/devices, as `wifi config` writes it. With `phy`, it binds the radio to its hardware: a radio that neither one matches does not come up. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later.
+- `phy` (String) Name of the phy, as in board.json. `wifi config` writes it instead of `path` when the phy is not named phyN. Needs uapi 3.2.0 or later.
+- `radio` (Number) Index of the radio on a phy that has several, as `wifi config` writes it. Needs uapi 3.2.0 or later.
 - `txpower` (Number) uci option txpower.
 
 ### Read-Only

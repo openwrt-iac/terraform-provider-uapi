@@ -23,19 +23,23 @@ type wirelessInterfaceResource struct{ client *client.Client }
 func NewWirelessInterfaceResource() resource.Resource { return &wirelessInterfaceResource{} }
 
 type wirelessInterfaceModel struct {
-	ID         types.String `tfsdk:"id"`
-	Managed    types.Bool   `tfsdk:"managed"`
-	ETag       types.String `tfsdk:"etag"`
-	Device     types.String `tfsdk:"device"`
-	Disabled   types.Bool   `tfsdk:"disabled"`
-	Encryption types.String `tfsdk:"encryption"`
-	HasKey     types.Bool   `tfsdk:"has_key"`
-	Hidden     types.Bool   `tfsdk:"hidden"`
-	Isolate    types.Bool   `tfsdk:"isolate"`
-	Key        types.String `tfsdk:"key"`
-	Mode       types.String `tfsdk:"mode"`
-	Network    types.String `tfsdk:"network"`
-	Ssid       types.String `tfsdk:"ssid"`
+	ID                 types.String `tfsdk:"id"`
+	Managed            types.Bool   `tfsdk:"managed"`
+	ETag               types.String `tfsdk:"etag"`
+	Device             types.String `tfsdk:"device"`
+	Disabled           types.Bool   `tfsdk:"disabled"`
+	Encryption         types.String `tfsdk:"encryption"`
+	FtOverDs           types.Bool   `tfsdk:"ft_over_ds"`
+	FtPskGenerateLocal types.Bool   `tfsdk:"ft_psk_generate_local"`
+	HasKey             types.Bool   `tfsdk:"has_key"`
+	Hidden             types.Bool   `tfsdk:"hidden"`
+	Ieee80211r         types.Bool   `tfsdk:"ieee80211r"`
+	Isolate            types.Bool   `tfsdk:"isolate"`
+	Key                types.String `tfsdk:"key"`
+	MobilityDomain     types.String `tfsdk:"mobility_domain"`
+	Mode               types.String `tfsdk:"mode"`
+	Network            types.String `tfsdk:"network"`
+	Ssid               types.String `tfsdk:"ssid"`
 }
 
 func (r *wirelessInterfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -50,19 +54,23 @@ func (r *wirelessInterfaceResource) Schema(_ context.Context, _ resource.SchemaR
 	resp.Schema = schema.Schema{
 		Description: "Wireless interface.",
 		Attributes: map[string]schema.Attribute{
-			"id":         optionalComputedIDAttribute(),
-			"managed":    managedAttribute(),
-			"etag":       etagAttribute(),
-			"device":     schema.StringAttribute{Required: true, Description: "Underlying device."},
-			"disabled":   optionalComputedBool("Whether the entry is disabled."),
-			"encryption": optionalComputedString("uci option encryption."),
-			"has_key":    schema.BoolAttribute{Computed: true, Description: "Whether a key is configured (the value is never returned)."},
-			"hidden":     optionalComputedBool("uci option hidden."),
-			"isolate":    optionalComputedBool("uci option isolate."),
-			"key":        schema.StringAttribute{Optional: true, Sensitive: true, Description: "Encryption passphrase. Write-only: never returned by the API."},
-			"mode":       optionalComputedString("uci option mode."),
-			"network":    optionalComputedString("uci option network."),
-			"ssid":       optionalComputedString("uci option ssid."),
+			"id":                    optionalComputedIDAttribute(),
+			"managed":               managedAttribute(),
+			"etag":                  etagAttribute(),
+			"device":                schema.StringAttribute{Required: true, Description: "Underlying device."},
+			"disabled":              optionalComputedBool("Whether the entry is disabled."),
+			"encryption":            optionalComputedString("Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`."),
+			"ft_over_ds":            optionalComputedBool("Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later."),
+			"ft_psk_generate_local": optionalComputedBool("Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk, psk2 or psk-mixed, and false otherwise. Needs uapi 3.2.0 or later."),
+			"has_key":               schema.BoolAttribute{Computed: true, Description: "Whether a key is configured (the value is never returned)."},
+			"hidden":                optionalComputedBool("uci option hidden."),
+			"ieee80211r":            optionalComputedBool("Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later."),
+			"isolate":               optionalComputedBool("uci option isolate."),
+			"key":                   schema.StringAttribute{Optional: true, Sensitive: true, Description: "Encryption passphrase. Write-only: never returned by the API."},
+			"mobility_domain":       optionalComputedString("802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later."),
+			"mode":                  optionalComputedString("uci option mode."),
+			"network":               optionalComputedString("uci option network."),
+			"ssid":                  optionalComputedString("uci option ssid."),
 		},
 	}
 }
@@ -75,9 +83,13 @@ func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfac
 	putStr(out, "device", m.Device)
 	putBool(out, "disabled", m.Disabled)
 	putStr(out, "encryption", m.Encryption)
+	putBool(out, "ft_over_ds", m.FtOverDs)
+	putBool(out, "ft_psk_generate_local", m.FtPskGenerateLocal)
 	putBool(out, "hidden", m.Hidden)
+	putBool(out, "ieee80211r", m.Ieee80211r)
 	putBool(out, "isolate", m.Isolate)
 	putStr(out, "key", m.Key)
+	putStr(out, "mobility_domain", m.MobilityDomain)
 	putStr(out, "mode", m.Mode)
 	putStr(out, "network", m.Network)
 	putStr(out, "ssid", m.Ssid)
@@ -90,10 +102,14 @@ func (r *wirelessInterfaceResource) read(ctx context.Context, obj map[string]any
 	m.Device = strVal(obj, "device")
 	m.Disabled = boolVal(obj, "disabled")
 	m.Encryption = strVal(obj, "encryption")
+	m.FtOverDs = boolVal(obj, "ft_over_ds")
+	m.FtPskGenerateLocal = boolVal(obj, "ft_psk_generate_local")
 	m.HasKey = boolValDefault(obj, "has_key")
 	m.Hidden = boolVal(obj, "hidden")
+	m.Ieee80211r = boolVal(obj, "ieee80211r")
 	m.Isolate = boolVal(obj, "isolate")
 	// key is write-only: preserve the planned value (the API never returns it).
+	m.MobilityDomain = strVal(obj, "mobility_domain")
 	m.Mode = strVal(obj, "mode")
 	m.Network = strVal(obj, "network")
 	m.Ssid = strVal(obj, "ssid")

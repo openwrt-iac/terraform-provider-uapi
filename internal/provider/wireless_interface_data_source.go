@@ -12,20 +12,24 @@ import (
 )
 
 type wirelessInterfaceDSModel struct {
-	ID         types.String                   `tfsdk:"id"`
-	Managed    types.Bool                     `tfsdk:"managed"`
-	ETag       types.String                   `tfsdk:"etag"`
-	Device     types.String                   `tfsdk:"device"`
-	Disabled   types.Bool                     `tfsdk:"disabled"`
-	Encryption types.String                   `tfsdk:"encryption"`
-	HasKey     types.Bool                     `tfsdk:"has_key"`
-	Hidden     types.Bool                     `tfsdk:"hidden"`
-	Isolate    types.Bool                     `tfsdk:"isolate"`
-	Key        types.String                   `tfsdk:"key"`
-	Mode       types.String                   `tfsdk:"mode"`
-	Network    types.String                   `tfsdk:"network"`
-	Ssid       types.String                   `tfsdk:"ssid"`
-	Runtime    *wirelessInterfaceRuntimeModel `tfsdk:"runtime"`
+	ID                 types.String                   `tfsdk:"id"`
+	Managed            types.Bool                     `tfsdk:"managed"`
+	ETag               types.String                   `tfsdk:"etag"`
+	Device             types.String                   `tfsdk:"device"`
+	Disabled           types.Bool                     `tfsdk:"disabled"`
+	Encryption         types.String                   `tfsdk:"encryption"`
+	FtOverDs           types.Bool                     `tfsdk:"ft_over_ds"`
+	FtPskGenerateLocal types.Bool                     `tfsdk:"ft_psk_generate_local"`
+	HasKey             types.Bool                     `tfsdk:"has_key"`
+	Hidden             types.Bool                     `tfsdk:"hidden"`
+	Ieee80211r         types.Bool                     `tfsdk:"ieee80211r"`
+	Isolate            types.Bool                     `tfsdk:"isolate"`
+	Key                types.String                   `tfsdk:"key"`
+	MobilityDomain     types.String                   `tfsdk:"mobility_domain"`
+	Mode               types.String                   `tfsdk:"mode"`
+	Network            types.String                   `tfsdk:"network"`
+	Ssid               types.String                   `tfsdk:"ssid"`
+	Runtime            *wirelessInterfaceRuntimeModel `tfsdk:"runtime"`
 }
 
 var (
@@ -49,20 +53,24 @@ func (d *wirelessInterfaceDataSource) Schema(_ context.Context, _ datasource.Sch
 	resp.Schema = dsschema.Schema{
 		Description: "Look up the wireless interface.",
 		Attributes: map[string]dsschema.Attribute{
-			"id":         dsIDAttribute(),
-			"managed":    dsManagedAttribute(),
-			"etag":       dsComputedString("Opaque ETag of the resource's current state."),
-			"device":     dsComputedString("Underlying device."),
-			"disabled":   dsComputedBool("Whether the entry is disabled."),
-			"encryption": dsComputedString("uci option encryption."),
-			"has_key":    dsComputedBool("Whether a key is configured (the value is never returned)."),
-			"hidden":     dsComputedBool("uci option hidden."),
-			"isolate":    dsComputedBool("uci option isolate."),
-			"key":        dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
-			"mode":       dsComputedString("uci option mode."),
-			"network":    dsComputedString("uci option network."),
-			"ssid":       dsComputedString("uci option ssid."),
-			"runtime":    wirelessInterfaceRuntimeAttribute(),
+			"id":                    dsIDAttribute(),
+			"managed":               dsManagedAttribute(),
+			"etag":                  dsComputedString("Opaque ETag of the resource's current state."),
+			"device":                dsComputedString("Underlying device."),
+			"disabled":              dsComputedBool("Whether the entry is disabled."),
+			"encryption":            dsComputedString("Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`."),
+			"ft_over_ds":            dsComputedBool("Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later."),
+			"ft_psk_generate_local": dsComputedBool("Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk, psk2 or psk-mixed, and false otherwise. Needs uapi 3.2.0 or later."),
+			"has_key":               dsComputedBool("Whether a key is configured (the value is never returned)."),
+			"hidden":                dsComputedBool("uci option hidden."),
+			"ieee80211r":            dsComputedBool("Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later."),
+			"isolate":               dsComputedBool("uci option isolate."),
+			"key":                   dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
+			"mobility_domain":       dsComputedString("802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later."),
+			"mode":                  dsComputedString("uci option mode."),
+			"network":               dsComputedString("uci option network."),
+			"ssid":                  dsComputedString("uci option ssid."),
+			"runtime":               wirelessInterfaceRuntimeAttribute(),
 		},
 	}
 }
@@ -88,17 +96,21 @@ func (d *wirelessInterfaceDataSource) Read(ctx context.Context, req datasource.R
 	base.ETag = types.StringValue(etag)
 	m := wirelessInterfaceDSModel{
 		ID: base.ID, Managed: base.Managed, ETag: base.ETag,
-		Device:     base.Device,
-		Disabled:   base.Disabled,
-		Encryption: base.Encryption,
-		HasKey:     base.HasKey,
-		Hidden:     base.Hidden,
-		Isolate:    base.Isolate,
-		Key:        base.Key,
-		Mode:       base.Mode,
-		Network:    base.Network,
-		Ssid:       base.Ssid,
-		Runtime:    parseWirelessInterfaceRuntime(obj),
+		Device:             base.Device,
+		Disabled:           base.Disabled,
+		Encryption:         base.Encryption,
+		FtOverDs:           base.FtOverDs,
+		FtPskGenerateLocal: base.FtPskGenerateLocal,
+		HasKey:             base.HasKey,
+		Hidden:             base.Hidden,
+		Ieee80211r:         base.Ieee80211r,
+		Isolate:            base.Isolate,
+		Key:                base.Key,
+		MobilityDomain:     base.MobilityDomain,
+		Mode:               base.Mode,
+		Network:            base.Network,
+		Ssid:               base.Ssid,
+		Runtime:            parseWirelessInterfaceRuntime(obj),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
