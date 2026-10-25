@@ -72,10 +72,19 @@ func goldenCases() map[string]string {
 	delete(singleProps, "clearable")
 	delete(singleProps, "clearlist")
 	sr := buildResource(singleton, singleProps, singleProps, nil)
+	// A runtime data source builds its model from a zero resource model, so it
+	// takes its own branch for a write-only list.
+	withRuntime := descriptor{
+		Type: "lab_radio", Schema: "LabRadios", Collection: "lab/radios",
+		Kind: "collection", Label: "lab radio", GenDataSource: true, Runtime: "wireless",
+		CreateOnly: []string{"wgname", "lockedname"},
+	}
+	rr := buildResource(withRuntime, fixtureProps(), fixtureProps(), []string{"name"})
 	return map[string]string{
 		"lab_thing_resource.go.golden":    renderResource(cr),
 		"lab_thing_data_source.go.golden": renderDataSource(cr),
 		"lab_single_resource.go.golden":   renderResource(sr),
+		"lab_radio_data_source.go.golden": renderDataSource(rr),
 	}
 }
 
