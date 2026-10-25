@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -38,6 +39,36 @@ func accTarget(t *testing.T) (providerCfg string, closer func()) {
 	}
 	m := newMockUAPI()
 	return providerHCL(m.URL), m.Close
+}
+
+// accErrorCheck skips a live case that the router cannot host: uapi (>= 3.2.0)
+// answers 503 to a write into a package whose config file or init script is
+// missing there, such as /etc/config/wireless on a box without a radio. The mock
+// never answers these, so a mock run still fails on them.
+func accErrorCheck(t *testing.T) resource.ErrorCheckFunc {
+	return func(err error) error {
+		if reason := unhostableReason(err); reason != "" && os.Getenv("UAPI_ACC_ENDPOINT") != "" {
+			t.Skip(reason)
+		}
+		return err
+	}
+}
+
+var (
+	unhostable = regexp.MustCompile(`uapi 503 (config_missing|init_script_missing): `)
+	blankLine  = regexp.MustCompile(`\n\s*\n`)
+)
+
+// unhostableReason returns the uapi message of such a 503, unwrapped from
+// Terraform's diagnostic output, or "" when err is not one.
+func unhostableReason(err error) string {
+	for _, p := range blankLine.Split(err.Error(), -1) {
+		p = strings.Join(strings.Fields(p), " ")
+		if loc := unhostable.FindStringIndex(p); loc != nil {
+			return p[loc[0]:]
+		}
+	}
+	return ""
 }
 
 // accProviders serves the real provider in-process; tests point its endpoint at

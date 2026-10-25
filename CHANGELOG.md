@@ -105,6 +105,15 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
 
   The first refresh after the router upgrade can change these values in state. A plan
   shows a change only where the configuration differs from the value that netifd uses.
+- uapi 3.2.0 answers `503 config_missing` to a write into a package whose file under
+  `/etc/config/` does not exist, and the message names the file. The common case is
+  `uapi_wireless_device` and `uapi_wireless_interface` on a router without a radio.
+  Before, uapi answered 200 and stored nothing, so the next plan showed the resource to
+  create again.
+- A live acceptance run (`UAPI_ACC_ENDPOINT` set) skips a `TestAccAllResources` case
+  whose create answers `503 config_missing` or `503 init_script_missing`, with the uapi
+  message as the reason. Before, such a case failed, and with uapi 3.1 a wireless case
+  failed on a missing resource with no hint of the cause. (#36)
 
 ## [3.1.0] - 2026-10-11
 

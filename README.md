@@ -314,7 +314,10 @@ cat examples/provider/provider.tf \
 cd /tmp/uapi-dev && terraform plan -var uapi_token="$UAPI_TOKEN"
 ```
 
-Acceptance tests (`make testacc`) require a live uapi instance and `TF_ACC=1`.
+Acceptance tests (`make testacc`, `TF_ACC=1`) run against an in-process fake uapi.
+Set `UAPI_ACC_ENDPOINT` and `UAPI_ACC_TOKEN` to run the endpoint-agnostic tests
+against a test router instead. There, `TestAccAllResources` skips a case when the
+router does not have the config file or the daemon of its package.
 
 ## Releasing (Terraform Registry)
 

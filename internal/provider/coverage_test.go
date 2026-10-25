@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -10,6 +11,8 @@ import (
 // a fresh fake, asserting it gets a stable id (and is managed, for uci
 // resources). The framework's post-apply empty-plan check also proves
 // idempotency for each. Import/update paths are covered by the pattern tests.
+// On a live router, a case whose package file or daemon is missing there is
+// skipped with the uapi message (accErrorCheck).
 func TestAccAllResources(t *testing.T) {
 	cases := []struct {
 		typ       string
@@ -203,11 +206,36 @@ resource "uapi_snmpd_access" "t" {
 			}
 			resource.Test(t, resource.TestCase{
 				ProtoV6ProviderFactories: accProviders(),
+				ErrorCheck:               accErrorCheck(t),
 				Steps: []resource.TestStep{{
 					Config: providerCfg + "\n" + c.hcl,
 					Check:  resource.ComposeAggregateTestCheckFunc(checks...),
 				}},
 			})
 		})
+	}
+}
+
+func TestUnhostableReason(t *testing.T) {
+	applyErr := func(detail string) error {
+		return errors.New("Error running apply: exit status 1\n\nError: Error creating wireless device\n\n" +
+			"  with uapi_wireless_device.t,\n" +
+			"  on terraform_plugin_test.tf line 17, in resource \"uapi_wireless_device\" \"t\":\n" +
+			"  17: resource \"uapi_wireless_device\" \"t\" {\n\n" + detail + "\n")
+	}
+	cases := []struct {
+		detail, want string
+	}{
+		{"uapi 503 config_missing: /etc/config/wireless not found: the package or\nhardware that creates it is missing on this router",
+			"uapi 503 config_missing: /etc/config/wireless not found: the package or hardware that creates it is missing on this router"},
+		{"uapi 503 init_script_missing: init script /etc/init.d/snmpd not found (is the\ndaemon installed?)",
+			"uapi 503 init_script_missing: init script /etc/init.d/snmpd not found (is the daemon installed?)"},
+		{"uapi 503 service_unavailable: ubus is not reachable", ""},
+		{"uapi 422 validation_failed: Request body failed validation\n  - device: config_missing (conflict)", ""},
+	}
+	for _, c := range cases {
+		if got := unhostableReason(applyErr(c.detail)); got != c.want {
+			t.Errorf("unhostableReason(%q) = %q, want %q", c.detail, got, c.want)
+		}
 	}
 }
