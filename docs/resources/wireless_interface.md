@@ -41,7 +41,7 @@ resource "uapi_wireless_interface" "example" {
 - `nasid` (String) 802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later.
 - `network` (String) uci option network.
 - `pmk_r1_push` (Boolean) Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later.
-- `r0_key_lifetime` (Number) 802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 10000. Needs uapi 3.2.0 or later.
+- `r0_key_lifetime` (Number) 802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. Needs uapi 3.2.0 or later.
 - `r0kh` (List of String, Sensitive) 802.11r R0 key holders, as `<MAC>,<NAS id>,<key>` entries. Write-only: never returned by the API, see `has_r0kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later.
 - `r1_key_holder` (String) 802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later.
 - `r1kh` (List of String, Sensitive) 802.11r R1 key holders, as `<MAC>,<R1KH id>,<key>` entries. Write-only: never returned by the API, see `has_r1kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later.

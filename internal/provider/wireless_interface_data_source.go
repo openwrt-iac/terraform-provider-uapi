@@ -82,7 +82,7 @@ func (d *wirelessInterfaceDataSource) Schema(_ context.Context, _ datasource.Sch
 			"nasid":                  dsComputedString("802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later."),
 			"network":                dsComputedString("uci option network."),
 			"pmk_r1_push":            dsComputedBool("Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later."),
-			"r0_key_lifetime":        dsComputedInt64("802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 10000. Needs uapi 3.2.0 or later."),
+			"r0_key_lifetime":        dsComputedInt64("802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. Needs uapi 3.2.0 or later."),
 			"r0kh":                   dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"r1_key_holder":          dsComputedString("802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later."),
 			"r1kh":                   dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
