@@ -200,8 +200,8 @@ var descriptors = []descriptor{
 	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true},
 	// wireless
 	{Type: "wireless_device", Schema: "WirelessDevices", Collection: "wireless/devices", Kind: "collection", Label: "wireless device", GenDataSource: true, Descs: map[string]string{
-		"path":         "Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later.",
-		"macaddr":      "MAC address of the phy. Older `wifi detect` configurations bind a radio with it instead of `path`. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later.",
+		"path":         "Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. Needs uapi 3.2.0 or later.",
+		"macaddr":      "MAC address of the phy. Older `wifi detect` configurations bind a radio with it instead of `path`. Needs uapi 3.2.0 or later.",
 		"phy":          "Name of the phy, as in board.json. `wifi config` writes it instead of `path` when the phy is not named phyN. Needs uapi 3.2.0 or later.",
 		"radio":        "Index of the radio on a phy that has several, as `wifi config` writes it. Needs uapi 3.2.0 or later.",
 		"cell_density": "Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later.",
@@ -218,8 +218,8 @@ var descriptors = []descriptor{
 		"r0_key_lifetime":        "802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 10000. Needs uapi 3.2.0 or later.",
 		"r1_key_holder":          "802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later.",
 		"pmk_r1_push":            "Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later.",
-		"r0kh":                   "802.11r R0 key holders, as `<MAC>,<NAS id>,<key>` entries. Write-only: never returned by the API, see `has_r0kh`. Removing it from the configuration keeps the entries on the router, as with `key`. Needs uapi 3.2.0 or later.",
-		"r1kh":                   "802.11r R1 key holders, as `<MAC>,<R1KH id>,<key>` entries. Write-only: never returned by the API, see `has_r1kh`. Removing it from the configuration keeps the entries on the router, as with `key`. Needs uapi 3.2.0 or later.",
+		"r0kh":                   "802.11r R0 key holders, as `<MAC>,<NAS id>,<key>` entries. Write-only: never returned by the API, see `has_r0kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later.",
+		"r1kh":                   "802.11r R1 key holders, as `<MAC>,<R1KH id>,<key>` entries. Write-only: never returned by the API, see `has_r1kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later.",
 		"has_r0kh":               "Whether R0 key holders are configured (the entries are never returned).",
 		"has_r1kh":               "Whether R1 key holders are configured (the entries are never returned).",
 	}},

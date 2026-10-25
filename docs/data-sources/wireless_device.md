@@ -35,9 +35,9 @@ data "uapi_wireless_device" "example" {
 - `etag` (String) Opaque ETag of the resource's current state.
 - `htmode` (String) uci option htmode.
 - `legacy_rates` (Boolean) Whether the legacy 802.11b rates are allowed. Defaults to false. Needs uapi 3.2.0 or later.
-- `macaddr` (String) MAC address of the phy. Older `wifi detect` configurations bind a radio with it instead of `path`. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later.
+- `macaddr` (String) MAC address of the phy. Older `wifi detect` configurations bind a radio with it instead of `path`. Needs uapi 3.2.0 or later.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `path` (String) Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later.
+- `path` (String) Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. Needs uapi 3.2.0 or later.
 - `phy` (String) Name of the phy, as in board.json. `wifi config` writes it instead of `path` when the phy is not named phyN. Needs uapi 3.2.0 or later.
 - `radio` (Number) Index of the radio on a phy that has several, as `wifi config` writes it. Needs uapi 3.2.0 or later.
 - `txpower` (Number) uci option txpower.

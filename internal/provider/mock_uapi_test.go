@@ -150,9 +150,8 @@ func scopeRefused(w http.ResponseWriter, coll string, named map[string]any, prot
 	return true
 }
 
-// normalizeStored applies the per-collection server-side shaping the provider has
-// to round-trip against.
-// uapi keeps a stored secret that a PUT leaves out, since a read never returns it.
+// keepWriteOnly mirrors uapi keeping a stored secret that a PUT leaves out, since
+// a read never returns it.
 func keepWriteOnly(coll string, stored, body map[string]any) {
 	if coll != "/wireless/interfaces" {
 		return
@@ -164,6 +163,8 @@ func keepWriteOnly(coll string, stored, body map[string]any) {
 	}
 }
 
+// normalizeStored applies the per-collection server-side shaping the provider has
+// to round-trip against.
 func normalizeStored(coll string, obj map[string]any) {
 	if coll == "/network/interfaces" {
 		// toUci drops what the proto does not take, so a read leaves it out.
