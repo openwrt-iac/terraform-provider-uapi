@@ -363,18 +363,107 @@ resource "uapi_wireless_interface" "w" {
   ssid       = "home"
   encryption = "psk2"
   key        = "supersecret"
+  r0kh       = ["02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"]
 }`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "ssid", "home"),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "key", "supersecret"),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_key", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "r0kh.#", "1"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_r0kh", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_r1kh", "false"),
 				),
 			},
 			{
 				ResourceName:            "uapi_wireless_interface.w",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"key"}, // write-only, never returned
+				ImportStateVerifyIgnore: []string{"key", "r0kh"}, // write-only, never returned
+			},
+		},
+	})
+}
+
+// An imported radio and SSID keep the options their configuration does not set when
+// another attribute changes: the update is a PUT, and uapi removes what it omits. A
+// radio without its path is not bound to its phy and stays down (uapi#238).
+func TestAccWireless_importKeepsUnconfiguredOptions(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/wireless/devices", "radio0", map[string]any{
+		"type": "mac80211", "path": "platform/soc/18000000.wifi", "band": "2g", "channel": 1,
+		"htmode": "HT40", "cell_density": 0, "legacy_rates": true, "macaddr": "02:00:00:00:01:00",
+	})
+	m.seedUnmanaged("/wireless/interfaces", "default_radio0", map[string]any{
+		"device": "radio0", "network": "lan", "mode": "ap", "ssid": "home", "encryption": "psk2+ccmp",
+		"key": "supersecret", "ieee80211r": true, "ft_over_ds": false, "ft_psk_generate_local": true,
+		"mobility_domain": "4f57", "nasid": "ap1", "reassociation_deadline": 20000, "r0_key_lifetime": 10000,
+		"r1_key_holder": "020000000100", "pmk_r1_push": true,
+		"r0kh": []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"},
+		"r1kh": []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"},
+	})
+	cfg := func(channel, ssid string) string {
+		return providerHCL(m.URL) + `
+resource "uapi_wireless_device" "radio0" {
+  id      = "radio0"
+  type    = "mac80211"
+  channel = ` + channel + `
+}
+
+resource "uapi_wireless_interface" "home" {
+  id     = "default_radio0"
+  device = "radio0"
+  ssid   = "` + ssid + `"
+  key    = "supersecret"
+}`
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg("1", "home"),
+				ResourceName:       "uapi_wireless_device.radio0",
+				ImportState:        true,
+				ImportStateId:      "radio0",
+				ImportStatePersist: true,
+			},
+			{
+				Config:             cfg("1", "home"),
+				ResourceName:       "uapi_wireless_interface.home",
+				ImportState:        true,
+				ImportStateId:      "default_radio0",
+				ImportStatePersist: true,
+			},
+			{
+				Config: cfg("6", "home2") + `
+
+data "uapi_wireless_interface" "home" {
+  id = uapi_wireless_interface.home.id
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "path", "platform/soc/18000000.wifi"),
+					m.checkStored("/wireless/devices", "radio0", "channel", float64(6)),
+					m.checkStored("/wireless/devices", "radio0", "path", "platform/soc/18000000.wifi"),
+					m.checkStored("/wireless/devices", "radio0", "legacy_rates", true),
+					m.checkStored("/wireless/devices", "radio0", "macaddr", "02:00:00:00:01:00"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ssid", "home2"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "encryption", "psk2+ccmp"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ieee80211r", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ft_psk_generate_local", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "mobility_domain", "4f57"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "nasid", "ap1"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "reassociation_deadline", float64(20000)),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r0_key_lifetime", float64(10000)),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r1_key_holder", "020000000100"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "pmk_r1_push", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r0kh", []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"}),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r1kh", []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"}),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r0kh", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r1kh", "true"),
+					resource.TestCheckNoResourceAttr("uapi_wireless_interface.home", "r0kh"),
+					resource.TestCheckResourceAttr("data.uapi_wireless_interface.home", "has_r0kh", "true"),
+					resource.TestCheckNoResourceAttr("data.uapi_wireless_interface.home", "r0kh"),
+				),
 			},
 		},
 	})
@@ -825,18 +914,7 @@ func TestAccNetworkInterface_unmodelledProto(t *testing.T) {
 		return providerHCL(m.URL) + "resource \"uapi_network_interface\" \"tun\" {\n  id = \"t6in4\"\n" + body + "}\n"
 	}
 	stored := func(key string, want any) resource.TestCheckFunc {
-		return func(*terraform.State) error {
-			m.mu.Lock()
-			defer m.mu.Unlock()
-			got, ok := m.store["/network/interfaces"]["t6in4"][key]
-			if want == nil && ok {
-				return fmt.Errorf("stored %s = %v, want it removed", key, got)
-			}
-			if want != nil && got != want {
-				return fmt.Errorf("stored %s = %v, want %v", key, got, want)
-			}
-			return nil
-		}
+		return m.checkStored("/network/interfaces", "t6in4", key, want)
 	}
 	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 		plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),

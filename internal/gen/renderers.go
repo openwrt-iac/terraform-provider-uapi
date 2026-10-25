@@ -51,7 +51,14 @@ func resAttr(f field) string {
 		fail("optclear field %q has type %q; only types.String and types.List are supported (add a helper)", f.Name, f.GoType)
 		return ""
 	case "writeonly":
-		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
+		switch f.GoType {
+		case "types.String":
+			return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
+		case "types.List":
+			return fmt.Sprintf("%q: schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
+		}
+		fail("writeonly field %q has type %q; only types.String and types.List are supported (add a helper)", f.Name, f.GoType)
+		return ""
 	case "createonly":
 		// Caller-supplied at create, immutable, never returned, rejected on
 		// PUT/PATCH. Changing it is a new section, so it forces replacement.
@@ -66,6 +73,9 @@ func resAttr(f field) string {
 func dsAttr(f field) string {
 	switch f.Kind {
 	case "writeonly":
+		if f.GoType == "types.List" {
+			return fmt.Sprintf("%q: dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Sensitive: true, Description: \"Always null; never returned by the API.\"},", f.Name)
+		}
 		return fmt.Sprintf("%q: dsschema.StringAttribute{Computed: true, Sensitive: true, Description: \"Always null; never returned by the API.\"},", f.Name)
 	case "computedbool":
 		return fmt.Sprintf("%q: dsComputedBool(%q),", f.Name, f.Desc)
@@ -533,6 +543,12 @@ func renderRuntimeDataSource(r resModel) string {
 	p("\tm := %sDSModel{", r.Camel)
 	p("\t\tID: base.ID, Managed: base.Managed, ETag: base.ETag,")
 	for _, f := range r.dsFields() {
+		if f.Kind == "writeonly" && f.GoType == "types.List" {
+			// read() leaves a write-only field as it found it, and base starts as a zero
+			// List, which has no element type, so State.Set would refuse it.
+			p("\t\t%s: types.ListNull(types.StringType),", f.GoName)
+			continue
+		}
 		p("\t\t%s: base.%s,", f.GoName, f.GoName)
 	}
 	p("\t\tRuntime: %s(obj),", rb.parse)

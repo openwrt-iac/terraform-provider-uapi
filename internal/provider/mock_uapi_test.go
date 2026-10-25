@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 // mockUAPI is an in-process fake of the uapi curated API, good enough to drive
@@ -148,6 +152,21 @@ func scopeRefused(w http.ResponseWriter, coll string, named map[string]any, prot
 		"code": "validation_failed", "message": "Request body failed validation", "errors": errs,
 	}, "")
 	return true
+}
+
+var wirelessWriteOnly = []string{"key", "r0kh", "r1kh"}
+
+// keepWriteOnly mirrors uapi keeping a stored secret that a PUT leaves out, since
+// a read never returns it.
+func keepWriteOnly(coll string, stored, body map[string]any) {
+	if coll != "/wireless/interfaces" {
+		return
+	}
+	for _, k := range wirelessWriteOnly {
+		if _, sent := body[k]; !sent && stored[k] != nil {
+			body[k] = stored[k]
+		}
+	}
 }
 
 // normalizeStored applies the per-collection server-side shaping the provider has
@@ -424,6 +443,7 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 		if r.Method == http.MethodPut {
 			body["id"] = id
 			body["managed"] = obj["managed"]
+			keepWriteOnly(coll, obj, body)
 			normalizeStored(coll, body)
 			m.store[coll][id] = body
 		} else {
@@ -602,11 +622,29 @@ func (m *mockUAPI) withRuntime(coll string, obj map[string]any) map[string]any {
 			"route":        []any{map[string]any{"target": "0.0.0.0", "mask": 0, "nexthop": "192.168.1.254"}},
 		}
 	case "/wireless/interfaces":
-		if _, ok := out["key"]; ok {
-			out["has_key"] = true
-			delete(out, "key")
+		for _, k := range wirelessWriteOnly {
+			_, ok := out[k]
+			out["has_"+k] = ok
+			delete(out, k)
 		}
 		out["runtime"] = map[string]any{"ifname": "wlan0", "channel": 36, "signal": -52, "assoclist_count": 3}
 	}
 	return out
+}
+
+// checkStored compares with the stored JSON type, so a number sent as a string fails as uapi
+// would refuse it. A nil want checks that the option is gone.
+func (m *mockUAPI) checkStored(coll, id, key string, want any) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		got, ok := m.store[coll][id][key]
+		if want == nil && ok {
+			return fmt.Errorf("stored %s.%s = %v, want it removed", id, key, got)
+		}
+		if want != nil && !reflect.DeepEqual(got, want) {
+			return fmt.Errorf("stored %s.%s = %#v, want %#v", id, key, got, want)
+		}
+		return nil
+	}
 }

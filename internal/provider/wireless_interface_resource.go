@@ -23,19 +23,32 @@ type wirelessInterfaceResource struct{ client *client.Client }
 func NewWirelessInterfaceResource() resource.Resource { return &wirelessInterfaceResource{} }
 
 type wirelessInterfaceModel struct {
-	ID         types.String `tfsdk:"id"`
-	Managed    types.Bool   `tfsdk:"managed"`
-	ETag       types.String `tfsdk:"etag"`
-	Device     types.String `tfsdk:"device"`
-	Disabled   types.Bool   `tfsdk:"disabled"`
-	Encryption types.String `tfsdk:"encryption"`
-	HasKey     types.Bool   `tfsdk:"has_key"`
-	Hidden     types.Bool   `tfsdk:"hidden"`
-	Isolate    types.Bool   `tfsdk:"isolate"`
-	Key        types.String `tfsdk:"key"`
-	Mode       types.String `tfsdk:"mode"`
-	Network    types.String `tfsdk:"network"`
-	Ssid       types.String `tfsdk:"ssid"`
+	ID                    types.String `tfsdk:"id"`
+	Managed               types.Bool   `tfsdk:"managed"`
+	ETag                  types.String `tfsdk:"etag"`
+	Device                types.String `tfsdk:"device"`
+	Disabled              types.Bool   `tfsdk:"disabled"`
+	Encryption            types.String `tfsdk:"encryption"`
+	FtOverDs              types.Bool   `tfsdk:"ft_over_ds"`
+	FtPskGenerateLocal    types.Bool   `tfsdk:"ft_psk_generate_local"`
+	HasKey                types.Bool   `tfsdk:"has_key"`
+	HasR0kh               types.Bool   `tfsdk:"has_r0kh"`
+	HasR1kh               types.Bool   `tfsdk:"has_r1kh"`
+	Hidden                types.Bool   `tfsdk:"hidden"`
+	Ieee80211r            types.Bool   `tfsdk:"ieee80211r"`
+	Isolate               types.Bool   `tfsdk:"isolate"`
+	Key                   types.String `tfsdk:"key"`
+	MobilityDomain        types.String `tfsdk:"mobility_domain"`
+	Mode                  types.String `tfsdk:"mode"`
+	Nasid                 types.String `tfsdk:"nasid"`
+	Network               types.String `tfsdk:"network"`
+	PmkR1Push             types.Bool   `tfsdk:"pmk_r1_push"`
+	R0KeyLifetime         types.Int64  `tfsdk:"r0_key_lifetime"`
+	R0kh                  types.List   `tfsdk:"r0kh"`
+	R1KeyHolder           types.String `tfsdk:"r1_key_holder"`
+	R1kh                  types.List   `tfsdk:"r1kh"`
+	ReassociationDeadline types.Int64  `tfsdk:"reassociation_deadline"`
+	Ssid                  types.String `tfsdk:"ssid"`
 }
 
 func (r *wirelessInterfaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -50,19 +63,32 @@ func (r *wirelessInterfaceResource) Schema(_ context.Context, _ resource.SchemaR
 	resp.Schema = schema.Schema{
 		Description: "Wireless interface.",
 		Attributes: map[string]schema.Attribute{
-			"id":         optionalComputedIDAttribute(),
-			"managed":    managedAttribute(),
-			"etag":       etagAttribute(),
-			"device":     schema.StringAttribute{Required: true, Description: "Underlying device."},
-			"disabled":   optionalComputedBool("Whether the entry is disabled."),
-			"encryption": optionalComputedString("uci option encryption."),
-			"has_key":    schema.BoolAttribute{Computed: true, Description: "Whether a key is configured (the value is never returned)."},
-			"hidden":     optionalComputedBool("uci option hidden."),
-			"isolate":    optionalComputedBool("uci option isolate."),
-			"key":        schema.StringAttribute{Optional: true, Sensitive: true, Description: "Encryption passphrase. Write-only: never returned by the API."},
-			"mode":       optionalComputedString("uci option mode."),
-			"network":    optionalComputedString("uci option network."),
-			"ssid":       optionalComputedString("uci option ssid."),
+			"id":                     optionalComputedIDAttribute(),
+			"managed":                managedAttribute(),
+			"etag":                   etagAttribute(),
+			"device":                 schema.StringAttribute{Required: true, Description: "Underlying device."},
+			"disabled":               optionalComputedBool("Whether the entry is disabled."),
+			"encryption":             optionalComputedString("Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`."),
+			"ft_over_ds":             optionalComputedBool("Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later."),
+			"ft_psk_generate_local":  optionalComputedBool("Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. 802.11r needs WPA2 or later, so plain psk gets no fast transition. Needs uapi 3.2.0 or later."),
+			"has_key":                schema.BoolAttribute{Computed: true, Description: "Whether a key is configured (the value is never returned)."},
+			"has_r0kh":               schema.BoolAttribute{Computed: true, Description: "Whether R0 key holders are configured (the entries are never returned)."},
+			"has_r1kh":               schema.BoolAttribute{Computed: true, Description: "Whether R1 key holders are configured (the entries are never returned)."},
+			"hidden":                 optionalComputedBool("uci option hidden."),
+			"ieee80211r":             optionalComputedBool("Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later."),
+			"isolate":                optionalComputedBool("uci option isolate."),
+			"key":                    schema.StringAttribute{Optional: true, Sensitive: true, Description: "Encryption passphrase. Write-only: never returned by the API."},
+			"mobility_domain":        optionalComputedString("802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later."),
+			"mode":                   optionalComputedString("uci option mode."),
+			"nasid":                  optionalComputedString("802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later."),
+			"network":                optionalComputedString("uci option network."),
+			"pmk_r1_push":            optionalComputedBool("Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later."),
+			"r0_key_lifetime":        optionalComputedInt64("802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 10000. Needs uapi 3.2.0 or later."),
+			"r0kh":                   schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: "802.11r R0 key holders, as `<MAC>,<NAS id>,<key>` entries. Write-only: never returned by the API, see `has_r0kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later."},
+			"r1_key_holder":          optionalComputedString("802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later."),
+			"r1kh":                   schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: "802.11r R1 key holders, as `<MAC>,<R1KH id>,<key>` entries. Write-only: never returned by the API, see `has_r1kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later."},
+			"reassociation_deadline": optionalComputedInt64("802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, OpenWrt uses 20000. Needs uapi 3.2.0 or later."),
+			"ssid":                   optionalComputedString("uci option ssid."),
 		},
 	}
 }
@@ -75,11 +101,22 @@ func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfac
 	putStr(out, "device", m.Device)
 	putBool(out, "disabled", m.Disabled)
 	putStr(out, "encryption", m.Encryption)
+	putBool(out, "ft_over_ds", m.FtOverDs)
+	putBool(out, "ft_psk_generate_local", m.FtPskGenerateLocal)
 	putBool(out, "hidden", m.Hidden)
+	putBool(out, "ieee80211r", m.Ieee80211r)
 	putBool(out, "isolate", m.Isolate)
 	putStr(out, "key", m.Key)
+	putStr(out, "mobility_domain", m.MobilityDomain)
 	putStr(out, "mode", m.Mode)
+	putStr(out, "nasid", m.Nasid)
 	putStr(out, "network", m.Network)
+	putBool(out, "pmk_r1_push", m.PmkR1Push)
+	putInt64(out, "r0_key_lifetime", m.R0KeyLifetime)
+	putList(ctx, out, "r0kh", m.R0kh, diags.d)
+	putStr(out, "r1_key_holder", m.R1KeyHolder)
+	putList(ctx, out, "r1kh", m.R1kh, diags.d)
+	putInt64(out, "reassociation_deadline", m.ReassociationDeadline)
 	putStr(out, "ssid", m.Ssid)
 	return out
 }
@@ -90,12 +127,25 @@ func (r *wirelessInterfaceResource) read(ctx context.Context, obj map[string]any
 	m.Device = strVal(obj, "device")
 	m.Disabled = boolVal(obj, "disabled")
 	m.Encryption = strVal(obj, "encryption")
+	m.FtOverDs = boolVal(obj, "ft_over_ds")
+	m.FtPskGenerateLocal = boolVal(obj, "ft_psk_generate_local")
 	m.HasKey = boolValDefault(obj, "has_key")
+	m.HasR0kh = boolValDefault(obj, "has_r0kh")
+	m.HasR1kh = boolValDefault(obj, "has_r1kh")
 	m.Hidden = boolVal(obj, "hidden")
+	m.Ieee80211r = boolVal(obj, "ieee80211r")
 	m.Isolate = boolVal(obj, "isolate")
 	// key is write-only: preserve the planned value (the API never returns it).
+	m.MobilityDomain = strVal(obj, "mobility_domain")
 	m.Mode = strVal(obj, "mode")
+	m.Nasid = strVal(obj, "nasid")
 	m.Network = strVal(obj, "network")
+	m.PmkR1Push = boolVal(obj, "pmk_r1_push")
+	m.R0KeyLifetime = int64Val(obj, "r0_key_lifetime")
+	// r0kh is write-only: preserve the planned value (the API never returns it).
+	m.R1KeyHolder = strVal(obj, "r1_key_holder")
+	// r1kh is write-only: preserve the planned value (the API never returns it).
+	m.ReassociationDeadline = int64Val(obj, "reassociation_deadline")
 	m.Ssid = strVal(obj, "ssid")
 }
 

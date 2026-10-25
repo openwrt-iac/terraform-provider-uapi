@@ -23,16 +23,22 @@ type wirelessDeviceResource struct{ client *client.Client }
 func NewWirelessDeviceResource() resource.Resource { return &wirelessDeviceResource{} }
 
 type wirelessDeviceModel struct {
-	ID       types.String `tfsdk:"id"`
-	Managed  types.Bool   `tfsdk:"managed"`
-	ETag     types.String `tfsdk:"etag"`
-	Band     types.String `tfsdk:"band"`
-	Channel  types.Int64  `tfsdk:"channel"`
-	Country  types.String `tfsdk:"country"`
-	Disabled types.Bool   `tfsdk:"disabled"`
-	Htmode   types.String `tfsdk:"htmode"`
-	Txpower  types.Int64  `tfsdk:"txpower"`
-	Type     types.String `tfsdk:"type"`
+	ID          types.String `tfsdk:"id"`
+	Managed     types.Bool   `tfsdk:"managed"`
+	ETag        types.String `tfsdk:"etag"`
+	Band        types.String `tfsdk:"band"`
+	CellDensity types.Int64  `tfsdk:"cell_density"`
+	Channel     types.Int64  `tfsdk:"channel"`
+	Country     types.String `tfsdk:"country"`
+	Disabled    types.Bool   `tfsdk:"disabled"`
+	Htmode      types.String `tfsdk:"htmode"`
+	LegacyRates types.Bool   `tfsdk:"legacy_rates"`
+	Macaddr     types.String `tfsdk:"macaddr"`
+	Path        types.String `tfsdk:"path"`
+	Phy         types.String `tfsdk:"phy"`
+	Radio       types.Int64  `tfsdk:"radio"`
+	Txpower     types.Int64  `tfsdk:"txpower"`
+	Type        types.String `tfsdk:"type"`
 }
 
 func (r *wirelessDeviceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -47,16 +53,22 @@ func (r *wirelessDeviceResource) Schema(_ context.Context, _ resource.SchemaRequ
 	resp.Schema = schema.Schema{
 		Description: "Wireless device.",
 		Attributes: map[string]schema.Attribute{
-			"id":       optionalComputedIDAttribute(),
-			"managed":  managedAttribute(),
-			"etag":     etagAttribute(),
-			"band":     optionalComputedString("uci option band."),
-			"channel":  optionalComputedInt64("uci option channel."),
-			"country":  optionalComputedString("uci option country."),
-			"disabled": optionalComputedBool("Whether the entry is disabled."),
-			"htmode":   optionalComputedString("uci option htmode."),
-			"txpower":  optionalComputedInt64("uci option txpower."),
-			"type":     schema.StringAttribute{Required: true, Description: "uci option type."},
+			"id":           optionalComputedIDAttribute(),
+			"managed":      managedAttribute(),
+			"etag":         etagAttribute(),
+			"band":         optionalComputedString("uci option band."),
+			"cell_density": optionalComputedInt64("Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later."),
+			"channel":      optionalComputedInt64("uci option channel."),
+			"country":      optionalComputedString("uci option country."),
+			"disabled":     optionalComputedBool("Whether the entry is disabled."),
+			"htmode":       optionalComputedString("uci option htmode."),
+			"legacy_rates": optionalComputedBool("Whether the legacy 802.11b rates are allowed. Defaults to false. Needs uapi 3.2.0 or later."),
+			"macaddr":      optionalComputedString("MAC address of the phy. Older `wifi detect` configurations bind a radio with it instead of `path`. Needs uapi 3.2.0 or later."),
+			"path":         optionalComputedString("Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. Needs uapi 3.2.0 or later."),
+			"phy":          optionalComputedString("Name of the phy, as in board.json. `wifi config` writes it instead of `path` when the phy is not named phyN. Needs uapi 3.2.0 or later."),
+			"radio":        optionalComputedInt64("Index of the radio on a phy that has several, as `wifi config` writes it. Needs uapi 3.2.0 or later."),
+			"txpower":      optionalComputedInt64("uci option txpower."),
+			"type":         schema.StringAttribute{Required: true, Description: "uci option type."},
 		},
 	}
 }
@@ -67,10 +79,16 @@ func (r *wirelessDeviceResource) body(ctx context.Context, m wirelessDeviceModel
 		putStr(out, "id", m.ID)
 	}
 	putStr(out, "band", m.Band)
+	putInt64(out, "cell_density", m.CellDensity)
 	putInt64(out, "channel", m.Channel)
 	putStr(out, "country", m.Country)
 	putBool(out, "disabled", m.Disabled)
 	putStr(out, "htmode", m.Htmode)
+	putBool(out, "legacy_rates", m.LegacyRates)
+	putStr(out, "macaddr", m.Macaddr)
+	putStr(out, "path", m.Path)
+	putStr(out, "phy", m.Phy)
+	putInt64(out, "radio", m.Radio)
 	putInt64(out, "txpower", m.Txpower)
 	putStr(out, "type", m.Type)
 	return out
@@ -80,10 +98,16 @@ func (r *wirelessDeviceResource) read(ctx context.Context, obj map[string]any, m
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
 	m.Band = strVal(obj, "band")
+	m.CellDensity = int64Val(obj, "cell_density")
 	m.Channel = int64Val(obj, "channel")
 	m.Country = strVal(obj, "country")
 	m.Disabled = boolVal(obj, "disabled")
 	m.Htmode = strVal(obj, "htmode")
+	m.LegacyRates = boolVal(obj, "legacy_rates")
+	m.Macaddr = strVal(obj, "macaddr")
+	m.Path = strVal(obj, "path")
+	m.Phy = strVal(obj, "phy")
+	m.Radio = int64Val(obj, "radio")
 	m.Txpower = int64Val(obj, "txpower")
 	m.Type = strVal(obj, "type")
 }
