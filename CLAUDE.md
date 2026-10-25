@@ -101,7 +101,7 @@ provider major.
 ## Resource-specific gotchas
 
 - **`uapi_system` is a singleton.** No id segment, no create/delete on the wire. Create and Update both `PATCH /system`; Delete is a no-op that only drops state.
-- **`uapi_wireless_interface.key` is write-only.** uapi never returns it, so `read()` must leave the model's key untouched (preserving the planned value) and rely on the computed `has_key`. Do not map a key field out of the response.
+- **`uapi_wireless_interface.key`, `r0kh` and `r1kh` are write-only.** uapi never returns them, so `read()` must leave the model's values untouched (preserving the planned value) and rely on the computed `has_key`, `has_r0kh` and `has_r1kh`. Do not map them out of the response. A PUT that leaves them out keeps them on the router, so only `r0kh = []` or `r1kh = []` removes the entries.
 - **Import adopts (adopt-keep-name since uapi 2.2.0).** `importByID` (in `helpers.go`) wraps `resolveImportID`, which checks `managed` and `POST .../adopt`s an unmanaged section. A *named* section is adopted in place (the id is unchanged, no router mutation); only an *anonymous* `cfgXXXX` section is renamed to a stable id. `importByID` warns only when the id actually changed (`adopted && id != req.ID`). All resource `ImportState` methods are one-liners delegating to `importByID`. `name` on `uapi_network_interface` is deprecated in favour of the settable `id`; the generator emits a `DeprecationMessage` from the spec's `deprecated: true`.
 - **423 locked is retried in the client,** honoring `Retry-After`. Do not add retry logic in resources.
 

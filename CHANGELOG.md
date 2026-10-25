@@ -94,11 +94,11 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
 - `metric`, `defaultroute`, `delegate`, `ip4table` and `ip6table` now apply to every
   proto. Before, uapi dropped them on some protos and answered 200. `peerdns` and
   `reqprefix` now also apply to `pppoe` and `ppp`, and `clientid` to `dhcpv6`.
-- uapi 3.2.0 changes the ETag of every interface once at the upgrade, and of some
-  routes, rules, devices, bridge VLANs and wireguard peers. A normal plan reads the new
-  ETag first, so nothing fails. An apply with `-refresh=false`, or of a plan saved
-  before the upgrade, answers 412 for such a resource. Run a plan with refresh after
-  the upgrade.
+- uapi 3.2.0 changes the ETag of every network interface, wireless device and wireless
+  interface once at the upgrade, and of some routes, rules, devices, bridge VLANs and
+  wireguard peers. A normal plan reads the new ETag first, so nothing fails. An apply
+  with `-refresh=false`, or of a plan saved before the upgrade, answers 412 for such a
+  resource. Run a plan with refresh after the upgrade.
 - A PUT of a wireguard interface writes `nohostroute '0'` to uci when the option was
   unset, because uapi reads an unset `nohostroute` as false and the provider sends the
   value from its state. The value has no effect. uapi 3.2.0 stopped writing it on a
