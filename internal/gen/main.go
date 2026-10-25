@@ -217,7 +217,7 @@ func buildResource(d descriptor, props, writable map[string]specProp, required [
 				fail("read-only field %q on %s has type %q, which has no computed emission; add one in resAttr", n, d.Type, typeOf(p))
 			}
 		case p.WriteOnly:
-			f.GoType, f.Kind = "types.String", "writeonly"
+			f.GoType, f.Kind = goType(p), "writeonly"
 		default:
 			f.GoType = goType(p)
 			if req[n] {

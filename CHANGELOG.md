@@ -34,15 +34,23 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
 - `uapi_network_interface.ip6class` and `ip6weight`, for every proto. They complete the
   prefix assignment options next to `ip6assign` and `ip6hint`.
 - The new attributes are also on the `uapi_network_interface` data source.
-- `uapi_wireless_device.path`, `phy` and `radio`, which bind a radio to its hardware, and
-  `cell_density` and `legacy_rates`. `uapi_wireless_interface.ieee80211r`, `ft_over_ds`,
-  `ft_psk_generate_local` and `mobility_domain`, LuCI's 802.11r settings. They are also on
-  the data sources.
+- `uapi_wireless_device.path`, `macaddr`, `phy` and `radio`, which bind a radio to its
+  hardware, and `cell_density` and `legacy_rates`. `uapi_wireless_interface.ieee80211r`,
+  `ft_over_ds`, `ft_psk_generate_local`, `mobility_domain`, `nasid`,
+  `reassociation_deadline`, `r0_key_lifetime`, `r1_key_holder`, `pmk_r1_push`, `r0kh` and
+  `r1kh`, the 802.11r settings of LuCI's WLAN roaming tab. They are also on the data
+  sources.
+- `r0kh` and `r1kh` hold shared keys, so they are write-only and sensitive, like `key`:
+  uapi never returns them, `has_r0kh` and `has_r1kh` say whether they are set, and the
+  state keeps the configured value. Removing them from the configuration keeps the entries
+  on the router, since uapi keeps them when a PUT leaves them out. The generator now emits a
+  write-only list attribute for them.
 
 ### Fixed
 - **The first update of an imported `uapi_wireless_device` removed its `path`, and the
   radio stayed down** (#37). An update is a PUT, and uapi removes the options that the
-  resource does not model. Without `path`, OpenWrt finds no phy for the radio. The update
+  resource does not model. Without `path` (or `macaddr`, on a radio that an older
+  `wifi detect` bound by MAC address), OpenWrt finds no phy for the radio. The update
   of an imported `uapi_wireless_interface` also removed its 802.11r options, and it failed
   with 422 when `encryption` carried a cipher, such as LuCI's `psk2+ccmp`. uapi 3.2.0
   models these options (openwrt-iac/uapi#238), and the new attributes are Optional+Computed,

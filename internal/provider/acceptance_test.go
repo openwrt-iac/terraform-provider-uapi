@@ -363,18 +363,22 @@ resource "uapi_wireless_interface" "w" {
   ssid       = "home"
   encryption = "psk2"
   key        = "supersecret"
+  r0kh       = ["02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"]
 }`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "ssid", "home"),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "key", "supersecret"),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_key", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "r0kh.#", "1"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_r0kh", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_r1kh", "false"),
 				),
 			},
 			{
 				ResourceName:            "uapi_wireless_interface.w",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"key"}, // write-only, never returned
+				ImportStateVerifyIgnore: []string{"key", "r0kh"}, // write-only, never returned
 			},
 		},
 	})
@@ -388,18 +392,21 @@ func TestAccWireless_importKeepsUnconfiguredOptions(t *testing.T) {
 	defer m.Close()
 	m.seedUnmanaged("/wireless/devices", "radio0", map[string]any{
 		"type": "mac80211", "path": "platform/soc/18000000.wifi", "band": "2g", "channel": 1,
-		"htmode": "HT40", "cell_density": 0, "legacy_rates": true,
+		"htmode": "HT40", "cell_density": 0, "legacy_rates": true, "macaddr": "02:00:00:00:01:00",
 	})
 	m.seedUnmanaged("/wireless/interfaces", "default_radio0", map[string]any{
 		"device": "radio0", "network": "lan", "mode": "ap", "ssid": "home", "encryption": "psk2+ccmp",
 		"key": "supersecret", "ieee80211r": true, "ft_over_ds": false, "ft_psk_generate_local": true,
-		"mobility_domain": "4f57",
+		"mobility_domain": "4f57", "nasid": "ap1", "reassociation_deadline": 20000, "r0_key_lifetime": 10000,
+		"r1_key_holder": "020000000100", "pmk_r1_push": true,
+		"r0kh": []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"},
+		"r1kh": []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"},
 	})
 	stored := func(coll, id, key string, want any) resource.TestCheckFunc {
 		return func(*terraform.State) error {
 			m.mu.Lock()
 			defer m.mu.Unlock()
-			if got := m.store[coll][id][key]; got != want {
+			if got := m.store[coll][id][key]; fmt.Sprint(got) != fmt.Sprint(want) {
 				return fmt.Errorf("stored %s.%s = %v, want %v", id, key, got, want)
 			}
 			return nil
@@ -438,17 +445,34 @@ resource "uapi_wireless_interface" "home" {
 				ImportStatePersist: true,
 			},
 			{
-				Config: cfg("6", "home2"),
+				Config: cfg("6", "home2") + `
+
+data "uapi_wireless_interface" "home" {
+  id = uapi_wireless_interface.home.id
+}`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "path", "platform/soc/18000000.wifi"),
 					stored("/wireless/devices", "radio0", "channel", float64(6)),
 					stored("/wireless/devices", "radio0", "path", "platform/soc/18000000.wifi"),
 					stored("/wireless/devices", "radio0", "legacy_rates", true),
+					stored("/wireless/devices", "radio0", "macaddr", "02:00:00:00:01:00"),
 					stored("/wireless/interfaces", "default_radio0", "ssid", "home2"),
 					stored("/wireless/interfaces", "default_radio0", "encryption", "psk2+ccmp"),
 					stored("/wireless/interfaces", "default_radio0", "ieee80211r", true),
 					stored("/wireless/interfaces", "default_radio0", "ft_psk_generate_local", true),
 					stored("/wireless/interfaces", "default_radio0", "mobility_domain", "4f57"),
+					stored("/wireless/interfaces", "default_radio0", "nasid", "ap1"),
+					stored("/wireless/interfaces", "default_radio0", "reassociation_deadline", 20000),
+					stored("/wireless/interfaces", "default_radio0", "r0_key_lifetime", 10000),
+					stored("/wireless/interfaces", "default_radio0", "r1_key_holder", "020000000100"),
+					stored("/wireless/interfaces", "default_radio0", "pmk_r1_push", true),
+					stored("/wireless/interfaces", "default_radio0", "r0kh", []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"}),
+					stored("/wireless/interfaces", "default_radio0", "r1kh", []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"}),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r0kh", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r1kh", "true"),
+					resource.TestCheckNoResourceAttr("uapi_wireless_interface.home", "r0kh"),
+					resource.TestCheckResourceAttr("data.uapi_wireless_interface.home", "has_r0kh", "true"),
+					resource.TestCheckNoResourceAttr("data.uapi_wireless_interface.home", "r0kh"),
 				),
 			},
 		},

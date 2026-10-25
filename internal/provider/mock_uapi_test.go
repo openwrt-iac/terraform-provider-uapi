@@ -152,6 +152,18 @@ func scopeRefused(w http.ResponseWriter, coll string, named map[string]any, prot
 
 // normalizeStored applies the per-collection server-side shaping the provider has
 // to round-trip against.
+// uapi keeps a stored secret that a PUT leaves out, since a read never returns it.
+func keepWriteOnly(coll string, stored, body map[string]any) {
+	if coll != "/wireless/interfaces" {
+		return
+	}
+	for _, k := range []string{"key", "r0kh", "r1kh"} {
+		if _, sent := body[k]; !sent && stored[k] != nil {
+			body[k] = stored[k]
+		}
+	}
+}
+
 func normalizeStored(coll string, obj map[string]any) {
 	if coll == "/network/interfaces" {
 		// toUci drops what the proto does not take, so a read leaves it out.
@@ -424,6 +436,7 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 		if r.Method == http.MethodPut {
 			body["id"] = id
 			body["managed"] = obj["managed"]
+			keepWriteOnly(coll, obj, body)
 			normalizeStored(coll, body)
 			m.store[coll][id] = body
 		} else {
@@ -602,9 +615,10 @@ func (m *mockUAPI) withRuntime(coll string, obj map[string]any) map[string]any {
 			"route":        []any{map[string]any{"target": "0.0.0.0", "mask": 0, "nexthop": "192.168.1.254"}},
 		}
 	case "/wireless/interfaces":
-		if _, ok := out["key"]; ok {
-			out["has_key"] = true
-			delete(out, "key")
+		for _, k := range []string{"key", "r0kh", "r1kh"} {
+			_, ok := out[k]
+			out["has_"+k] = ok
+			delete(out, k)
 		}
 		out["runtime"] = map[string]any{"ifname": "wlan0", "channel": 36, "signal": -52, "assoclist_count": 3}
 	}

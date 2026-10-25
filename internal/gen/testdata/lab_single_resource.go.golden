@@ -35,6 +35,7 @@ type labSingleModel struct {
 	Name       types.String `tfsdk:"name"`
 	Note       types.String `tfsdk:"note"`
 	Secret     types.String `tfsdk:"secret"`
+	Secretlist types.List   `tfsdk:"secretlist"`
 	Tags       types.List   `tfsdk:"tags"`
 	Weight     types.Int64  `tfsdk:"weight"`
 	Wgname     types.String `tfsdk:"wgname"`
@@ -61,6 +62,7 @@ func (r *labSingleResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"name":       optionalComputedString("Optional section name."),
 			"note":       schema.StringAttribute{Computed: true, Description: "uci option note."},
 			"secret":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "uci option secret."},
+			"secretlist": schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: "uci option secretlist."},
 			"tags":       optionalComputedStringList("uci option tags."),
 			"weight":     optionalComputedInt64("uci option weight."),
 			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Create-only kernel name."},
@@ -76,6 +78,7 @@ func (r *labSingleResource) body(ctx context.Context, m labSingleModel, diags *d
 	}
 	putStr(out, "name", m.Name)
 	putStr(out, "secret", m.Secret)
+	putList(ctx, out, "secretlist", m.Secretlist, diags.d)
 	putList(ctx, out, "tags", m.Tags, diags.d)
 	putInt64(out, "weight", m.Weight)
 	if create {
@@ -93,6 +96,7 @@ func (r *labSingleResource) read(ctx context.Context, obj map[string]any, m *lab
 	m.Name = strVal(obj, "name")
 	m.Note = strVal(obj, "note")
 	// secret is write-only: preserve the planned value (the API never returns it).
+	// secretlist is write-only: preserve the planned value (the API never returns it).
 	m.Tags = diags.list(listValKeepEmpty(ctx, obj, "tags", m.Tags))
 	m.Weight = int64Val(obj, "weight")
 	// wgname is create-only: preserve the planned value (the API never returns it).

@@ -12,7 +12,7 @@ import (
 var update = flag.Bool("update", false, "update golden files in testdata/")
 
 // fixtureProps exercises every field-classification branch the generator has:
-// required string, optional+computed string/int/bool/list, write-only,
+// required string, optional+computed string/int/bool/list, write-only string/list,
 // read-only bool/string, and create-only (also marked deprecated, to pin the
 // DeprecationMessage path). buildResource sorts field names, so output is stable.
 func fixtureProps() map[string]specProp {
@@ -22,6 +22,7 @@ func fixtureProps() map[string]specProp {
 		"flag":       {Type: "boolean"},
 		"tags":       {Type: "array"},
 		"secret":     {Type: "string", WriteOnly: true},
+		"secretlist": {Type: "array", WriteOnly: true},
 		"has_secret": {Type: "boolean", ReadOnly: true},
 		"note":       {Type: "string", ReadOnly: true},
 		"wgname":     {Type: "string", Description: "Create-only kernel name.", Deprecated: true},

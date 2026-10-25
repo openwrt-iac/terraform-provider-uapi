@@ -33,6 +33,7 @@ type wirelessDeviceModel struct {
 	Disabled    types.Bool   `tfsdk:"disabled"`
 	Htmode      types.String `tfsdk:"htmode"`
 	LegacyRates types.Bool   `tfsdk:"legacy_rates"`
+	Macaddr     types.String `tfsdk:"macaddr"`
 	Path        types.String `tfsdk:"path"`
 	Phy         types.String `tfsdk:"phy"`
 	Radio       types.Int64  `tfsdk:"radio"`
@@ -62,7 +63,8 @@ func (r *wirelessDeviceResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"disabled":     optionalComputedBool("Whether the entry is disabled."),
 			"htmode":       optionalComputedString("uci option htmode."),
 			"legacy_rates": optionalComputedBool("Whether the legacy 802.11b rates are allowed. Defaults to false. Needs uapi 3.2.0 or later."),
-			"path":         optionalComputedString("Device path of the phy under /sys/devices, as `wifi config` writes it. With `phy`, it binds the radio to its hardware: a radio that neither one matches does not come up. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later."),
+			"macaddr":      optionalComputedString("MAC address of the phy. Older `wifi detect` configurations bind a radio with it instead of `path`. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later."),
+			"path":         optionalComputedString("Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. An imported radio keeps it when the configuration omits it. Needs uapi 3.2.0 or later."),
 			"phy":          optionalComputedString("Name of the phy, as in board.json. `wifi config` writes it instead of `path` when the phy is not named phyN. Needs uapi 3.2.0 or later."),
 			"radio":        optionalComputedInt64("Index of the radio on a phy that has several, as `wifi config` writes it. Needs uapi 3.2.0 or later."),
 			"txpower":      optionalComputedInt64("uci option txpower."),
@@ -83,6 +85,7 @@ func (r *wirelessDeviceResource) body(ctx context.Context, m wirelessDeviceModel
 	putBool(out, "disabled", m.Disabled)
 	putStr(out, "htmode", m.Htmode)
 	putBool(out, "legacy_rates", m.LegacyRates)
+	putStr(out, "macaddr", m.Macaddr)
 	putStr(out, "path", m.Path)
 	putStr(out, "phy", m.Phy)
 	putInt64(out, "radio", m.Radio)
@@ -101,6 +104,7 @@ func (r *wirelessDeviceResource) read(ctx context.Context, obj map[string]any, m
 	m.Disabled = boolVal(obj, "disabled")
 	m.Htmode = strVal(obj, "htmode")
 	m.LegacyRates = boolVal(obj, "legacy_rates")
+	m.Macaddr = strVal(obj, "macaddr")
 	m.Path = strVal(obj, "path")
 	m.Phy = strVal(obj, "phy")
 	m.Radio = int64Val(obj, "radio")

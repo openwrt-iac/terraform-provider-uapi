@@ -30,7 +30,7 @@ resource "uapi_wireless_interface" "example" {
 - `disabled` (Boolean) Whether the entry is disabled.
 - `encryption` (String) Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`.
 - `ft_over_ds` (Boolean) Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later.
-- `ft_psk_generate_local` (Boolean) Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk, psk2 or psk-mixed, and false otherwise. Needs uapi 3.2.0 or later.
+- `ft_psk_generate_local` (Boolean) Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. 802.11r needs WPA2 or later, so plain psk gets no fast transition. Needs uapi 3.2.0 or later.
 - `hidden` (Boolean) uci option hidden.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `ieee80211r` (Boolean) Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later.
@@ -38,13 +38,22 @@ resource "uapi_wireless_interface" "example" {
 - `key` (String, Sensitive) Encryption passphrase. Write-only: never returned by the API.
 - `mobility_domain` (String) 802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later.
 - `mode` (String) uci option mode.
+- `nasid` (String) 802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later.
 - `network` (String) uci option network.
+- `pmk_r1_push` (Boolean) Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later.
+- `r0_key_lifetime` (Number) 802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 10000. Needs uapi 3.2.0 or later.
+- `r0kh` (List of String, Sensitive) 802.11r R0 key holders, as `<MAC>,<NAS id>,<key>` entries. Write-only: never returned by the API, see `has_r0kh`. Removing it from the configuration keeps the entries on the router, as with `key`. Needs uapi 3.2.0 or later.
+- `r1_key_holder` (String) 802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later.
+- `r1kh` (List of String, Sensitive) 802.11r R1 key holders, as `<MAC>,<R1KH id>,<key>` entries. Write-only: never returned by the API, see `has_r1kh`. Removing it from the configuration keeps the entries on the router, as with `key`. Needs uapi 3.2.0 or later.
+- `reassociation_deadline` (Number) 802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, OpenWrt uses 20000. Needs uapi 3.2.0 or later.
 - `ssid` (String) uci option ssid.
 
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state, used for If-Match optimistic concurrency.
 - `has_key` (Boolean) Whether a key is configured (the value is never returned).
+- `has_r0kh` (Boolean) Whether R0 key holders are configured (the entries are never returned).
+- `has_r1kh` (Boolean) Whether R1 key holders are configured (the entries are never returned).
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 
 ## Import
