@@ -6,7 +6,7 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
-## [3.2.0] - TBD
+## [3.2.0] - 2026-10-29
 
 Tracks uapi 3.2.0. **Upgrade the provider and uapi together.** Provider 3.1 fails
 against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an

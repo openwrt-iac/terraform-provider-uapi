@@ -17,7 +17,9 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 - An OpenWrt router running **uapi >= 3.0.0** (OpenWrt 25.12+), reachable over HTTP(S).
   `uapi_cron_job` and `uapi_dhcp_host.match_tag` need uapi >= 3.1.0. The
   `uapi_network_interface` attributes `broadcast_flag`, `sourcefilter`, `ip6class` and
-  `ip6weight`, and the list form of `ip6prefix`, need uapi >= 3.2.0.
+  `ip6weight`, the list form of `ip6prefix`, and the new `uapi_wireless_device` and
+  `uapi_wireless_interface` attributes, such as `path` and the 802.11r settings, need
+  uapi >= 3.2.0.
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
 - Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
 
