@@ -35,7 +35,7 @@ data "uapi_dhcp_host" "example" {
 - `instance` (String) uci option instance.
 - `ip` (String) uci option ip.
 - `leasetime` (String) uci option leasetime.
-- `macs` (List of String) MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.
+- `macs` (List of String) MAC addresses for this reservation, one per entry (the uci `list mac`). From uapi 3.2.0, an option or a list entry that holds several MACs separated by spaces reads as one entry per MAC, as dnsmasq gets them. uapi refuses an entry with a space, so list each MAC as its own entry.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `match_tag` (List of String) dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it. Only a tag that dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does. A comma, a double quote, a `#`, a control character or a blank value is refused.
 - `name` (String) Hostname dnsmasq answers for this reservation. A comma, a double quote, a `#` or a control character is refused, because the name goes into dnsmasq's config line.

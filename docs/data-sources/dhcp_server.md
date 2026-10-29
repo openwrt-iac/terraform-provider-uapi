@@ -27,7 +27,7 @@ data "uapi_dhcp_server" "example" {
 
 ### Read-Only
 
-- `dhcp_option` (List of String) uci option dhcp_option.
+- `dhcp_option` (List of String) DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it.
 - `dhcpv6` (String) uci option dhcpv6.
 - `domain` (String) uci option domain.
 - `dynamicdhcp` (Boolean) uci option dynamicdhcp.

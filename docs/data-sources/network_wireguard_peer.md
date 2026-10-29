@@ -31,12 +31,12 @@ data "uapi_network_wireguard_peer" "example" {
 - `description` (String) uci option description.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `endpoint_host` (String) uci option endpoint_host.
-- `endpoint_port` (Number) uci option endpoint_port.
+- `endpoint_port` (Number) UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0, and wg then cannot bring the interface up. uapi refuses a write of 0, so an update of such a peer fails until a port is set.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `has_preshared_key` (Boolean) Whether a preshared key is configured.
 - `interface` (String) Network interface this entry applies to.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `persistent_keepalive` (Number) uci option persistent_keepalive.
+- `persistent_keepalive` (Number) Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1, and wg then cannot bring the interface up. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.
 - `preshared_key` (String, Sensitive) Always null; never returned by the API.
 - `public_key` (String) uci option public_key.
 - `route_allowed_ips` (Boolean) uci option route_allowed_ips.

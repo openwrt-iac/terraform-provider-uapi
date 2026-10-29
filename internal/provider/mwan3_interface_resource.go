@@ -70,7 +70,7 @@ func (r *mwan3InterfaceResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"failure_interval":      optionalComputedInt64("uci option failure_interval."),
 			"failure_latency":       optionalComputedInt64("uci option failure_latency."),
 			"failure_loss":          optionalComputedInt64("uci option failure_loss."),
-			"family":                schema.StringAttribute{Required: true, Description: "Address family: any, ipv4, or ipv6."},
+			"family":                schema.StringAttribute{Required: true, Description: "Address family that this interface tracks: `ipv4` or `ipv6`."},
 			"flush_conntrack":       optionalComputedStringList("uci option flush_conntrack."),
 			"interval":              optionalComputedInt64("uci option interval."),
 			"keep_failure_interval": optionalComputedBool("uci option keep_failure_interval."),

@@ -23,6 +23,6 @@ data "uapi_unbound_ext" "example" {}
 
 - `enabled` (Boolean) Whether the entry is active.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `ext_line` (List of String) Verbatim lines rendered into unbound_ext.conf, outside the `server:` clause. One entry per line; build whole `forward-zone:`/`view:`/`stub:` clauses by listing them in order.
+- `ext_line` (List of String) Verbatim lines rendered into unbound_ext.conf, outside the `server:` clause, one entry per line. Build whole `forward-zone:`, `view:` or `stub:` clauses by listing their lines in order. Nothing checks their grammar before unbound restarts, and unbound stops on a line that it cannot parse. If unbound ran before the write, uapi 3.2.0 and later then restore the previous lines and answer `500 reload_failed_restored`.
 - `id` (String) Stable id.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.

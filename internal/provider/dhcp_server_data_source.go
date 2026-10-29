@@ -34,7 +34,7 @@ func (d *dhcpServerDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"id":          dsIDAttribute(),
 			"managed":     dsManagedAttribute(),
 			"etag":        dsComputedString("Opaque ETag of the resource's current state."),
-			"dhcp_option": dsComputedStringList("uci option dhcp_option."),
+			"dhcp_option": dsComputedStringList("DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it."),
 			"dhcpv6":      dsComputedString("uci option dhcpv6."),
 			"domain":      dsComputedString("uci option domain."),
 			"dynamicdhcp": dsComputedBool("uci option dynamicdhcp."),

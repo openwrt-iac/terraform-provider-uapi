@@ -35,7 +35,7 @@ func (d *unboundExtDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"managed":  dsManagedAttribute(),
 			"etag":     dsComputedString("Opaque ETag of the resource's current state."),
 			"enabled":  dsComputedBool("Whether the entry is active."),
-			"ext_line": dsComputedStringList("Verbatim lines rendered into unbound_ext.conf, outside the `server:` clause. One entry per line; build whole `forward-zone:`/`view:`/`stub:` clauses by listing them in order."),
+			"ext_line": dsComputedStringList("Verbatim lines rendered into unbound_ext.conf, outside the `server:` clause, one entry per line. Build whole `forward-zone:`, `view:` or `stub:` clauses by listing their lines in order. Nothing checks their grammar before unbound restarts, and unbound stops on a line that it cannot parse. If unbound ran before the write, uapi 3.2.0 and later then restore the previous lines and answer `500 reload_failed_restored`."),
 		},
 	}
 }

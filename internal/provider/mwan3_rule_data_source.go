@@ -36,7 +36,7 @@ func (d *mwan3RuleDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			"etag":       dsComputedString("Opaque ETag of the resource's current state."),
 			"dest_ip":    dsComputedString("Destination IP addresses or CIDRs."),
 			"dest_port":  dsComputedString("Destination ports."),
-			"family":     dsComputedString("Address family: any, ipv4, or ipv6."),
+			"family":     dsComputedString("Address family of the traffic that this rule matches: `ipv4` or `ipv6`. Unset, mwan3 applies the rule to both."),
 			"ipset":      dsComputedString("uci option ipset."),
 			"logging":    dsComputedBool("uci option logging."),
 			"proto":      dsComputedString("Protocol."),

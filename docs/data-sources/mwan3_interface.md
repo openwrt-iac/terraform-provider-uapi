@@ -34,7 +34,7 @@ data "uapi_mwan3_interface" "example" {
 - `failure_interval` (Number) uci option failure_interval.
 - `failure_latency` (Number) uci option failure_latency.
 - `failure_loss` (Number) uci option failure_loss.
-- `family` (String) Address family: any, ipv4, or ipv6.
+- `family` (String) Address family that this interface tracks: `ipv4` or `ipv6`.
 - `flush_conntrack` (List of String) uci option flush_conntrack.
 - `interval` (Number) uci option interval.
 - `keep_failure_interval` (Boolean) uci option keep_failure_interval.

@@ -29,7 +29,7 @@ resource "uapi_mwan3_rule" "example" {
 
 - `dest_ip` (String) Destination IP addresses or CIDRs.
 - `dest_port` (String) Destination ports.
-- `family` (String) Address family: any, ipv4, or ipv6.
+- `family` (String) Address family of the traffic that this rule matches: `ipv4` or `ipv6`. Unset, mwan3 applies the rule to both.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `ipset` (String) uci option ipset.
 - `logging` (Boolean) uci option logging.

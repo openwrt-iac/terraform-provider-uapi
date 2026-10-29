@@ -28,4 +28,4 @@ data "uapi_unbound_srv" "example" {}
 - `interface_outgoing` (List of String) Source addresses for upstream recursion (multi-WAN egress).
 - `ip_transparent` (Boolean) Bind to addresses that are not yet up (VIP / alias / floating addresses).
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `srv_line` (List of String) Verbatim lines inserted inside unbound's `server:` clause. One entry per line; `unbound-checkconf` validates grammar after restart.
+- `srv_line` (List of String) Verbatim lines inserted inside unbound's `server:` clause, one entry per line. Nothing checks their grammar before unbound restarts, and unbound stops on a line that it cannot parse. If unbound ran before the write, uapi 3.2.0 and later then restore the previous lines and answer `500 reload_failed_restored`.

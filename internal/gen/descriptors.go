@@ -41,6 +41,10 @@ const (
 	markDesc  = "Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate."
 )
 
+// Shared by unbound_srv and unbound_ext. unbound-uci-ext documents an unbound-checkconf run that
+// nothing performs, so the grammar is only checked by unbound itself at the restart.
+const unboundLineDesc = "Nothing checks their grammar before unbound restarts, and unbound stops on a line that it cannot parse. If unbound ran before the write, uapi 3.2.0 and later then restore the previous lines and answer `500 reload_failed_restored`."
+
 var commonDesc = map[string]string{
 	"name":               "Optional section name.",
 	"enabled":            "Whether the entry is active.",
@@ -78,8 +82,8 @@ var commonDesc = map[string]string{
 	"ip_transparent":     "Bind to addresses that are not yet up (VIP / alias / floating addresses).",
 	"interface_bind":     "Addresses unbound binds on (`addr` or `addr@port`). Pair with the main unbound `interface_auto = false` for exclusive binding.",
 	"interface_outgoing": "Source addresses for upstream recursion (multi-WAN egress).",
-	"srv_line":           "Verbatim lines inserted inside unbound's `server:` clause. One entry per line; `unbound-checkconf` validates grammar after restart.",
-	"ext_line":           "Verbatim lines rendered into unbound_ext.conf, outside the `server:` clause. One entry per line; build whole `forward-zone:`/`view:`/`stub:` clauses by listing them in order.",
+	"srv_line":           "Verbatim lines inserted inside unbound's `server:` clause, one entry per line. " + unboundLineDesc,
+	"ext_line":           "Verbatim lines rendered into unbound_ext.conf, outside the `server:` clause, one entry per line. Build whole `forward-zone:`, `view:` or `stub:` clauses by listing their lines in order. " + unboundLineDesc,
 }
 
 // A rule needs no source zone (fw4 puts it in the output chain), but a redirect
@@ -197,7 +201,10 @@ var descriptors = []descriptor{
 	}},
 	{Type: "network_rule", Schema: "NetworkRules", Collection: "network/rules", Kind: "collection", Label: "network rule", GenDataSource: true},
 	{Type: "network_bridge_vlan", Schema: "NetworkBridgeVlans", Collection: "network/bridge_vlans", Kind: "collection", Label: "network bridge VLAN", GenDataSource: true},
-	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true},
+	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true, Descs: map[string]string{
+		"endpoint_port":        "UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0, and wg then cannot bring the interface up. uapi refuses a write of 0, so an update of such a peer fails until a port is set.",
+		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1, and wg then cannot bring the interface up. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.",
+	}},
 	// wireless
 	{Type: "wireless_device", Schema: "WirelessDevices", Collection: "wireless/devices", Kind: "collection", Label: "wireless device", GenDataSource: true, Descs: map[string]string{
 		"path":         "Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. Needs uapi 3.2.0 or later.",
@@ -226,11 +233,13 @@ var descriptors = []descriptor{
 	// dhcp
 	{Type: "dhcp_host", Schema: "DhcpHosts", Collection: "dhcp/hosts", Kind: "collection", Label: "dhcp host", GenDataSource: true, Descs: map[string]string{
 		"name":      "Hostname dnsmasq answers for this reservation. A comma, a double quote, a `#` or a control character is refused, because the name goes into dnsmasq's config line.",
-		"macs":      "MAC addresses for this reservation (the uci `list mac`). Takes precedence over the deprecated `mac` and `mac_aliases` when non-empty.",
+		"macs":      "MAC addresses for this reservation, one per entry (the uci `list mac`). From uapi 3.2.0, an option or a list entry that holds several MACs separated by spaces reads as one entry per MAC, as dnsmasq gets them. uapi refuses an entry with a space, so list each MAC as its own entry.",
 		"tag":       "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). This does not restrict the reservation: use `match_tag` for that. A response is always a list, including for a section stored as a space-separated scalar. A comma, a double quote, a `#` or a control character is refused.",
 		"match_tag": "dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it. Only a tag that dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does. A comma, a double quote, a `#`, a control character or a blank value is refused.",
 	}, SchemaVersion: 1},
-	{Type: "dhcp_server", Schema: "DhcpServers", Collection: "dhcp/servers", Kind: "collection", Label: "dhcp server", GenDataSource: true},
+	{Type: "dhcp_server", Schema: "DhcpServers", Collection: "dhcp/servers", Kind: "collection", Label: "dhcp server", GenDataSource: true, Descs: map[string]string{
+		"dhcp_option": "DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it.",
+	}},
 	{Type: "dhcp_dnsmasq", Schema: "DhcpDnsmasq", Collection: "dhcp/dnsmasq", Kind: "singleton", Label: "dnsmasq settings", GenDataSource: true},
 	{Type: "dhcp_odhcpd", Schema: "DhcpOdhcpd", Collection: "dhcp/odhcpd", Kind: "singleton", Label: "odhcpd settings", GenDataSource: true},
 	// snmpd
@@ -260,15 +269,20 @@ var descriptors = []descriptor{
 	}},
 	{Type: "lldpd_config", Schema: "LldpdConfig", Collection: "lldpd/config", Kind: "singleton", Label: "lldpd config", GenDataSource: true, Descs: map[string]string{
 		"lldp_description": "System description advertised in LLDP frames. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.",
+		"interface":        "Interfaces on which lldpd runs: a uci interface name, which OpenWrt resolves to its device, a device name, or a pattern such as `eth*` or `!eth1`. Unset, lldpd runs on every interface. From uapi 3.2.0, an option or a list entry that holds several names separated by spaces reads as one entry per name, as lldpd.init splits it. uapi refuses an entry with a space, a quote, a backslash or a `#`.",
 	}},
 	{Type: "prometheus_node_exporter_lua_config", Schema: "PrometheusNodeExporterLuaConfig", Collection: "prometheus_node_exporter_lua/config", Kind: "singleton", Label: "prometheus node_exporter config", GenDataSource: true},
 	// mwan3 (added in uapi 2.0.0-rc3)
-	{Type: "mwan3_interface", Schema: "Mwan3Interfaces", Collection: "mwan3/interfaces", Kind: "collection", Label: "mwan3 interface", GenDataSource: true},
+	{Type: "mwan3_interface", Schema: "Mwan3Interfaces", Collection: "mwan3/interfaces", Kind: "collection", Label: "mwan3 interface", GenDataSource: true, Descs: map[string]string{
+		"family": "Address family that this interface tracks: `ipv4` or `ipv6`.",
+	}},
 	{Type: "mwan3_member", Schema: "Mwan3Members", Collection: "mwan3/members", Kind: "collection", Label: "mwan3 member", GenDataSource: true, Descs: map[string]string{
 		"interface": "Name of an `uapi_mwan3_interface` section, not a network interface.",
 	}},
 	{Type: "mwan3_policy", Schema: "Mwan3Policies", Collection: "mwan3/policies", Kind: "collection", Label: "mwan3 policy", GenDataSource: true},
-	{Type: "mwan3_rule", Schema: "Mwan3Rules", Collection: "mwan3/rules", Kind: "collection", Label: "mwan3 rule", GenDataSource: true},
+	{Type: "mwan3_rule", Schema: "Mwan3Rules", Collection: "mwan3/rules", Kind: "collection", Label: "mwan3 rule", GenDataSource: true, Descs: map[string]string{
+		"family": "Address family of the traffic that this rule matches: `ipv4` or `ipv6`. Unset, mwan3 applies the rule to both.",
+	}},
 	{Type: "mwan3_globals", Schema: "Mwan3Globals", Collection: "mwan3/globals", Kind: "singleton", Label: "mwan3 globals", GenDataSource: true},
 	// usteer + openvpn (added in uapi 2.0.0-rc3; openvpn key/tls_auth/pkcs12 are write-only per the spec)
 	{Type: "usteer_config", Schema: "UsteerConfig", Collection: "usteer/config", Kind: "singleton", Label: "usteer config", GenDataSource: true},

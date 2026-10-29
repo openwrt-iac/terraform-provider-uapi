@@ -30,7 +30,7 @@ data "uapi_mwan3_rule" "example" {
 - `dest_ip` (String) Destination IP addresses or CIDRs.
 - `dest_port` (String) Destination ports.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `family` (String) Address family: any, ipv4, or ipv6.
+- `family` (String) Address family of the traffic that this rule matches: `ipv4` or `ipv6`. Unset, mwan3 applies the rule to both.
 - `ipset` (String) uci option ipset.
 - `logging` (Boolean) uci option logging.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
