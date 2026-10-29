@@ -125,7 +125,7 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
 - A section that already stores such a value reads it as it is, and uapi refuses every
   write to that section until the value is fixed. For `mtu` and `table`,
   `uapi_diagnostics` with `validate = true` lists these sections.
-- uapi 3.2.0 also refuses, with 422, wireless and WireGuard values that the daemon
+- uapi 3.2.0 also refuses, with 422, wireless, WireGuard and DHCP values that the daemon
   refuses (#41):
   - On `uapi_wireless_interface`: `mode = "wds"`, for which OpenWrt 25.12 sets up no
     interface, an `ssid` over 32 bytes, and a `key` that hostapd or wpa_supplicant
@@ -134,9 +134,14 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
   - On `uapi_network_wireguard_peer`: an `endpoint_host` with a `#` or a backslash, and
     a `public_key` or `preshared_key` that is not in the form that `wg pubkey` or
     `wg genpsk` prints.
+  - On `uapi_dhcp_server`: a `dhcp_option` entry in which an address is followed by
+    whitespace and another option, such as `3,10.0.0.1 6,10.0.0.1`. dnsmasq reads each
+    entry as one option, so it refused such a line and did not start, while the apply
+    passed. A space in a text option, such as `15,my domain`, still passes.
 
   A value that uci already holds blocks a write only when the write makes the daemon
-  read it, for example when it sets the SSID up or enables the peer.
+  read it, for example when it sets the SSID up, enables the peer, or changes the
+  `dhcp_option` list.
 - **A write that turns on a radio or a WireGuard interface checks what it turns on**
   (#41). uapi 3.2.0 answers 422 `conflict` to:
   - a `uapi_wireless_device` write that turns the radio on, or gives it a `type`, while
@@ -159,6 +164,12 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
   stops unbound now fails with `500 reload_failed_restored`, and uapi restores the
   previous configuration. Before, the apply passed and DNS stayed down. The next plan
   shows the same change again (#41).
+- An apply of `uapi_dhcp_server`, `uapi_dhcp_host` or `uapi_dhcp_dnsmasq`, and of
+  `uapi_dhcp_odhcpd` while dnsmasq runs, now fails with `500 reload_failed_restored`
+  when dnsmasq refuses to parse the configuration that it gets. uapi then restores the
+  previous configuration, and the next plan shows the same change again. A
+  configuration that dnsmasq parses but cannot start with, such as a port that another
+  daemon holds, still passes (#41).
 - uapi 3.2.0 also reads some network values as netifd reads them:
   - An integer in hex or octal, such as `metric '0x10'`, reads as its value.
   - A scalar `dns`, `ipaddr`, `ip6addr`, wireguard `addresses`, device or bridge VLAN
