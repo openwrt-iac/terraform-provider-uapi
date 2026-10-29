@@ -170,6 +170,13 @@ against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
   previous configuration, and the next plan shows the same change again. A
   configuration that dnsmasq parses but cannot start with, such as a port that another
   daemon holds, still passes (#41).
+- **An update of an imported `uapi_dhcp_server` removes the options that uapi does not
+  model**, as an update of the wireless resources does (#40). On the stock `lan` of
+  OpenWrt 25.12, these are `dhcpv4`, `ra_slaac` and `ra_flags`. Without `ra_flags`,
+  odhcpd leaves the managed flag out of its router advertisements, so a client that
+  follows that flag no longer asks for a DHCPv6 address. If your clients need DHCPv6
+  addresses, keep that section out of Terraform until uapi models these options
+  (openwrt-iac/uapi#282). This is not new in 3.2.0.
 - uapi 3.2.0 also reads some network values as netifd reads them:
   - An integer in hex or octal, such as `metric '0x10'`, reads as its value.
   - A scalar `dns`, `ipaddr`, `ip6addr`, wireguard `addresses`, device or bridge VLAN
