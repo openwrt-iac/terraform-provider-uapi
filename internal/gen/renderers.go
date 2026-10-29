@@ -39,15 +39,26 @@ func resAttr(f field) string {
 			return fmt.Sprintf("%q: optionalComputedString(%q),", f.Name, f.Desc)
 		}
 	case "optclear":
-		// Plain Optional (clear-on-omit). Only strings are flaggable today; the spec
-		// criterion (`section.X ?? null` + nullable type) precludes lists, so fail
-		// loudly rather than emit a wrong shape if a non-string field gets flagged.
-		if f.GoType != "types.String" {
-			fail("optclear field %q has type %q; only types.String is supported (add a helper)", f.Name, f.GoType)
+		// Plain Optional (clear-on-omit): a string, or a list since uapi 3.2.0 made
+		// network_interface.ip6prefix one. Fail loudly on another type rather than
+		// emit a wrong shape.
+		switch f.GoType {
+		case "types.String":
+			return fmt.Sprintf("%q: optionalString(%q),", f.Name, f.Desc)
+		case "types.List":
+			return fmt.Sprintf("%q: optionalStringList(%q),", f.Name, f.Desc)
 		}
-		return fmt.Sprintf("%q: optionalString(%q),", f.Name, f.Desc)
+		fail("optclear field %q has type %q; only types.String and types.List are supported (add a helper)", f.Name, f.GoType)
+		return ""
 	case "writeonly":
-		return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
+		switch f.GoType {
+		case "types.String":
+			return fmt.Sprintf("%q: schema.StringAttribute{Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
+		case "types.List":
+			return fmt.Sprintf("%q: schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: %q},", f.Name, f.Desc)
+		}
+		fail("writeonly field %q has type %q; only types.String and types.List are supported (add a helper)", f.Name, f.GoType)
+		return ""
 	case "createonly":
 		// Caller-supplied at create, immutable, never returned, rejected on
 		// PUT/PATCH. Changing it is a new section, so it forces replacement.
@@ -62,6 +73,9 @@ func resAttr(f field) string {
 func dsAttr(f field) string {
 	switch f.Kind {
 	case "writeonly":
+		if f.GoType == "types.List" {
+			return fmt.Sprintf("%q: dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Sensitive: true, Description: \"Always null; never returned by the API.\"},", f.Name)
+		}
 		return fmt.Sprintf("%q: dsschema.StringAttribute{Computed: true, Sensitive: true, Description: \"Always null; never returned by the API.\"},", f.Name)
 	case "computedbool":
 		return fmt.Sprintf("%q: dsComputedBool(%q),", f.Name, f.Desc)
@@ -153,9 +167,16 @@ func renderResource(r resModel) string {
 	p("\t_ resource.Resource = &%sResource{}", r.Camel)
 	p("\t_ resource.ResourceWithConfigure = &%sResource{}", r.Camel)
 	p("\t_ resource.ResourceWithImportState = &%sResource{}", r.Camel)
+	if r.Scope != nil {
+		p("\t_ resource.ResourceWithValidateConfig = &%sResource{}", r.Camel)
+		p("\t_ resource.ResourceWithModifyPlan = &%sResource{}", r.Camel)
+	}
 	p(")\n")
 	p("type %sResource struct{ client *client.Client }\n", r.Camel)
 	p("func New%sResource() resource.Resource { return &%sResource{} }\n", r.Pascal, r.Camel)
+	if r.Scope != nil {
+		p("%s", renderScope(r))
+	}
 
 	// model
 	p("type %sModel struct {", r.Camel)
@@ -316,6 +337,21 @@ func crudCollection(r resModel) string {
 	c := r.Camel
 	coll := c + "Collection"
 	createArg, updateArg := bodyCreateArgs(r)
+	write := fmt.Sprintf("obj, etag, err := r.client.Put(ctx, \"/\"+%s+\"/\"+plan.ID.ValueString(), body, state.ETag.ValueString())", coll)
+	if r.Scope != nil {
+		// uapi refuses a PUT with a discriminator outside the request enum, such as
+		// a proto it does not model, and a PUT would drop the options of that
+		// proto's handler. A merge PATCH of the changes keeps them.
+		write = fmt.Sprintf(`itemPath := "/"+%[1]s+"/"+plan.ID.ValueString()
+	var obj map[string]any
+	var etag string
+	var err error
+	if %[2]sScope.patches(plan.%[3]s, state.%[3]s) {
+		obj, etag, err = r.client.Patch(ctx, itemPath, mergeDelta(body, r.body(ctx, state, ds%[4]s)), state.ETag.ValueString())
+	} else {
+		obj, etag, err = r.client.Put(ctx, itemPath, body, state.ETag.ValueString())
+	}`, coll, c, pascal(r.Scope.Field), updateArg)
+	}
 	return fmt.Sprintf(`
 func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan %[1]sModel
@@ -354,7 +390,7 @@ func (r *%[1]sResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	ctx = client.WithWarner(ctx, ds)
 	body := r.body(ctx, plan, ds%[5]s)
 	if resp.Diagnostics.HasError() { return }
-	obj, etag, err := r.client.Put(ctx, "/"+%[2]s+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
+	%[6]s
 	if err != nil { writeErr(&resp.Diagnostics, "updating", %[3]q, err); return }
 	r.read(ctx, obj, &plan, ds)
 	plan.ETag = types.StringValue(etag)
@@ -374,7 +410,7 @@ func (r *%[1]sResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 func (r *%[1]sResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importByID(ctx, r.client, %[2]s, %[3]q, req, resp)
 }
-`, c, coll, r.Label, createArg, updateArg)
+`, c, coll, r.Label, createArg, updateArg, write)
 }
 
 func crudSingleton(r resModel) string {
@@ -507,6 +543,12 @@ func renderRuntimeDataSource(r resModel) string {
 	p("\tm := %sDSModel{", r.Camel)
 	p("\t\tID: base.ID, Managed: base.Managed, ETag: base.ETag,")
 	for _, f := range r.dsFields() {
+		if f.Kind == "writeonly" && f.GoType == "types.List" {
+			// read() leaves a write-only field as it found it, and base starts as a zero
+			// List, which has no element type, so State.Set would refuse it.
+			p("\t\t%s: types.ListNull(types.StringType),", f.GoName)
+			continue
+		}
 		p("\t\t%s: base.%s,", f.GoName, f.GoName)
 	}
 	p("\t\tRuntime: %s(obj),", rb.parse)

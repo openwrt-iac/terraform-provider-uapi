@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -38,6 +39,36 @@ func accTarget(t *testing.T) (providerCfg string, closer func()) {
 	}
 	m := newMockUAPI()
 	return providerHCL(m.URL), m.Close
+}
+
+// accErrorCheck skips a live case that the router cannot host: uapi (>= 3.2.0)
+// answers 503 to a write into a package whose config file or init script is
+// missing there, such as /etc/config/wireless on a box without a radio. The mock
+// never answers these, so a mock run still fails on them.
+func accErrorCheck(t *testing.T) resource.ErrorCheckFunc {
+	return func(err error) error {
+		if reason := unhostableReason(err); reason != "" && os.Getenv("UAPI_ACC_ENDPOINT") != "" {
+			t.Skip(reason)
+		}
+		return err
+	}
+}
+
+var (
+	unhostable = regexp.MustCompile(`uapi 503 (config_missing|init_script_missing): `)
+	blankLine  = regexp.MustCompile(`\n\s*\n`)
+)
+
+// unhostableReason returns the uapi message of such a 503, unwrapped from
+// Terraform's diagnostic output, or "" when err is not one.
+func unhostableReason(err error) string {
+	for _, p := range blankLine.Split(err.Error(), -1) {
+		p = strings.Join(strings.Fields(p), " ")
+		if loc := unhostable.FindStringIndex(p); loc != nil {
+			return p[loc[0]:]
+		}
+	}
+	return ""
 }
 
 // accProviders serves the real provider in-process; tests point its endpoint at
@@ -332,18 +363,107 @@ resource "uapi_wireless_interface" "w" {
   ssid       = "home"
   encryption = "psk2"
   key        = "supersecret"
+  r0kh       = ["02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"]
 }`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "ssid", "home"),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "key", "supersecret"),
 					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_key", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "r0kh.#", "1"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_r0kh", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.w", "has_r1kh", "false"),
 				),
 			},
 			{
 				ResourceName:            "uapi_wireless_interface.w",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"key"}, // write-only, never returned
+				ImportStateVerifyIgnore: []string{"key", "r0kh"}, // write-only, never returned
+			},
+		},
+	})
+}
+
+// An imported radio and SSID keep the options their configuration does not set when
+// another attribute changes: the update is a PUT, and uapi removes what it omits. A
+// radio without its path is not bound to its phy and stays down (uapi#238).
+func TestAccWireless_importKeepsUnconfiguredOptions(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/wireless/devices", "radio0", map[string]any{
+		"type": "mac80211", "path": "platform/soc/18000000.wifi", "band": "2g", "channel": 1,
+		"htmode": "HT40", "cell_density": 0, "legacy_rates": true, "macaddr": "02:00:00:00:01:00",
+	})
+	m.seedUnmanaged("/wireless/interfaces", "default_radio0", map[string]any{
+		"device": "radio0", "network": "lan", "mode": "ap", "ssid": "home", "encryption": "psk2+ccmp",
+		"key": "supersecret", "ieee80211r": true, "ft_over_ds": false, "ft_psk_generate_local": true,
+		"mobility_domain": "4f57", "nasid": "ap1", "reassociation_deadline": 20000, "r0_key_lifetime": 10000,
+		"r1_key_holder": "020000000100", "pmk_r1_push": true,
+		"r0kh": []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"},
+		"r1kh": []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"},
+	})
+	cfg := func(channel, ssid string) string {
+		return providerHCL(m.URL) + `
+resource "uapi_wireless_device" "radio0" {
+  id      = "radio0"
+  type    = "mac80211"
+  channel = ` + channel + `
+}
+
+resource "uapi_wireless_interface" "home" {
+  id     = "default_radio0"
+  device = "radio0"
+  ssid   = "` + ssid + `"
+  key    = "supersecret"
+}`
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg("1", "home"),
+				ResourceName:       "uapi_wireless_device.radio0",
+				ImportState:        true,
+				ImportStateId:      "radio0",
+				ImportStatePersist: true,
+			},
+			{
+				Config:             cfg("1", "home"),
+				ResourceName:       "uapi_wireless_interface.home",
+				ImportState:        true,
+				ImportStateId:      "default_radio0",
+				ImportStatePersist: true,
+			},
+			{
+				Config: cfg("6", "home2") + `
+
+data "uapi_wireless_interface" "home" {
+  id = uapi_wireless_interface.home.id
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "path", "platform/soc/18000000.wifi"),
+					m.checkStored("/wireless/devices", "radio0", "channel", float64(6)),
+					m.checkStored("/wireless/devices", "radio0", "path", "platform/soc/18000000.wifi"),
+					m.checkStored("/wireless/devices", "radio0", "legacy_rates", true),
+					m.checkStored("/wireless/devices", "radio0", "macaddr", "02:00:00:00:01:00"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ssid", "home2"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "encryption", "psk2+ccmp"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ieee80211r", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "ft_psk_generate_local", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "mobility_domain", "4f57"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "nasid", "ap1"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "reassociation_deadline", float64(20000)),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r0_key_lifetime", float64(10000)),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r1_key_holder", "020000000100"),
+					m.checkStored("/wireless/interfaces", "default_radio0", "pmk_r1_push", true),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r0kh", []any{"02:00:00:00:02:00,ap2,0123456789abcdef0123456789abcdef"}),
+					m.checkStored("/wireless/interfaces", "default_radio0", "r1kh", []any{"02:00:00:00:02:00,020000000200,0123456789abcdef0123456789abcdef"}),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r0kh", "true"),
+					resource.TestCheckResourceAttr("uapi_wireless_interface.home", "has_r1kh", "true"),
+					resource.TestCheckNoResourceAttr("uapi_wireless_interface.home", "r0kh"),
+					resource.TestCheckResourceAttr("data.uapi_wireless_interface.home", "has_r0kh", "true"),
+					resource.TestCheckNoResourceAttr("data.uapi_wireless_interface.home", "r0kh"),
+				),
 			},
 		},
 	})
@@ -524,6 +644,323 @@ resource "uapi_network_interface" "renum" {
 					resource.TestCheckResourceAttr("uapi_network_interface.renum", "ipaddrs.0", "192.0.2.1"),
 					// The derived view has to follow the list, not the prior state.
 					resource.TestCheckResourceAttr("uapi_network_interface.renum", "ipaddr", "192.0.2.1"),
+				),
+			},
+		},
+	})
+}
+
+const wgTestKey = "4TMrf9VJAdq0+HDQRFG9uuRYXTtMmu6PrCwpaomeICk="
+
+// A proto switch must apply with the attributes of the old proto removed from
+// the configuration. They are Optional+Computed, so UseStateForUnknown kept
+// their prior values, the PUT sent them, and uapi >= 3.2.0 refused it with 422
+// (#32). The plan after each step must be empty.
+func TestAccNetworkInterface_protoSwitch(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.sw"
+	iface := func(body string) string {
+		return providerCfg + "resource \"uapi_network_interface\" \"sw\" {\n  id = \"uapiacc_sw\"\n" + body + "}\n"
+	}
+	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),
+	}}
+	static := `  proto   = "static"
+  ipaddrs = ["192.0.2.10"]
+`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(`  proto    = "static"
+  ipaddrs  = ["192.0.2.10"]
+  ip6addrs = ["2001:db8:32::10/64"]
+  netmask  = "255.255.255.0"
+`),
+				Check: resource.TestCheckResourceAttr(n, "ip6addrs.0", "2001:db8:32::10/64"),
+			},
+			{
+				Config: iface(`  proto    = "dhcp"
+  hostname = "uapiacc-sw"
+  clientid = "01020000003201"
+  peerdns  = false
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "hostname", "uapiacc-sw"),
+					resource.TestCheckNoResourceAttr(n, "ipaddrs.#"),
+					resource.TestCheckNoResourceAttr(n, "ip6addrs.#"),
+					resource.TestCheckNoResourceAttr(n, "netmask"),
+				),
+			},
+			{
+				Config:           iface(static),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "ipaddrs.0", "192.0.2.10"),
+					resource.TestCheckNoResourceAttr(n, "hostname"),
+					resource.TestCheckNoResourceAttr(n, "clientid"),
+					resource.TestCheckNoResourceAttr(n, "peerdns"),
+				),
+			},
+			{
+				Config: iface(fmt.Sprintf(`  proto       = "wireguard"
+  private_key = %q
+  listen_port = 51998
+  addresses   = ["10.32.0.1/24"]
+`, wgTestKey)),
+				ConfigPlanChecks: inPlace,
+				Check:            resource.TestCheckResourceAttr(n, "listen_port", "51998"),
+			},
+			{
+				Config:           iface(static),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "addresses.#"),
+					resource.TestCheckNoResourceAttr(n, "listen_port"),
+					resource.TestCheckNoResourceAttr(n, "nohostroute"),
+				),
+			},
+		},
+	})
+}
+
+// The options that netifd reads for every proto must apply on each proto and
+// survive a switch. Before uapi 3.2.0 some protos dropped them behind a 200, and
+// uapi stored ip6hint only on dhcpv6, so a static interface failed the apply
+// with an inconsistent result (#31).
+func TestAccNetworkInterface_coreOptions(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.core"
+	iface := func(body string) string {
+		return providerCfg + `resource "uapi_network_interface" "core" {
+  id           = "uapiacc_core"
+  metric       = 20
+  ip4table     = "100"
+  ip6table     = "100"
+  defaultroute = false
+  delegate     = false
+  ip6assign    = 64
+  ip6hint      = "1"
+  ip6class     = ["local"]
+  ip6weight    = 10
+` + body + "}\n"
+	}
+	core := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr(n, "metric", "20"),
+		resource.TestCheckResourceAttr(n, "ip4table", "100"),
+		resource.TestCheckResourceAttr(n, "ip6table", "100"),
+		resource.TestCheckResourceAttr(n, "defaultroute", "false"),
+		resource.TestCheckResourceAttr(n, "delegate", "false"),
+		resource.TestCheckResourceAttr(n, "ip6assign", "64"),
+		resource.TestCheckResourceAttr(n, "ip6hint", "1"),
+		resource.TestCheckResourceAttr(n, "ip6class.0", "local"),
+		resource.TestCheckResourceAttr(n, "ip6weight", "10"),
+	)
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(`  proto   = "static"
+  ipaddrs = ["192.0.2.11"]
+`),
+				Check: core,
+			},
+			{
+				Config: iface(`  proto        = "dhcpv6"
+  sourcefilter = false
+  reqprefix    = "2001:db8::/56"
+  reqaddress   = "try"
+  clientid     = "00030001020000003202"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(core,
+					resource.TestCheckResourceAttr(n, "sourcefilter", "false"),
+					resource.TestCheckResourceAttr(n, "reqprefix", "2001:db8::/56"),
+					resource.TestCheckNoResourceAttr(n, "ipaddrs.#"),
+				),
+			},
+			{
+				Config: iface(`  proto          = "dhcp"
+  broadcast_flag = true
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(core,
+					resource.TestCheckResourceAttr(n, "broadcast_flag", "true"),
+					resource.TestCheckNoResourceAttr(n, "broadcast"),
+					resource.TestCheckNoResourceAttr(n, "sourcefilter"),
+					resource.TestCheckNoResourceAttr(n, "reqprefix"),
+				),
+			},
+		},
+	})
+}
+
+// A value for an attribute that the proto does not take fails the plan, before
+// uapi can refuse the apply.
+func TestAccNetworkInterface_scopeRefusedAtPlan(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerCfg + `
+resource "uapi_network_interface" "bad" {
+  id       = "uapiacc_bad"
+  proto    = "static"
+  ipaddrs  = ["192.0.2.12"]
+  hostname = "uapiacc-bad"
+  dns      = []
+}`,
+			ExpectError: regexp.MustCompile(`proto "static" does not take hostname`),
+		}},
+	})
+}
+
+// When the proto is unknown at plan time, no prior value is safe to send: the
+// scoped attributes plan as unknown, so the PUT leaves out the static address
+// that a switch to dhcp would have carried.
+func TestAccNetworkInterface_unknownProto(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	cfg := func(proto, addrs string) string {
+		return providerCfg + fmt.Sprintf(`
+resource "terraform_data" "proto" {
+  input = %q
+}
+
+resource "uapi_network_interface" "u" {
+  id    = "uapiacc_unk"
+  proto = terraform_data.proto.output
+%s}
+`, proto, addrs)
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("static", "  ipaddrs = [\"192.0.2.13\"]\n"),
+				Check:  resource.TestCheckResourceAttr("uapi_network_interface.u", "ipaddrs.0", "192.0.2.13"),
+			},
+			{
+				Config: cfg("dhcp", ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_interface.u", "proto", "dhcp"),
+					resource.TestCheckNoResourceAttr("uapi_network_interface.u", "ipaddrs.#"),
+				),
+			},
+		},
+	})
+}
+
+// ip6prefix is a list as of uapi 3.2.0 (#34). uapi stores one prefix as a uci
+// option and several as a uci list, and reads both as an array, so the import
+// step reads back the scalar that the second step stored.
+func TestAccNetworkInterface_ip6prefixList(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.p6"
+	iface := func(prefix string) string {
+		return providerCfg + fmt.Sprintf(`resource "uapi_network_interface" "p6" {
+  id       = "uapiacc_p6"
+  proto    = "static"
+  ip6addrs = ["2001:db8:34::1/64"]
+%s}
+`, prefix)
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(`  ip6prefix = ["2001:db8:340::/48", "2001:db8:341::/48"]` + "\n"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "ip6prefix.#", "2"),
+					resource.TestCheckResourceAttr(n, "ip6prefix.0", "2001:db8:340::/48"),
+					resource.TestCheckResourceAttr(n, "ip6prefix.1", "2001:db8:341::/48"),
+				),
+			},
+			{
+				Config: iface(`  ip6prefix = ["2001:db8:340::/48"]` + "\n"),
+				Check:  resource.TestCheckResourceAttr(n, "ip6prefix.#", "1"),
+			},
+			{
+				ResourceName:      n,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: iface(""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),
+				}},
+				Check: resource.TestCheckNoResourceAttr(n, "ip6prefix.#"),
+			},
+		},
+	})
+}
+
+// An interface on a proto that uapi does not model, such as a 6in4 tunnel that
+// LuCI created, imports and updates (#35). uapi refuses a PUT there, and a PUT
+// would drop the options of the proto's handler, so an update is a merge PATCH
+// of the changes. A switch to a modelled proto is a PUT, which replaces them.
+func TestAccNetworkInterface_unmodelledProto(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/network/interfaces", "t6in4", map[string]any{
+		"proto": "6in4", "peeraddr": "192.0.2.1", "ip6prefix": []any{"2001:db8:46::/48"},
+	})
+	const n = "uapi_network_interface.tun"
+	tun := func(body string) string {
+		return providerHCL(m.URL) + "resource \"uapi_network_interface\" \"tun\" {\n  id = \"t6in4\"\n" + body + "}\n"
+	}
+	stored := func(key string, want any) resource.TestCheckFunc {
+		return m.checkStored("/network/interfaces", "t6in4", key, want)
+	}
+	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),
+	}}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: tun(`  proto     = "6in4"
+  ip6prefix = ["2001:db8:46::/48"]
+`),
+				ResourceName:       n,
+				ImportState:        true,
+				ImportStateId:      "t6in4",
+				ImportStatePersist: true,
+			},
+			{
+				Config: tun(`  proto     = "6in4"
+  ip6prefix = ["2001:db8:46::/48"]
+  mtu       = 1400
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "mtu", "1400"),
+					stored("peeraddr", "192.0.2.1"),
+				),
+			},
+			{
+				Config: tun(`  proto = "6in4"
+  mtu   = 1400
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "ip6prefix.#"),
+					stored("ip6prefix", nil),
+					stored("peeraddr", "192.0.2.1"),
+				),
+			},
+			{
+				Config: tun(`  proto   = "static"
+  ipaddrs = ["192.0.2.46"]
+`),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "proto", "static"),
+					stored("peeraddr", nil),
 				),
 			},
 		},

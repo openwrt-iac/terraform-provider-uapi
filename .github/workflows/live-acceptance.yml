@@ -19,6 +19,10 @@ name: Live acceptance
 # Against a target you can only reach over the network, either be ready to use
 # the console, or scope the run away from the network resources, e.g.
 #   -run 'TestAccAllResources/uapi_(firewall|dhcp|system|snmpd|...)'
+#
+# A case that the target cannot host is skipped with uapi's message: uapi 3.2.0
+# answers 503 config_missing or init_script_missing when the package's file under
+# /etc/config/ or its daemon is missing, such as wireless on a box without a radio.
 on:
   workflow_dispatch:
     inputs:

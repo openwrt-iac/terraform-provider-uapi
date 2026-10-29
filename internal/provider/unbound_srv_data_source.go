@@ -38,7 +38,7 @@ func (d *unboundSrvDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"interface_bind":     dsComputedStringList("Addresses unbound binds on (`addr` or `addr@port`). Pair with the main unbound `interface_auto = false` for exclusive binding."),
 			"interface_outgoing": dsComputedStringList("Source addresses for upstream recursion (multi-WAN egress)."),
 			"ip_transparent":     dsComputedBool("Bind to addresses that are not yet up (VIP / alias / floating addresses)."),
-			"srv_line":           dsComputedStringList("Verbatim lines inserted inside unbound's `server:` clause. One entry per line; `unbound-checkconf` validates grammar after restart."),
+			"srv_line":           dsComputedStringList("Verbatim lines inserted inside unbound's `server:` clause, one entry per line. Nothing checks their grammar before unbound restarts, and unbound stops on a line that it cannot parse. If unbound ran before the write, uapi 3.2.0 and later then restore the previous lines and answer `500 reload_failed_restored`."),
 		},
 	}
 }

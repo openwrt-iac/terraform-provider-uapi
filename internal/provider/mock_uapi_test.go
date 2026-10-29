@@ -7,8 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 // mockUAPI is an in-process fake of the uapi curated API, good enough to drive
@@ -75,10 +80,120 @@ func mirrorIpaddr(obj map[string]any) {
 	delete(obj, "ipaddrs")
 }
 
+// ifaceFieldProtos copies uapi's FIELD_PROTOS (src/resources/network.interfaces.uc
+// as of 3.2.0): the protos that take each field, every other field applying to
+// every proto. It is written out here rather than taken from the generated table,
+// so that a misread of the spec's allOf entries fails the suite.
+var ifaceFieldProtos = map[string][]string{
+	"ipaddr": {"static"}, "ipaddrs": {"static"}, "ip6addrs": {"static"},
+	"netmask": {"static"}, "broadcast": {"static"}, "gateway": {"static"}, "ip6gw": {"static"},
+	"ip6prefix":      {"static", "dhcpv6", "wireguard"},
+	"broadcast_flag": {"dhcp"}, "hostname": {"dhcp"},
+	"clientid":     {"dhcp", "dhcpv6"},
+	"reqaddress":   {"dhcpv6"},
+	"reqprefix":    {"dhcpv6", "pppoe", "ppp"},
+	"sourcefilter": {"dhcpv6", "pppoe", "ppp"},
+	"peerdns":      {"dhcp", "dhcpv6", "pppoe", "ppp", "wwan"},
+	"private_key":  {"wireguard"}, "has_private_key": {"wireguard"}, "listen_port": {"wireguard"},
+	"addresses": {"wireguard"}, "nohostroute": {"wireguard"},
+}
+
+var ifaceProtos = []string{"static", "dhcp", "dhcpv6", "pppoe", "none", "ppp", "wwan", "wireguard"}
+
+// ifaceApplies is uapi's applies(). On a proto that uapi does not model, every
+// field applies except `broadcast_flag` and `has_private_key`, which are the
+// dhcp and wireguard readings of their uci options.
+func ifaceApplies(field, proto string) bool {
+	protos, ok := ifaceFieldProtos[field]
+	if !ok || slices.Contains(protos, proto) {
+		return true
+	}
+	return !slices.Contains(ifaceProtos, proto) && field != "broadcast_flag" && field != "has_private_key"
+}
+
+// ifaceScopeErrors is uapi's 422 for a field that the request names with a value
+// and that the proto does not take. null, "" and [] ask for nothing and pass.
+func ifaceScopeErrors(named map[string]any, proto string) []any {
+	var errs []any
+	for k, v := range named {
+		if v == nil || v == "" || k == "ipaddr" || k == "has_private_key" || ifaceApplies(k, proto) {
+			continue
+		}
+		if list, ok := v.([]any); ok && len(list) == 0 {
+			continue
+		}
+		errs = append(errs, map[string]any{"field": k, "code": "conflict",
+			"message": "applies only when proto is " + strings.Join(ifaceFieldProtos[k], ", ")})
+	}
+	return errs
+}
+
+// scopeRefused writes uapi's 422 and reports true when the request names a field
+// that the interface's proto does not take. The type gate also refuses a named
+// proto outside the request enum, so only a PATCH that leaves `proto` out
+// reaches an interface on a proto that uapi does not model.
+func scopeRefused(w http.ResponseWriter, coll string, named map[string]any, proto any) bool {
+	if coll != "/network/interfaces" {
+		return false
+	}
+	if p, ok := named["proto"].(string); ok && !slices.Contains(ifaceProtos, p) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"code": "validation_failed", "message": "Request body failed validation",
+			"errors": []any{map[string]any{"field": "proto", "code": "not_in_enum", "message": "must be one of the modelled protos"}},
+		}, "")
+		return true
+	}
+	p, _ := proto.(string)
+	errs := ifaceScopeErrors(named, p)
+	if len(errs) == 0 {
+		return false
+	}
+	writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+		"code": "validation_failed", "message": "Request body failed validation", "errors": errs,
+	}, "")
+	return true
+}
+
+var wirelessWriteOnly = []string{"key", "r0kh", "r1kh"}
+
+// keepWriteOnly mirrors uapi keeping a stored secret that a PUT leaves out, since
+// a read never returns it.
+func keepWriteOnly(coll string, stored, body map[string]any) {
+	if coll != "/wireless/interfaces" {
+		return
+	}
+	for _, k := range wirelessWriteOnly {
+		if _, sent := body[k]; !sent && stored[k] != nil {
+			body[k] = stored[k]
+		}
+	}
+}
+
 // normalizeStored applies the per-collection server-side shaping the provider has
 // to round-trip against.
 func normalizeStored(coll string, obj map[string]any) {
 	if coll == "/network/interfaces" {
+		// toUci drops what the proto does not take, so a read leaves it out.
+		proto, _ := obj["proto"].(string)
+		for k := range obj {
+			if !ifaceApplies(k, proto) {
+				delete(obj, k)
+			}
+		}
+		// A write may still send ip6prefix as a space-separated string, and a read
+		// is always the list of its words.
+		if s, ok := obj["ip6prefix"].(string); ok {
+			words := []any{}
+			for _, w := range strings.Fields(s) {
+				words = append(words, w)
+			}
+			obj["ip6prefix"] = words
+		}
+		// fromUci reads an unset nohostroute through strict_bool, so it is false on
+		// wireguard, where the other protos leave it out.
+		if _, ok := obj["nohostroute"]; !ok && proto == "wireguard" {
+			obj["nohostroute"] = false
+		}
 		mirrorIpaddr(obj)
 	}
 	dropEmptyLists(obj)
@@ -262,6 +377,9 @@ func (m *mockUAPI) decode(r *http.Request) map[string]any {
 
 func (m *mockUAPI) handleCollectionCreate(w http.ResponseWriter, r *http.Request, coll string) {
 	body := m.decode(r)
+	if scopeRefused(w, coll, body, body["proto"]) {
+		return
+	}
 	// Caller-supplied section name (settable id, uapi >= 2.2.0): use it and 409
 	// if it collides; otherwise assign a synthetic id.
 	id, _ := body["id"].(string)
@@ -315,14 +433,27 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 			return
 		}
 		body := m.decode(r)
+		proto := body["proto"]
+		if r.Method == http.MethodPatch && proto == nil {
+			proto = obj["proto"]
+		}
+		if scopeRefused(w, coll, body, proto) {
+			return
+		}
 		if r.Method == http.MethodPut {
 			body["id"] = id
 			body["managed"] = obj["managed"]
+			keepWriteOnly(coll, obj, body)
 			normalizeStored(coll, body)
 			m.store[coll][id] = body
 		} else {
+			// RFC 7396: null removes the key.
 			for k, v := range body {
-				obj[k] = v
+				if v == nil {
+					delete(obj, k)
+				} else {
+					obj[k] = v
+				}
 			}
 			normalizeStored(coll, obj)
 		}
@@ -491,11 +622,29 @@ func (m *mockUAPI) withRuntime(coll string, obj map[string]any) map[string]any {
 			"route":        []any{map[string]any{"target": "0.0.0.0", "mask": 0, "nexthop": "192.168.1.254"}},
 		}
 	case "/wireless/interfaces":
-		if _, ok := out["key"]; ok {
-			out["has_key"] = true
-			delete(out, "key")
+		for _, k := range wirelessWriteOnly {
+			_, ok := out[k]
+			out["has_"+k] = ok
+			delete(out, k)
 		}
 		out["runtime"] = map[string]any{"ifname": "wlan0", "channel": 36, "signal": -52, "assoclist_count": 3}
 	}
 	return out
+}
+
+// checkStored compares with the stored JSON type, so a number sent as a string fails as uapi
+// would refuse it. A nil want checks that the option is gone.
+func (m *mockUAPI) checkStored(coll, id, key string, want any) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		got, ok := m.store[coll][id][key]
+		if want == nil && ok {
+			return fmt.Errorf("stored %s.%s = %v, want it removed", id, key, got)
+		}
+		if want != nil && !reflect.DeepEqual(got, want) {
+			return fmt.Errorf("stored %s.%s = %#v, want %#v", id, key, got, want)
+		}
+		return nil
+	}
 }

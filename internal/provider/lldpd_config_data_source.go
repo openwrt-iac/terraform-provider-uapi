@@ -38,7 +38,7 @@ func (d *lldpdConfigDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"enable_edp":        dsComputedBool("uci option enable_edp."),
 			"enable_fdp":        dsComputedBool("uci option enable_fdp."),
 			"enable_sonmp":      dsComputedBool("uci option enable_sonmp."),
-			"interface":         dsComputedStringList("Network interface this entry applies to."),
+			"interface":         dsComputedStringList("Interfaces on which lldpd runs: a uci interface name, which OpenWrt resolves to its device, a device name, or a pattern such as `eth*` or `!eth1`. Unset, lldpd runs on every interface. From uapi 3.2.0, an option or a list entry that holds several names separated by spaces reads as one entry per name, as lldpd.init splits it. uapi refuses an entry with a space, a quote, a backslash or a `#`."),
 			"lldp_capabilities": dsComputedBool("uci option lldp_capabilities."),
 			"lldp_class":        dsComputedInt64("uci option lldp_class."),
 			"lldp_description":  dsComputedString("System description advertised in LLDP frames. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake."),

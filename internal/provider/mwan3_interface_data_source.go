@@ -40,7 +40,7 @@ func (d *mwan3InterfaceDataSource) Schema(_ context.Context, _ datasource.Schema
 			"failure_interval":      dsComputedInt64("uci option failure_interval."),
 			"failure_latency":       dsComputedInt64("uci option failure_latency."),
 			"failure_loss":          dsComputedInt64("uci option failure_loss."),
-			"family":                dsComputedString("Address family: any, ipv4, or ipv6."),
+			"family":                dsComputedString("Address family that this interface tracks: `ipv4` or `ipv6`."),
 			"flush_conntrack":       dsComputedStringList("uci option flush_conntrack."),
 			"interval":              dsComputedInt64("uci option interval."),
 			"keep_failure_interval": dsComputedBool("uci option keep_failure_interval."),

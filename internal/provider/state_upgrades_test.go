@@ -199,3 +199,64 @@ func TestUpgradeFirewallRedirect_warnsOnTruncation(t *testing.T) {
 		t.Errorf("warning should name the field and count, got %q", got)
 	}
 }
+
+func stringList(t *testing.T, s tfsdk.State, name string) []string {
+	t.Helper()
+	raw, _, err := tftypes.WalkAttributePath(s.Raw, tftypes.NewAttributePath().WithAttributeName(name))
+	if err != nil {
+		t.Fatalf("walking %s: %v", name, err)
+	}
+	var list []tftypes.Value
+	if err := raw.(tftypes.Value).As(&list); err != nil {
+		t.Fatalf("%s is not a list: %v", name, err)
+	}
+	out := make([]string, len(list))
+	for i, v := range list {
+		if err := v.As(&out[i]); err != nil {
+			t.Fatalf("%s[%d]: %v", name, i, err)
+		}
+	}
+	return out
+}
+
+// State written by provider 3.1: ip6prefix is a string, and a space-separated
+// one holds several prefixes, as netifd reads it. The write-only key and the
+// etag are not in a read, so the upgrader has to carry them.
+func TestUpgradeNetworkInterface_ip6prefixStringToList(t *testing.T) {
+	s := runUpgrade(t, &networkInterfaceResource{}, `{"id":"wg0","managed":true,"etag":"\"v1\"",
+		"proto":"wireguard","addresses":["10.0.0.1/24"],"private_key":"secret","has_private_key":true,
+		"ip6prefix":"2001:db8:1::/48 2001:db8:2::/48"}`)
+	got := stringList(t, s, "ip6prefix")
+	if strings.Join(got, ",") != "2001:db8:1::/48,2001:db8:2::/48" {
+		t.Errorf("ip6prefix = %v, want both prefixes split out of the scalar", got)
+	}
+	if v := attrString(t, s, "private_key"); v != "secret" {
+		t.Errorf("private_key = %q, want it carried over", v)
+	}
+	if v := attrString(t, s, "etag"); v != `"v1"` {
+		t.Errorf("etag = %q, want it carried over", v)
+	}
+}
+
+// State the 3.2 provider wrote already holds a list; the upgrader must leave it alone.
+func TestUpgradeNetworkInterface_ip6prefixListIsNoop(t *testing.T) {
+	s := runUpgrade(t, &networkInterfaceResource{}, `{"id":"lan","managed":true,"etag":"\"v1\"",
+		"proto":"static","ipaddrs":["192.0.2.1"],"ip6prefix":["2001:db8:1::/48"]}`)
+	if got := stringList(t, s, "ip6prefix"); len(got) != 1 || got[0] != "2001:db8:1::/48" {
+		t.Errorf("ip6prefix = %v, want the list unchanged", got)
+	}
+	if v := attrString(t, s, "private_key"); v != "<null>" {
+		t.Errorf("private_key = %q, want null", v)
+	}
+}
+
+// Provider 3.1 refreshed against uapi 3.2 reads the new array through strVal,
+// which formats it with %v. The brackets must not end up in a prefix.
+func TestUpgradeNetworkInterface_ip6prefixFormattedArray(t *testing.T) {
+	s := runUpgrade(t, &networkInterfaceResource{}, `{"id":"lan","managed":true,"etag":"\"v1\"",
+		"proto":"static","ipaddrs":["192.0.2.1"],"ip6prefix":"[2001:db8:1::/48 2001:db8:2::/48]"}`)
+	got := stringList(t, s, "ip6prefix")
+	if strings.Join(got, ",") != "2001:db8:1::/48,2001:db8:2::/48" {
+		t.Errorf("ip6prefix = %v, want the two prefixes without brackets", got)
+	}
+}

@@ -6,6 +6,210 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-29
+
+Tracks uapi 3.2.0. **Upgrade the provider and uapi together.** Provider 3.1 fails
+against uapi 3.2 when a `uapi_network_interface` changes `proto` or has an
+`ip6prefix`. The new attributes and the list form of `ip6prefix` require uapi >=
+3.2.0. Everything else works against uapi 3.0 and 3.1.
+
+### Changed
+- **`uapi_network_interface.ip6prefix` is a list of strings** on the resource and the
+  data source, because netifd and LuCI read it as a list (#34). Change
+  `ip6prefix = "2001:db8::/48"` to `ip6prefix = ["2001:db8::/48"]`, or the plan fails
+  with a type error. The state migrates on the first plan: a string becomes the list of
+  its space-separated words. This includes a state that provider 3.1 refreshed against
+  uapi 3.2, which holds the array as text, such as `"[2001:db8::/48]"`. Removing the attribute from the configuration still
+  clears it. uapi stores one prefix as a uci option and several as a uci list, and it
+  reads both as a list.
+
+### Added
+- `uapi_network_interface.broadcast_flag`, for proto `dhcp`: uci `broadcast` on a dhcp
+  interface, which makes udhcpc ask the server for broadcast replies (`-B`). `broadcast`
+  stays the static broadcast address. uapi read LuCI's `broadcast '1'` on a dhcp
+  interface as an address, so a PUT of such an interface answered 422.
+- `uapi_network_interface.sourcefilter`, for protos `dhcpv6`, `pppoe` and `ppp`. Set it
+  to `false` for a routed `ip6prefix`: the default route from upstream then has no
+  source, and the downstream subnets of the prefix get a default route (#31).
+- `uapi_network_interface.ip6class` and `ip6weight`, for every proto. They complete the
+  prefix assignment options next to `ip6assign` and `ip6hint`.
+- The new attributes are also on the `uapi_network_interface` data source.
+- `uapi_wireless_device.path`, `macaddr`, `phy` and `radio`, which bind a radio to its
+  hardware, and `cell_density` and `legacy_rates`. `uapi_wireless_interface.ieee80211r`,
+  `ft_over_ds`, `ft_psk_generate_local`, `mobility_domain`, `nasid`,
+  `reassociation_deadline`, `r0_key_lifetime`, `r1_key_holder`, `pmk_r1_push`, `r0kh` and
+  `r1kh`, the 802.11r settings of LuCI's WLAN roaming tab. They are also on the data
+  sources.
+- `r0kh` and `r1kh` hold shared keys, so they are write-only and sensitive, like `key`:
+  uapi never returns them, `has_r0kh` and `has_r1kh` say whether they are set, and the
+  state keeps the configured value. Removing them from the configuration keeps the entries
+  on the router, since uapi keeps them when a PUT leaves them out. Set them to `[]` to
+  remove the entries. The generator now emits a
+  write-only list attribute for them.
+
+### Fixed
+- **The first update of an imported `uapi_wireless_device` removed its `path`, and the
+  radio stayed down** (#37). An update is a PUT, and uapi removes the options that the
+  resource does not model. Without `path` (or `macaddr`, on a radio that an older
+  `wifi detect` bound by MAC address), OpenWrt finds no phy for the radio. The update
+  of an imported `uapi_wireless_interface` also removed its 802.11r options, and it failed
+  with 422 when `encryption` carried a cipher, such as LuCI's `psk2+ccmp`. uapi 3.2.0
+  models these options (openwrt-iac/uapi#238), and the new attributes are Optional+Computed,
+  so a configuration that omits them keeps the imported values. Against uapi 3.1, the
+  update still removes them. uapi 3.2.0 still does not model `num_global_macaddr` on a
+  radio, or the 802.11k and 802.11v options of an SSID, so an update still removes those.
+- **A `proto` change on `uapi_network_interface` failed against uapi 3.2 with 422.**
+  The attributes of the old proto are Optional+Computed, so the plan kept their values
+  from the state and the PUT sent them. Static to dhcp sent `ipaddrs` and `ip6addrs`.
+  Dhcp to static sent `hostname`, `clientid` and `peerdns`. Wireguard to another proto
+  sent `addresses`, `listen_port` and `nohostroute`. The plan now sets to null each
+  attribute that the planned `proto` does not take, unless the configuration sets it.
+  The table comes from the uapi spec. An attribute that the old proto did not take,
+  and the new proto takes, plans as unknown: it read null, and the new proto can read
+  a default there, such as `nohostroute = false` on wireguard. When `proto` is unknown
+  at plan time, all of these attributes plan as unknown (#32).
+- **An update of a `uapi_network_interface` on a proto that uapi does not model failed
+  with 422 `not_in_enum`.** Such an interface, for example a `6in4` tunnel that LuCI
+  created, imports and reads, but uapi 3.2 refuses a PUT of it. A PUT would also drop
+  the options of the proto's handler that uapi does not model, such as `peeraddr`. An
+  update that keeps such a proto is now a merge PATCH of the changed attributes, and
+  null removes an attribute. A switch away from such a proto is still a PUT, which
+  replaces those options. uapi refuses a switch to such a proto (#35).
+- A static interface with `ip6hint` failed with "Provider produced inconsistent result
+  after apply", because uapi stored `ip6hint` only on proto `dhcpv6`. uapi 3.2.0 stores
+  the prefix assignment options on every proto (#31).
+- Descriptions: each `uapi_network_interface` attribute that some protos do not take
+  now names the protos that take it. `metric`, `defaultroute`, `delegate`, `ip4table`,
+  `ip6table`, `ip6assign` and `ip6hint` say that they apply to every proto. `clientid`,
+  `reqprefix`, `listen_port`, `broadcast` and `proto` describe what they hold.
+- Descriptions: `family` on `uapi_mwan3_interface` and `uapi_mwan3_rule` no longer lists
+  `any`, which uapi refuses. `srv_line` no longer says that `unbound-checkconf` checks
+  the lines, because nothing runs it, and `srv_line` and `ext_line` say what happens when
+  unbound cannot parse a line. `uapi_dhcp_host.macs` no longer names `mac` and
+  `mac_aliases`, which 3.0.0 removed. `endpoint_port`, `persistent_keepalive`,
+  `dhcp_option` and `uapi_lldpd_config.interface` describe what they hold (#41).
+
+### Notes
+- uapi 3.2.0 refuses, with 422 `conflict`, a value for a `uapi_network_interface`
+  attribute that the proto does not take. The provider now reports it at plan time.
+  Before, uapi answered 200: it kept a static address field such as `ipaddrs` on any
+  proto, where netifd ignores it, and dropped every other such field. If your
+  configuration sets such an attribute, remove it or set it to null. An empty list
+  passes, because uapi stores nothing for it. An empty string does not pass: it reads
+  back null, and the apply would fail.
+- `metric`, `defaultroute`, `delegate`, `ip4table` and `ip6table` now apply to every
+  proto. Before, uapi dropped them on some protos and answered 200. `peerdns` and
+  `reqprefix` now also apply to `pppoe` and `ppp`, and `clientid` to `dhcpv6`.
+- uapi 3.2.0 changes the ETag of every network interface, wireless device and wireless
+  interface once at the upgrade, and of some routes, rules, devices, bridge VLANs and
+  wireguard peers. A normal plan reads the new ETag first, so nothing fails. An apply
+  with `-refresh=false`, or of a plan saved before the upgrade, answers 412 for such a
+  resource. Run a plan with refresh after the upgrade.
+- A PUT of a wireguard interface writes `nohostroute '0'` to uci when the option was
+  unset, because uapi reads an unset `nohostroute` as false and the provider sends the
+  value from its state. The value has no effect. uapi 3.2.0 stopped writing it on a
+  PATCH that does not name the field, which covers the update of an interface on a
+  proto that uapi does not model.
+- uapi 3.2.0 refuses more writes that it accepted before. The provider adds no
+  client-side check, so each one is an apply-time `422`:
+  - `mtu` below 68 on `uapi_network_interface` and `uapi_network_device`. netifd
+    ignores such a value. On proto `ppp` and `pppoe`, `mtu` must also be from 128 to
+    16384, because pppd refuses other values.
+  - `listen_port = -1` on `uapi_network_interface`. uapi reads -1 when uci holds a
+    service name that does not resolve, and wireguard then cannot bring the interface
+    up. Set a port.
+  - `table = 0` on `uapi_network_route` and `lookup = 0` on `uapi_network_rule`,
+    because netifd cannot resolve table 0.
+  - A `uapi_network_rule` `goto` that the kernel refuses: with an action other than
+    goto, or one that does not jump past `priority`.
+- A section that already stores such a value reads it as it is, and uapi refuses every
+  write to that section until the value is fixed. For `mtu` and `table`,
+  `uapi_diagnostics` with `validate = true` lists these sections.
+- uapi 3.2.0 also refuses, with 422, wireless, WireGuard and DHCP values that the daemon
+  refuses (#41):
+  - On `uapi_wireless_interface`: `mode = "wds"`, for which OpenWrt 25.12 sets up no
+    interface, an `ssid` over 32 bytes, and a `key` that hostapd or wpa_supplicant
+    refuses, such as one under 8 bytes with `psk2`. With 802.11r, also a `nasid` over
+    48 bytes, and `r0kh` or `r1kh` entries that hostapd cannot parse.
+  - On `uapi_network_wireguard_peer`: an `endpoint_host` with a `#` or a backslash, and
+    a `public_key` or `preshared_key` that is not in the form that `wg pubkey` or
+    `wg genpsk` prints.
+  - On `uapi_dhcp_server`: a `dhcp_option` entry in which an address is followed by
+    whitespace and another option, such as `3,10.0.0.1 6,10.0.0.1`. dnsmasq reads each
+    entry as one option, so it refused such a line and did not start, while the apply
+    passed. A space in a text option, such as `15,my domain`, still passes.
+
+  A value that uci already holds blocks a write only when the write makes the daemon
+  read it, for example when it sets the SSID up, enables the peer, or changes the
+  `dhcp_option` list.
+- **A write that turns on a radio or a WireGuard interface checks what it turns on**
+  (#41). uapi 3.2.0 answers 422 `conflict` to:
+  - a `uapi_wireless_device` write that turns the radio on, or gives it a `type`, while
+    an enabled SSID of the radio holds a value that the daemon refuses.
+  - a `uapi_network_interface` write that switches to proto `wireguard`, or enables a
+    wireguard interface, while a peer of the interface holds a value that a peer write
+    refuses.
+
+  The message names each SSID or peer and its fields. Such a value can come from LuCI,
+  from a hand edit, or from uapi 3.1, which accepted it. An SSID references its radio,
+  and a peer its interface, so Terraform updates the radio or the interface first, and
+  it skips the SSID or the peer when that update fails. Each new apply then fails the
+  same way. Fix the SSID or the peer in an apply that keeps the radio or the interface
+  off, or apply it first with `-target`.
+- uapi 3.2.0 stores `mode 'ap'` when a create or a PUT of a `uapi_wireless_interface`
+  sends no `mode`. With uapi 3.1, an SSID that the configuration created without `mode`
+  had no mode in uci, so OpenWrt set up nothing for it until a later update sent the
+  mode from the state.
+- An apply of `uapi_unbound_server`, `uapi_unbound_srv` or `uapi_unbound_ext` that
+  stops unbound now fails with `500 reload_failed_restored`, and uapi restores the
+  previous configuration. Before, the apply passed and DNS stayed down. The next plan
+  shows the same change again (#41).
+- An apply of `uapi_dhcp_server`, `uapi_dhcp_host` or `uapi_dhcp_dnsmasq`, and of
+  `uapi_dhcp_odhcpd` while dnsmasq runs, now fails with `500 reload_failed_restored`
+  when dnsmasq refuses to parse the configuration that it gets. uapi then restores the
+  previous configuration, and the next plan shows the same change again. A
+  configuration that dnsmasq parses but cannot start with, such as a port that another
+  daemon holds, still passes (#41).
+- **An update of an imported `uapi_dhcp_server` removes the options that uapi does not
+  model**, as an update of the wireless resources does (#40). On the stock `lan` of
+  OpenWrt 25.12, these are `dhcpv4`, `ra_slaac` and `ra_flags`. Without `ra_flags`,
+  odhcpd leaves the managed flag out of its router advertisements, so a client that
+  follows that flag no longer asks for a DHCPv6 address. If your clients need DHCPv6
+  addresses, keep that section out of Terraform until uapi models these options
+  (openwrt-iac/uapi#282). This is not new in 3.2.0.
+- uapi 3.2.0 also reads some network values as netifd reads them:
+  - An integer in hex or octal, such as `metric '0x10'`, reads as its value.
+  - A scalar `dns`, `ipaddr`, `ip6addr`, wireguard `addresses`, device or bridge VLAN
+    `ports`, or peer `allowed_ips` with several words reads as one entry per word.
+  - A table name in a route or a rule reads as its id.
+
+  The first refresh after the router upgrade can change these values in state. A plan
+  shows a change only where the configuration differs from the value that netifd uses.
+- uapi 3.2.0 reads more values as the daemons read them (#41):
+  - `uapi_dhcp_host.macs`, `uapi_dhcp_server.dhcp_option` and
+    `uapi_lldpd_config.interface`: an option of several words reads as one entry per
+    word. For `macs` and `interface`, a list entry of several words also reads as its
+    words. uapi refuses an entry with a space in `macs` and `interface`, so list each
+    value as its own entry. Before, every update of a host with several MACs in one
+    option failed with 422.
+  - `uapi_network_wireguard_peer.endpoint_port` reads 0 for a service name that does
+    not resolve, and `persistent_keepalive` reads -1 for a value that wg cannot read,
+    such as `25x`. Before, both read null, and an update removed the option. uapi
+    refuses an update that sends the 0 back, so set `endpoint_port` in the configuration
+    of such a peer. A keepalive of -1 that an update sends back is stored as `-1`.
+
+  As for the network values, the first refresh can change these values in state, and
+  the ETag of the section changes.
+- uapi 3.2.0 answers `503 config_missing` to a write into a package whose file under
+  `/etc/config/` does not exist, and the message names the file. The common case is
+  `uapi_wireless_device` and `uapi_wireless_interface` on a router without a radio.
+  Before, uapi answered 200 and stored nothing, so the next plan showed the resource to
+  create again.
+- A live acceptance run (`UAPI_ACC_ENDPOINT` set) skips a `TestAccAllResources` case
+  whose create answers `503 config_missing` or `503 init_script_missing`, with the uapi
+  message as the reason. Before, such a case failed, and with uapi 3.1 a wireless case
+  failed on a missing resource with no hint of the cause. (#36)
+
 ## [3.1.0] - 2026-10-11
 
 Tracks uapi 3.1.0. The new resource and field require uapi >= 3.1.0. Everything

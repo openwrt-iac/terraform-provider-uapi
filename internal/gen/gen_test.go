@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"go/format"
 	"os"
@@ -11,7 +12,7 @@ import (
 var update = flag.Bool("update", false, "update golden files in testdata/")
 
 // fixtureProps exercises every field-classification branch the generator has:
-// required string, optional+computed string/int/bool/list, write-only,
+// required string, optional+computed string/int/bool/list, write-only string/list,
 // read-only bool/string, and create-only (also marked deprecated, to pin the
 // DeprecationMessage path). buildResource sorts field names, so output is stable.
 func fixtureProps() map[string]specProp {
@@ -21,11 +22,13 @@ func fixtureProps() map[string]specProp {
 		"flag":       {Type: "boolean"},
 		"tags":       {Type: "array"},
 		"secret":     {Type: "string", WriteOnly: true},
+		"secretlist": {Type: "array", WriteOnly: true},
 		"has_secret": {Type: "boolean", ReadOnly: true},
 		"note":       {Type: "string", ReadOnly: true},
 		"wgname":     {Type: "string", Description: "Create-only kernel name.", Deprecated: true},
 		"lockedname": {Type: "string", Description: "Strict create-only name."},
 		"clearable":  {Type: "string", Description: "Clear-on-omit field.", XClearOnOmit: true},
+		"clearlist":  {Type: []any{"array", "string", "null"}, Description: "Clear-on-omit list.", XClearOnOmit: true},
 	}
 }
 
@@ -51,15 +54,37 @@ func goldenCases() map[string]string {
 	// both, so every field stays writable and the split is exercised without the
 	// golden output changing shape.
 	cr := buildResource(collection, fixtureProps(), fixtureProps(), []string{"name"})
+	// A scope table switching on `name`: `off` takes neither `flag` nor `tags`.
+	// The entry that only requires a field is skipped, as uapi enforces it.
+	scoped := fixtureProps()
+	scoped["name"] = specProp{Type: "string", Enum: []string{"on", "off"}}
+	var conds []specCond
+	if err := json.Unmarshal([]byte(`[
+		{"if": {"properties": {"name": {"const": "on"}}}, "then": {"required": ["weight"]}},
+		{"if": {"properties": {"name": {"enum": ["off"]}}}, "then": {"properties": {"tags": {"type": "null"}, "flag": {"type": "null"}}}}
+	]`), &conds); err != nil {
+		panic(err)
+	}
+	applyScope(&cr, conds, scoped)
 	// clear-on-omit is collection-only (the singleton guard rejects it), so the
 	// singleton fixture must not carry the clearable field.
 	singleProps := fixtureProps()
 	delete(singleProps, "clearable")
+	delete(singleProps, "clearlist")
 	sr := buildResource(singleton, singleProps, singleProps, nil)
+	// A runtime data source builds its model from a zero resource model, so it
+	// takes its own branch for a write-only list.
+	withRuntime := descriptor{
+		Type: "lab_radio", Schema: "LabRadios", Collection: "lab/radios",
+		Kind: "collection", Label: "lab radio", GenDataSource: true, Runtime: "wireless",
+		CreateOnly: []string{"wgname", "lockedname"},
+	}
+	rr := buildResource(withRuntime, fixtureProps(), fixtureProps(), []string{"name"})
 	return map[string]string{
 		"lab_thing_resource.go.golden":    renderResource(cr),
 		"lab_thing_data_source.go.golden": renderDataSource(cr),
 		"lab_single_resource.go.golden":   renderResource(sr),
+		"lab_radio_data_source.go.golden": renderDataSource(rr),
 	}
 }
 

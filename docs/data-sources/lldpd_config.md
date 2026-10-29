@@ -27,7 +27,7 @@ data "uapi_lldpd_config" "example" {}
 - `enable_sonmp` (Boolean) uci option enable_sonmp.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `id` (String) Stable id.
-- `interface` (List of String) Network interface this entry applies to.
+- `interface` (List of String) Interfaces on which lldpd runs: a uci interface name, which OpenWrt resolves to its device, a device name, or a pattern such as `eth*` or `!eth1`. Unset, lldpd runs on every interface. From uapi 3.2.0, an option or a list entry that holds several names separated by spaces reads as one entry per name, as lldpd.init splits it. uapi refuses an entry with a space, a quote, a backslash or a `#`.
 - `lldp_capabilities` (Boolean) uci option lldp_capabilities.
 - `lldp_class` (Number) uci option lldp_class.
 - `lldp_description` (String) System description advertised in LLDP frames. A string as of uapi 2.5.0; it was previously modelled as a boolean by mistake.

@@ -23,7 +23,7 @@ resource "uapi_mwan3_interface" "example" {
 
 ### Required
 
-- `family` (String) Address family: any, ipv4, or ipv6.
+- `family` (String) Address family that this interface tracks: `ipv4` or `ipv6`.
 
 ### Optional
 
