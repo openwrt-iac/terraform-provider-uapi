@@ -2,8 +2,8 @@
 	"openapi": "3.1.0",
 	"info": {
 		"title": "uapi",
-		"version": "3.1.0",
-		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}` (computed; clients ignore for drift detection).\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.wireguard_peers.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: snapshot, validate, commit, reload, restore-on-failure. `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means the init script's reload action **exited 0**. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - the resource has no reload services\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/openwrt-iac/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nThis major accepts both forms for everything below; v4 removes the old one. The canonical list with migration notes is `docs/deprecations.md`.\n\n- **`network/interfaces.ip6prefix` will stop accepting a space-separated string on write.** Responses are always an array, the list that netifd reads and that LuCI writes for wireguard and 6in4. The string remains valid in a request because the 3.1 spec declared one; v4 drops it and the field becomes array-only in both directions.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/openwrt-iac/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/openwrt-iac/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/openwrt-iac/uapi/tree/main/docs)",
+		"version": "3.2.0",
+		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}` (computed; clients ignore for drift detection).\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.interfaces.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: snapshot, validate, commit, reload, restore-on-failure. `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means that the reload action of each init script that ran **exited 0**, and `X-Reload-Status: no_reload` says that none ran, because the write changed nothing in uci. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - no init script ran, because the write changed nothing in uci\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/openwrt-iac/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major, apart from the carve-outs that docs/versioning.md lists. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nThis major accepts both forms for everything below, and v4 removes the old one. The canonical list with migration notes is `docs/deprecations.md`.\n\n- **`network/interfaces.ip6prefix` will stop accepting a space-separated string on write.** Responses are always an array, the list that netifd reads and that LuCI writes for wireguard and 6in4. The string remains valid in a request because the 3.1 spec declared one. v4 drops it and the field becomes array-only in both directions.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/openwrt-iac/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/openwrt-iac/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/openwrt-iac/uapi/tree/main/docs)",
 		"contact": {
 			"name": "uapi",
 			"url": "https://github.com/openwrt-iac/uapi"
@@ -78,7 +78,7 @@
 		},
 		{
 			"name": "Wireless / Interfaces",
-			"description": "SSIDs (`config wifi-iface`). `key` write-only; runtime carries iwinfo state."
+			"description": "SSIDs (`config wifi-iface`). `key`, `r0kh` and `r1kh` are write-only, and runtime carries iwinfo state."
 		},
 		{
 			"name": "Dhcp / Hosts",
@@ -183,10 +183,6 @@
 		{
 			"name": "Vnstat / Config",
 			"description": "Global vnstat singleton."
-		},
-		{
-			"name": "Vnstat / Interfaces",
-			"description": "Per-iface vnstat enable."
 		},
 		{
 			"name": "Mwan3 / Globals",
@@ -330,7 +326,6 @@
 				"Lldpd / Config",
 				"Prometheus Node Exporter Lua / Config",
 				"Vnstat / Config",
-				"Vnstat / Interfaces",
 				"Mwan3 / Globals",
 				"Mwan3 / Interfaces",
 				"Mwan3 / Members",
@@ -756,12 +751,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/FirewallRulesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/FirewallRulesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -1398,12 +1388,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/FirewallZonesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/FirewallZonesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -2040,12 +2025,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/FirewallRedirectsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/FirewallRedirectsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -2682,12 +2662,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/FirewallNatRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/FirewallNatPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -3324,12 +3299,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/FirewallForwardingsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/FirewallForwardingsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -3688,12 +3658,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/FirewallDefaultsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/FirewallDefaultsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -4156,12 +4121,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/NetworkInterfacesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/NetworkInterfacesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -4810,12 +4770,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/NetworkDevicesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/NetworkDevicesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -5458,12 +5413,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/NetworkRoutesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/NetworkRoutesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -6100,12 +6050,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/NetworkRulesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/NetworkRulesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -6748,12 +6693,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/NetworkBridgeVlansRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/NetworkBridgeVlansPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -7396,12 +7336,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/NetworkWireguardPeersRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/NetworkWireguardPeersPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -8038,12 +7973,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/WirelessDevicesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/WirelessDevicesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -8680,12 +8610,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/WirelessInterfacesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/WirelessInterfacesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -9322,12 +9247,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/DhcpHostsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/DhcpHostsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -10174,12 +10094,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/DhcpServersRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/DhcpServersPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -10538,12 +10453,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/DhcpDnsmasqRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/DhcpDnsmasqPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -10722,12 +10632,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/DhcpOdhcpdRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/DhcpOdhcpdPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -10906,12 +10811,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SystemRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SystemPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -11368,12 +11268,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SystemTimeserversRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SystemTimeserversPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -12010,12 +11905,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/DropbearInstancesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/DropbearInstancesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -12652,12 +12542,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/UhttpdInstancesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/UhttpdInstancesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -13294,12 +13179,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/UhttpdCertsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/UhttpdCertsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -13658,12 +13538,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/UnboundServerRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/UnboundServerPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -13842,12 +13717,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/UnboundSrvRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/UnboundSrvPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -14026,12 +13896,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/UnboundExtRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/UnboundExtPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -14488,12 +14353,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SqmQueuesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SqmQueuesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -15130,12 +14990,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SnmpdAgentsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SnmpdAgentsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -15772,12 +15627,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SnmpdCom2secsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SnmpdCom2secsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -16414,12 +16264,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SnmpdGroupsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SnmpdGroupsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -17056,12 +16901,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SnmpdAccessesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SnmpdAccessesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -17420,12 +17260,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/SnmpdSystemRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/SnmpdSystemPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -17604,12 +17439,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/LldpdConfigRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/LldpdConfigPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -17788,12 +17618,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/PrometheusNodeExporterLuaConfigRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/PrometheusNodeExporterLuaConfigPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -17972,12 +17797,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/VnstatConfigRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/VnstatConfigPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -18156,12 +17976,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/Mwan3GlobalsRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/Mwan3GlobalsPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -18618,12 +18433,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/Mwan3InterfacesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/Mwan3InterfacesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -19260,12 +19070,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/Mwan3MembersRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/Mwan3MembersPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -19902,12 +19707,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/Mwan3PoliciesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/Mwan3PoliciesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -20544,12 +20344,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/Mwan3RulesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/Mwan3RulesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -20908,12 +20703,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/UsteerConfigRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/UsteerConfigPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -21370,12 +21160,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"allOf": [
-									{
-										"$ref": "#/components/schemas/OpenvpnInstancesRequest"
-									}
-								],
-								"description": "merge-patch partial body: any subset of the request schema"
+								"$ref": "#/components/schemas/OpenvpnInstancesPatch"
 							}
 						},
 						"application/json-patch+json": {
@@ -23615,7 +23400,7 @@
 		"/diagnostics": {
 			"get": {
 				"summary": "Operational snapshot (lock state, uptime, loaded resources)",
-				"description": "Scope: uapi:diagnostics:ro (or *:ro). With `?validate=1` the response also carries the validation sweep, which walks every section the token may read and reports the ones a write would reject. The sweep is opt-in because it reads the whole configuration and this endpoint is normally polled.",
+				"description": "Scope: uapi:diagnostics:ro (or *:ro). With `?validate=1` the response also carries the validation sweep, which walks every section the token may read and reports the ones a write would reject, and the ones that hold a value that a write cannot add, also where the daemon does not read it yet. The sweep is opt-in because it reads the whole configuration and this endpoint is normally polled.",
 				"parameters": [
 					{
 						"name": "validate",
@@ -23883,7 +23668,7 @@
 				"properties": {
 					"id": {
 						"type": "string",
-						"description": "Optional; generated if absent"
+						"description": "The section name. A stored `option id` does not replace it."
 					},
 					".type": {
 						"type": "string"
@@ -24552,7 +24337,7 @@
 					},
 					"invalid_sections": {
 						"type": "array",
-						"description": "Sections a write would reject today. Present only with ?validate=1.",
+						"description": "Sections a write would reject today, and sections that hold a value that a write cannot add. Present only with ?validate=1.",
 						"items": {
 							"type": "object",
 							"required": [
@@ -24608,6 +24393,10 @@
 											},
 											"message": {
 												"type": "string"
+											},
+											"live": {
+												"type": "boolean",
+												"description": "Present on an error of a rule that a write applies only when it adds the error. false means that the daemon does not read the value yet, for example because the section is disabled."
 											}
 										}
 									}
@@ -24797,7 +24586,6 @@
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -24835,7 +24623,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 						"description": "Mark to set, as value or value/mask (decimal or 0x hex, 32-bit). Requires target MARK; mutually exclusive with set_xmark"
 					},
 					"set_xmark": {
@@ -24843,7 +24630,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 						"description": "Mark to XOR, as value or value/mask (decimal or 0x hex, 32-bit). Requires target MARK; mutually exclusive with set_mark"
 					},
 					"set_dscp": {
@@ -24851,7 +24637,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$",
 						"description": "DSCP class to apply: a symbolic name (CS0-CS7, BE, LE, AF11-AF43, EF, case-insensitive) or a number 0-63. Requires target DSCP"
 					},
 					"match": {
@@ -24893,8 +24678,7 @@
 									"null"
 								],
 								"items": {
-									"type": "string",
-									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+									"type": "string"
 								}
 							},
 							"dest_port": {
@@ -24903,8 +24687,7 @@
 									"null"
 								],
 								"items": {
-									"type": "string",
-									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+									"type": "string"
 								}
 							},
 							"proto": {
@@ -24913,8 +24696,7 @@
 									"null"
 								],
 								"items": {
-									"type": "string",
-									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+									"type": "string"
 								},
 								"description": "Match protocols by name or number, e.g. tcp, udp, gre, sctp, 47, or the wildcards all / any / tcpudp. Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those and would otherwise emit a rule matching the whole protocol. Defaults to tcpudp when unset"
 							},
@@ -24932,7 +24714,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
 							},
 							"dscp": {
@@ -24940,7 +24721,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$",
 								"description": "Match DSCP class or value, optionally negated with a leading '!'"
 							}
 						}
@@ -25250,13 +25030,165 @@
 					}
 				]
 			},
+			"FirewallRulesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of FirewallRulesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"name": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 122
+					},
+					"target": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ACCEPT",
+							"REJECT",
+							"DROP",
+							"NOTRACK",
+							"MARK",
+							"DSCP",
+							null
+						]
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"set_mark": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+					},
+					"set_xmark": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+					},
+					"set_dscp": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$"
+					},
+					"match": {
+						"type": [
+							"object",
+							"null"
+						],
+						"properties": {
+							"src_zone": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"dest_zone": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"src_ip": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string"
+								}
+							},
+							"dest_ip": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string"
+								}
+							},
+							"src_port": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string",
+									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								}
+							},
+							"dest_port": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string",
+									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								}
+							},
+							"proto": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string",
+									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+								}
+							},
+							"family": {
+								"type": [
+									"string",
+									"null"
+								],
+								"enum": [
+									"any",
+									"ipv4",
+									"ipv6",
+									null
+								]
+							},
+							"mark": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+							},
+							"dscp": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$"
+							}
+						}
+					}
+				}
+			},
 			"FirewallZonesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci firewall.zone",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -25268,7 +25200,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[a-zA-Z0-9_-]+$",
 						"description": "Zone name; alphanumerics, dashes, underscores"
 					},
 					"input": {
@@ -25414,13 +25345,98 @@
 					"name"
 				]
 			},
+			"FirewallZonesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of FirewallZonesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"name": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[a-zA-Z0-9_-]+$"
+					},
+					"input": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ACCEPT",
+							"REJECT",
+							"DROP",
+							null
+						]
+					},
+					"output_policy": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ACCEPT",
+							"REJECT",
+							"DROP",
+							null
+						]
+					},
+					"forward": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ACCEPT",
+							"REJECT",
+							"DROP",
+							null
+						]
+					},
+					"network": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"masq": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"mtu_fix": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"family": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"any",
+							"ipv4",
+							"ipv6",
+							null
+						]
+					}
+				}
+			},
 			"FirewallRedirectsResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci firewall.redirect",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -25477,7 +25493,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Match source port or range, one value per redirect"
 							},
 							"src_dport": {
@@ -25485,7 +25500,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "With target DNAT, the incoming destination port or range to match. With target SNAT, the source port to rewrite to. One value per redirect"
 							},
 							"src_dip": {
@@ -25507,7 +25521,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Rewrite destination port or range, one value per redirect"
 							},
 							"proto": {
@@ -25516,8 +25529,7 @@
 									"null"
 								],
 								"items": {
-									"type": "string",
-									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+									"type": "string"
 								},
 								"description": "Match protocols by name or number, e.g. tcp, udp, gre, sctp, 47, or the wildcards all / any / tcpudp. Every protocol must be tcp or udp when a port is matched, because firewall4 keeps a port match only on those and would otherwise emit a redirect matching the whole protocol. Defaults to tcpudp when unset"
 							},
@@ -25535,7 +25547,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
 							}
 						}
@@ -25827,13 +25838,157 @@
 					}
 				]
 			},
+			"FirewallRedirectsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of FirewallRedirectsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"name": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 122
+					},
+					"target": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"DNAT",
+							"SNAT",
+							null
+						]
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"match": {
+						"type": "object",
+						"properties": {
+							"src_zone": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"dest_zone": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"src_ip": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"src_port": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+							},
+							"src_dport": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+							},
+							"src_dip": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"dest_ip": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"dest_port": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+							},
+							"proto": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string",
+									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+								}
+							},
+							"family": {
+								"type": [
+									"string",
+									"null"
+								],
+								"enum": [
+									"any",
+									"ipv4",
+									"ipv6",
+									null
+								]
+							},
+							"mark": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+							}
+						}
+					},
+					"reflection": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"reflection_src": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"internal",
+							"external",
+							null
+						]
+					},
+					"reflection_zone": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"FirewallNatResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci firewall.nat",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -25904,7 +26059,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Match source port or range, optionally negated with a leading '!'"
 							},
 							"dest_ip": {
@@ -25919,7 +26073,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Match destination port or range, optionally negated with a leading '!'"
 							},
 							"proto": {
@@ -25928,8 +26081,7 @@
 									"null"
 								],
 								"items": {
-									"type": "string",
-									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+									"type": "string"
 								},
 								"description": "Match protocols by name or number, e.g. tcp, udp, gre, sctp, 47, or the wildcards all / any. When a port is matched, every protocol must be tcp or udp, or all of them a wildcard that firewall4 rewrites to both. Defaults to all when unset"
 							},
@@ -25938,7 +26090,6 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
 							},
 							"family": {
@@ -26147,13 +26298,135 @@
 					}
 				]
 			},
+			"FirewallNatPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of FirewallNatRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"name": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 122
+					},
+					"target": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"SNAT",
+							"MASQUERADE",
+							"ACCEPT",
+							null
+						]
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"snat_ip": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"snat_port": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"match": {
+						"type": [
+							"object",
+							"null"
+						],
+						"properties": {
+							"src_zone": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"device": {
+								"type": [
+									"string",
+									"null"
+								],
+								"maxLength": 15
+							},
+							"src_ip": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"src_port": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+							},
+							"dest_ip": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"dest_port": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+							},
+							"proto": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string",
+									"pattern": "^!?[A-Za-z0-9*][A-Za-z0-9-]{0,31}$"
+								}
+							},
+							"mark": {
+								"type": [
+									"string",
+									"null"
+								],
+								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+							},
+							"family": {
+								"type": [
+									"string",
+									"null"
+								],
+								"enum": [
+									"any",
+									"ipv4",
+									"ipv6",
+									null
+								]
+							}
+						}
+					}
+				}
+			},
 			"FirewallForwardingsResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci firewall.forwarding",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -26238,6 +26511,46 @@
 					"src",
 					"dest"
 				]
+			},
+			"FirewallForwardingsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of FirewallForwardingsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"src": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"dest": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"family": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"any",
+							"ipv4",
+							"ipv6",
+							null
+						]
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
 			},
 			"FirewallDefaultsResponse": {
 				"type": "object",
@@ -26427,13 +26740,106 @@
 					}
 				}
 			},
+			"FirewallDefaultsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of FirewallDefaultsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"input": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ACCEPT",
+							"REJECT",
+							"DROP",
+							null
+						]
+					},
+					"output_policy": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ACCEPT",
+							"REJECT",
+							"DROP",
+							null
+						]
+					},
+					"forward": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ACCEPT",
+							"REJECT",
+							"DROP",
+							null
+						]
+					},
+					"syn_flood": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"drop_invalid": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"synflood_burst": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000
+					},
+					"synflood_rate": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000
+					},
+					"tcp_syncookies": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"flow_offloading": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"flow_offloading_hw": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"NetworkInterfacesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci network.interface",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Create-time only; picks the uci section name (which becomes the uapi `id` field). When omitted, the server emits a 14-char `wg_<rand>` for proto=wireguard (fits Linux IFNAMSIZ for the kernel netdev) or a 28-char ULID otherwise. Useful for LuCI parity (`lan`, `wan`, `guest`) and readable cross-references. For proto=wireguard the value must additionally fit IFNAMSIZ (15 chars max)."
 					},
 					"managed": {
@@ -26450,7 +26856,7 @@
 					"proto": {
 						"type": "string",
 						"default": "none",
-						"description": "Interface protocol. Several values need a handler package on the device: wwan needs `wwan`, wireguard needs `wireguard-tools`, dhcpv6 needs `odhcp6c`, and ppp/pppoe need `ppp`. When the handler is missing the write still succeeds and the interface is inert; `runtime.effective_proto` is what reveals it. A read answers any proto that uci stores, such as the `6in4` that LuCI writes, while a write takes only the protos that the request schema lists. On another proto, a PATCH that leaves `proto` out keeps the options that its handler reads."
+						"description": "Interface protocol. Several values need a handler package on the device: wwan needs `wwan`, wireguard needs `wireguard-tools`, dhcpv6 needs `odhcp6c`, and ppp/pppoe need `ppp`. When the handler is missing the write still succeeds and the interface is inert; `runtime.effective_proto` is what reveals it. A read answers any proto that uci stores, such as the `6in4` that LuCI writes, while a write takes only the protos that the request schema lists. On another proto, a PATCH that leaves `proto` out keeps the options that its handler reads. A write that switches an enabled interface to wireguard answers 422 while a stored `network/wireguard_peers` of the interface holds a value for which a peer write refuses to enable the peer, such as one that makes wg refuse the whole interface."
 					},
 					"dns": {
 						"type": [
@@ -26520,7 +26926,7 @@
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Whether netifd ignores this interface entirely. A disabled interface is not registered at all, so it has no ubus object and its addresses and routes are not installed."
+						"description": "Whether netifd ignores this interface entirely. A disabled interface is not registered at all, so it has no ubus object and its addresses and routes are not installed. A write that enables a wireguard interface answers 422 while one of its stored peers holds a value for which a peer write refuses to enable the peer."
 					},
 					"ip4table": {
 						"type": [
@@ -26679,7 +27085,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write; v4 removes that (see docs/deprecations.md)."
+						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write, and v4 removes that (see docs/deprecations.md)."
 					},
 					"gateway": {
 						"type": [
@@ -26714,7 +27120,7 @@
 						],
 						"minimum": -1,
 						"maximum": 65535,
-						"description": "WireGuard listen port; 0 or unset lets the kernel pick one. A service name that uci stores, such as `openvpn`, reads as its port from /etc/services, as wg resolves it. -1 reads when the name does not resolve, and then wg cannot bring the interface up; a write of -1 answers 422."
+						"description": "WireGuard listen port. 0 or unset lets the kernel pick one. A service name that uci stores, such as `openvpn`, reads as its port from /etc/services, as wg resolves it. -1 reads when the name does not resolve, and then wg cannot bring the interface up. A write of -1 answers 422. A PATCH that switches an enabled interface to wireguard and leaves listen_port out also answers 422 while uci holds such a name, which the read of the old proto does not show, and null in the switch removes it."
 					},
 					"nohostroute": {
 						"type": "boolean",
@@ -26746,14 +27152,13 @@
 							"string",
 							"null"
 						],
-						"description": "Client identifier: DHCP option 61 on proto dhcp, a DUID on proto dhcpv6"
+						"description": "Client identifier: DHCP option 61 on proto dhcp, a DUID on proto dhcpv6, as hex digits with optional colons"
 					},
 					"reqprefix": {
 						"type": [
 							"string",
 							"null"
 						],
-						"pattern": "^(auto|no|[0-9]+|[0-9A-Fa-f:]+/[0-9]+)$",
 						"description": "Prefix delegation request (dhcpv6, pppoe, ppp): auto, no, a prefix length, or a prefix such as 2001:db8::/56"
 					},
 					"reqaddress": {
@@ -27093,7 +27498,7 @@
 					"proto": {
 						"type": "string",
 						"default": "none",
-						"description": "Interface protocol. Several values need a handler package on the device: wwan needs `wwan`, wireguard needs `wireguard-tools`, dhcpv6 needs `odhcp6c`, and ppp/pppoe need `ppp`. When the handler is missing the write still succeeds and the interface is inert; `runtime.effective_proto` is what reveals it. A read answers any proto that uci stores, such as the `6in4` that LuCI writes, while a write takes only the protos that the request schema lists. On another proto, a PATCH that leaves `proto` out keeps the options that its handler reads.",
+						"description": "Interface protocol. Several values need a handler package on the device: wwan needs `wwan`, wireguard needs `wireguard-tools`, dhcpv6 needs `odhcp6c`, and ppp/pppoe need `ppp`. When the handler is missing the write still succeeds and the interface is inert; `runtime.effective_proto` is what reveals it. A read answers any proto that uci stores, such as the `6in4` that LuCI writes, while a write takes only the protos that the request schema lists. On another proto, a PATCH that leaves `proto` out keeps the options that its handler reads. A write that switches an enabled interface to wireguard answers 422 while a stored `network/wireguard_peers` of the interface holds a value for which a peer write refuses to enable the peer, such as one that makes wg refuse the whole interface.",
 						"enum": [
 							"static",
 							"dhcp",
@@ -27173,7 +27578,7 @@
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Whether netifd ignores this interface entirely. A disabled interface is not registered at all, so it has no ubus object and its addresses and routes are not installed."
+						"description": "Whether netifd ignores this interface entirely. A disabled interface is not registered at all, so it has no ubus object and its addresses and routes are not installed. A write that enables a wireguard interface answers 422 while one of its stored peers holds a value for which a peer write refuses to enable the peer."
 					},
 					"ip4table": {
 						"type": [
@@ -27265,7 +27670,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write; v4 removes that (see docs/deprecations.md)."
+						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write, and v4 removes that (see docs/deprecations.md)."
 					},
 					"gateway": {
 						"type": [
@@ -27296,7 +27701,7 @@
 						],
 						"minimum": 0,
 						"maximum": 65535,
-						"description": "WireGuard listen port; 0 or unset lets the kernel pick one. A service name that uci stores, such as `openvpn`, reads as its port from /etc/services, as wg resolves it. -1 reads when the name does not resolve, and then wg cannot bring the interface up; a write of -1 answers 422."
+						"description": "WireGuard listen port. 0 or unset lets the kernel pick one. A service name that uci stores, such as `openvpn`, reads as its port from /etc/services, as wg resolves it. -1 reads when the name does not resolve, and then wg cannot bring the interface up. A write of -1 answers 422. A PATCH that switches an enabled interface to wireguard and leaves listen_port out also answers 422 while uci holds such a name, which the read of the old proto does not show, and null in the switch removes it."
 					},
 					"nohostroute": {
 						"type": "boolean",
@@ -27328,7 +27733,8 @@
 							"string",
 							"null"
 						],
-						"description": "Client identifier: DHCP option 61 on proto dhcp, a DUID on proto dhcpv6"
+						"pattern": "^[0-9A-Fa-f:]*$",
+						"description": "Client identifier: DHCP option 61 on proto dhcp, a DUID on proto dhcpv6, as hex digits with optional colons"
 					},
 					"reqprefix": {
 						"type": [
@@ -27668,13 +28074,272 @@
 					}
 				]
 			},
+			"NetworkInterfacesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of NetworkInterfacesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"device": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"proto": {
+						"type": "string",
+						"enum": [
+							"static",
+							"dhcp",
+							"dhcpv6",
+							"pppoe",
+							"none",
+							"ppp",
+							"wwan",
+							"wireguard"
+						]
+					},
+					"dns": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"ip6assign": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 128
+					},
+					"ip6hint": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ip6ifaceid": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ip6class": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"ip6weight": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 2147483647
+					},
+					"mtu": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 68,
+						"maximum": 65535
+					},
+					"auto": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"disabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ip4table": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ip6table": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"metric": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"defaultroute": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"delegate": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ipaddrs": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"ip6addrs": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"netmask": {
+						"type": [
+							"string",
+							"null"
+						],
+						"x-uapi-clear-on-omit": true
+					},
+					"broadcast": {
+						"type": [
+							"string",
+							"null"
+						],
+						"x-uapi-clear-on-omit": true
+					},
+					"ip6gw": {
+						"type": [
+							"string",
+							"null"
+						],
+						"x-uapi-clear-on-omit": true
+					},
+					"ip6prefix": {
+						"type": [
+							"array",
+							"string",
+							"null"
+						],
+						"x-uapi-clear-on-omit": true,
+						"items": {
+							"type": "string"
+						}
+					},
+					"gateway": {
+						"type": [
+							"string",
+							"null"
+						],
+						"x-uapi-clear-on-omit": true
+					},
+					"addresses": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"private_key": {
+						"type": "string",
+						"writeOnly": true
+					},
+					"listen_port": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 65535
+					},
+					"nohostroute": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"peerdns": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"broadcast_flag": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"hostname": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"clientid": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9A-Fa-f:]*$"
+					},
+					"reqprefix": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^(auto|no|[0-9]+|[0-9A-Fa-f:]+/[0-9]+)$"
+					},
+					"reqaddress": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"try",
+							"force",
+							"none",
+							null
+						]
+					},
+					"sourcefilter": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"NetworkDevicesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci network.device",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -27743,7 +28408,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[0-9A-Fa-f]{2}([:-][0-9A-Fa-f]{2}){5}$",
 						"description": "MAC address override (colon or dash separated)"
 					},
 					"ipv6": {
@@ -27882,13 +28546,88 @@
 					}
 				]
 			},
+			"NetworkDevicesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of NetworkDevicesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"name": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"type": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"bridge",
+							"8021q",
+							"8021ad",
+							"macvlan",
+							"veth",
+							"tun",
+							"tap",
+							null
+						]
+					},
+					"ports": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"vid": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 4094
+					},
+					"ifname": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"mtu": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 68,
+						"maximum": 65535
+					},
+					"macaddr": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9A-Fa-f]{2}([:-][0-9A-Fa-f]{2}){5}$"
+					},
+					"ipv6": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"NetworkRoutesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci network.route",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -27930,7 +28669,7 @@
 						],
 						"minimum": 0,
 						"maximum": 4294967295,
-						"description": "Routing table id. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the route; a write of 0 answers 422."
+						"description": "Routing table id. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the route. A write of 0 answers 422."
 					},
 					"metric": {
 						"type": [
@@ -28026,7 +28765,7 @@
 						],
 						"minimum": 1,
 						"maximum": 4294967295,
-						"description": "Routing table id. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the route; a write of 0 answers 422."
+						"description": "Routing table id. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the route. A write of 0 answers 422."
 					},
 					"metric": {
 						"type": [
@@ -28074,13 +28813,98 @@
 					"target"
 				]
 			},
+			"NetworkRoutesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of NetworkRoutesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"interface": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"target": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"netmask": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"gateway": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"table": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 4294967295
+					},
+					"metric": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"mtu": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"source": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"type": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"unicast",
+							"blackhole",
+							"unreachable",
+							"prohibit",
+							"throw",
+							"anycast",
+							"multicast",
+							"local",
+							"broadcast",
+							null
+						]
+					},
+					"disabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"NetworkRulesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci network.rule",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -28130,7 +28954,7 @@
 						],
 						"minimum": 0,
 						"maximum": 4294967295,
-						"description": "Routing table id to look up when action is lookup. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the rule; a write of 0 answers 422."
+						"description": "Routing table id to look up when action is lookup. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the rule. A write of 0 answers 422."
 					},
 					"goto": {
 						"type": [
@@ -28293,7 +29117,7 @@
 						],
 						"minimum": 1,
 						"maximum": 4294967295,
-						"description": "Routing table id to look up when action is lookup. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the rule; a write of 0 answers 422."
+						"description": "Routing table id to look up when action is lookup. A name that uci stores reads as its id: 253 default, 254 main, 255 local, or the id in /etc/iproute2/rt_tables. 0 reads when netifd cannot resolve the stored table, and netifd then drops the rule. A write of 0 answers 422."
 					},
 					"goto": {
 						"type": [
@@ -28400,13 +29224,103 @@
 					}
 				]
 			},
+			"NetworkRulesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of NetworkRulesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"in": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"out": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"src": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"dest": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"priority": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 32766
+					},
+					"lookup": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 4294967295
+					},
+					"goto": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 2147483647
+					},
+					"action": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"lookup",
+							"goto",
+							"unreachable",
+							"prohibit",
+							"blackhole",
+							"throw",
+							null
+						]
+					},
+					"invert": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"mark": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"disabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"NetworkBridgeVlansResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci network.bridge-vlan",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -28434,8 +29348,7 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"pattern": "^[A-Za-z0-9._-]+(:[tu*]+)?$"
+							"type": "string"
 						},
 						"description": "Bridge ports with optional :t (tagged), :u (untagged), :* (pvid) suffix"
 					},
@@ -28490,13 +29403,46 @@
 					"vlan"
 				]
 			},
+			"NetworkBridgeVlansPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of NetworkBridgeVlansRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"device": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"vlan": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 4094
+					},
+					"ports": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9._-]+(:[tu*]+)?$"
+						}
+					}
+				}
+			},
 			"NetworkWireguardPeersResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci network.wireguard_peer",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -28519,7 +29465,7 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[A-Za-z0-9+/]{43}=$"
+						"description": "WireGuard public key of the peer, as wg pubkey prints it"
 					},
 					"has_preshared_key": {
 						"type": "boolean",
@@ -28540,7 +29486,7 @@
 							"string",
 							"null"
 						],
-						"description": "Remote endpoint hostname or IP"
+						"description": "Remote endpoint host name or IP address. An IPv6 address goes without brackets, because wireguard.sh brackets every host with a colon itself. A write that changes the host, or enables the peer, refuses a backslash, a newline, a `#`, and a colon outside an IPv6 address, which can end in a %zone"
 					},
 					"endpoint_port": {
 						"type": [
@@ -28549,15 +29495,16 @@
 						],
 						"minimum": 0,
 						"maximum": 65535,
-						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as wg resolves it. 0 reads when the name does not resolve, and then wg cannot bring the interface up; a write of 0 answers 422."
+						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as wg resolves it. 0 reads when the name does not resolve, and then wg cannot bring the interface up. A write that changes the port to 0 answers 422, and so does a write that sends back the 0 of a name that does not resolve, because it would store port 0 in its place. A write that leaves a stored port as it is passes, unless it enables the peer, or changes the host or the key of an enabled peer, while the port reads 0."
 					},
 					"persistent_keepalive": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 65535
+						"minimum": -1,
+						"maximum": 65535,
+						"description": "Seconds between keepalive packets. 0, a stored `off` or no value turns them off. -1 reads when wg cannot read the stored value, and then wg cannot bring the interface up. A write that changes the keepalive to -1 answers 422. A write that leaves such a stored value as it is passes, unless it enables the peer, and a PUT that sends the -1 back stores -1, which wg refuses as it refuses the stored value."
 					},
 					"route_allowed_ips": {
 						"type": "boolean",
@@ -28576,8 +29523,7 @@
 					"preshared_key": {
 						"type": "string",
 						"writeOnly": true,
-						"pattern": "^[A-Za-z0-9+/]{43}=$",
-						"description": "Optional preshared key; accepted on write, masked on read"
+						"description": "Optional preshared key, as wg genpsk prints it. A write sets it, and a read does not show it."
 					}
 				},
 				"required": [
@@ -28611,7 +29557,8 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[A-Za-z0-9+/]{43}=$"
+						"pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$",
+						"description": "WireGuard public key of the peer, as wg pubkey prints it"
 					},
 					"allowed_ips": {
 						"type": [
@@ -28628,7 +29575,7 @@
 							"string",
 							"null"
 						],
-						"description": "Remote endpoint hostname or IP"
+						"description": "Remote endpoint host name or IP address. An IPv6 address goes without brackets, because wireguard.sh brackets every host with a colon itself. A write that changes the host, or enables the peer, refuses a backslash, a newline, a `#`, and a colon outside an IPv6 address, which can end in a %zone"
 					},
 					"endpoint_port": {
 						"type": [
@@ -28637,7 +29584,7 @@
 						],
 						"minimum": 1,
 						"maximum": 65535,
-						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as wg resolves it. 0 reads when the name does not resolve, and then wg cannot bring the interface up; a write of 0 answers 422."
+						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as wg resolves it. 0 reads when the name does not resolve, and then wg cannot bring the interface up. A write that changes the port to 0 answers 422, and so does a write that sends back the 0 of a name that does not resolve, because it would store port 0 in its place. A write that leaves a stored port as it is passes, unless it enables the peer, or changes the host or the key of an enabled peer, while the port reads 0."
 					},
 					"persistent_keepalive": {
 						"type": [
@@ -28645,7 +29592,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 65535
+						"maximum": 65535,
+						"description": "Seconds between keepalive packets. 0, a stored `off` or no value turns them off. -1 reads when wg cannot read the stored value, and then wg cannot bring the interface up. A write that changes the keepalive to -1 answers 422. A write that leaves such a stored value as it is passes, unless it enables the peer, and a PUT that sends the -1 back stores -1, which wg refuses as it refuses the stored value."
 					},
 					"route_allowed_ips": {
 						"type": "boolean",
@@ -28660,8 +29608,8 @@
 					"preshared_key": {
 						"type": "string",
 						"writeOnly": true,
-						"pattern": "^[A-Za-z0-9+/]{43}=$",
-						"description": "Optional preshared key; accepted on write, masked on read"
+						"pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$",
+						"description": "Optional preshared key, as wg genpsk prints it. A write sets it, and a read does not show it."
 					}
 				},
 				"required": [
@@ -28670,13 +29618,86 @@
 					"allowed_ips"
 				]
 			},
+			"NetworkWireguardPeersPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of NetworkWireguardPeersRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"interface": {
+						"type": "string"
+					},
+					"description": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"public_key": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$"
+					},
+					"allowed_ips": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"endpoint_host": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"endpoint_port": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65535
+					},
+					"persistent_keepalive": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 65535
+					},
+					"route_allowed_ips": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"disabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"preshared_key": {
+						"type": "string",
+						"writeOnly": true,
+						"pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$"
+					}
+				}
+			},
 			"WirelessDevicesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci wireless.wifi-device",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -28720,7 +29741,6 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
 						"description": "Index of the radio on a phy that has several, as `wifi config` writes it"
 					},
 					"band": {
@@ -28742,10 +29762,7 @@
 							"string",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 196,
-						"pattern": "^auto$",
-						"description": "Channel number (0-196) or the string \"auto\""
+						"description": "Channel number (0-233, where 6 GHz uses up to 233) or the string \"auto\". A stored value reads as the number that wifi-scripts takes from it: ` 6` and `0x6` are 6, a fraction is cut, and other text is 0, which is auto. A write refuses a number outside 0 to 233"
 					},
 					"htmode": {
 						"type": [
@@ -28759,7 +29776,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^([A-Za-z]{2}|00)$",
 						"description": "ISO 3166-1 alpha-2 regulatory country code, or \"00\" for the world/global domain (stock 6 GHz default)"
 					},
 					"txpower": {
@@ -28767,14 +29783,10 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 30,
-						"description": "TX power in dBm"
+						"description": "TX power in dBm, from 0 to 30 on write. A stored value reads as wifi-scripts reads it, as for `channel`"
 					},
 					"cell_density": {
 						"type": "integer",
-						"minimum": 0,
-						"maximum": 3,
 						"default": 0,
 						"description": "Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high"
 					},
@@ -28786,7 +29798,7 @@
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Disable this radio at boot"
+						"description": "Disable this radio at boot. wifi-scripts sets up no SSID of a disabled radio, or of one without a `type`. A write that turns the radio on, such as a create without `disabled: true` or a write that gives the radio its type, is refused with `conflict` while an enabled SSID of the radio holds a value that wifi-scripts or a daemon refuses, as the fields of wireless/interfaces describe. The error names each such SSID and its fields, and `GET /api/v3/diagnostics?validate=1` lists them. Such a write is also refused for a stored `cell_density` outside 0 to 3, for which wifi-scripts stops the radio"
 					},
 					"runtime": {
 						"type": "object",
@@ -28843,8 +29855,8 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"description": "Index of the radio on a phy that has several, as `wifi config` writes it"
+						"description": "Index of the radio on a phy that has several, as `wifi config` writes it",
+						"minimum": 0
 					},
 					"band": {
 						"type": [
@@ -28865,10 +29877,10 @@
 							"string",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 196,
 						"pattern": "^auto$",
-						"description": "Channel number (0-196) or the string \"auto\""
+						"description": "Channel number (0-233, where 6 GHz uses up to 233) or the string \"auto\". A stored value reads as the number that wifi-scripts takes from it: ` 6` and `0x6` are 6, a fraction is cut, and other text is 0, which is auto. A write refuses a number outside 0 to 233",
+						"minimum": 0,
+						"maximum": 233
 					},
 					"htmode": {
 						"type": [
@@ -28890,16 +29902,16 @@
 							"integer",
 							"null"
 						],
+						"description": "TX power in dBm, from 0 to 30 on write. A stored value reads as wifi-scripts reads it, as for `channel`",
 						"minimum": 0,
-						"maximum": 30,
-						"description": "TX power in dBm"
+						"maximum": 30
 					},
 					"cell_density": {
 						"type": "integer",
-						"minimum": 0,
-						"maximum": 3,
 						"default": 0,
-						"description": "Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high"
+						"description": "Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high",
+						"minimum": 0,
+						"maximum": 3
 					},
 					"legacy_rates": {
 						"type": "boolean",
@@ -28909,12 +29921,122 @@
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Disable this radio at boot"
+						"description": "Disable this radio at boot. wifi-scripts sets up no SSID of a disabled radio, or of one without a `type`. A write that turns the radio on, such as a create without `disabled: true` or a write that gives the radio its type, is refused with `conflict` while an enabled SSID of the radio holds a value that wifi-scripts or a daemon refuses, as the fields of wireless/interfaces describe. The error names each such SSID and its fields, and `GET /api/v3/diagnostics?validate=1` lists them. Such a write is also refused for a stored `cell_density` outside 0 to 3, for which wifi-scripts stops the radio"
 					}
 				},
 				"required": [
 					"type"
 				]
+			},
+			"WirelessDevicesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of WirelessDevicesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"type": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"mac80211",
+							"broadcom",
+							null
+						]
+					},
+					"path": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"phy": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"macaddr": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"radio": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"band": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"2g",
+							"5g",
+							"6g",
+							"60g",
+							null
+						]
+					},
+					"channel": {
+						"type": [
+							"integer",
+							"string",
+							"null"
+						],
+						"pattern": "^auto$",
+						"minimum": 0,
+						"maximum": 233
+					},
+					"htmode": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"country": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^([A-Za-z]{2}|00)$"
+					},
+					"txpower": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 30
+					},
+					"cell_density": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 3
+					},
+					"legacy_rates": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"disabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
 			},
 			"WirelessInterfacesResponse": {
 				"type": "object",
@@ -28922,7 +30044,6 @@
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -28953,14 +30074,15 @@
 							"monitor",
 							"mesh"
 						],
-						"default": "ap"
+						"default": "ap",
+						"description": "A write refuses mode wds, for which wifi-scripts sets up no interface. LuCI writes a WDS access point or station as mode ap or sta with option wds. A read reports a stored wds, and a write that leaves it as it is is refused for it only when it sets the SSID up. A create or a PUT that sends no mode stores ap, and a write that sends a null mode is refused. A PATCH that sends no mode leaves a section without one as it is, and the read of such a section reports ap"
 					},
 					"ssid": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "SSID broadcast (or joined in sta mode)"
+						"description": "SSID broadcast (or joined in sta mode). A write refuses more than 32 bytes, which hostapd and wpa_supplicant refuse in mode ap, sta and adhoc. uapi counts bytes, so a non-ASCII character counts for more than one. In mode monitor, adhoc or mesh, it must not hold a single quote. A write that leaves the SSID as it is is refused for a problem that it already had only when it sets the SSID up or moves it into a mode that the problem applies to"
 					},
 					"encryption": {
 						"type": "string",
@@ -29063,7 +30185,7 @@
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Disable this iface at boot"
+						"description": "Disable this iface at boot. wifi-scripts sets an SSID up only while the SSID and a radio that `device` names are enabled, and that radio has a `type`, and the daemons read its values only then. A write sets the SSID up when it enables the SSID on an enabled radio, or moves an enabled SSID from a radio that is off or missing to an enabled one. A move between two enabled radios is not checked. wireless/devices refuses a write that turns a radio on while an enabled SSID of the radio holds a value that wifi-scripts or a daemon refuses, as the other fields describe"
 					},
 					"hidden": {
 						"type": "boolean",
@@ -29090,47 +30212,42 @@
 							"boolean",
 							"null"
 						],
-						"description": "Generate the 802.11r keys locally instead of using the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. 802.11r needs WPA2 or later, so plain psk gets no fast transition at all"
+						"description": "Generate the 802.11r keys locally instead of using the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. A stored value other than 1, true, 0 or false reads as false, as wifi-scripts takes it. 802.11r needs WPA2 or later, so plain psk gets no fast transition at all"
 					},
 					"mobility_domain": {
 						"type": [
 							"string",
 							"null"
 						],
-						"pattern": "^[0-9A-Fa-f]{4}$",
-						"description": "802.11r mobility domain, 4 hex digits. Unset, wifi-scripts derives it from the SSID"
+						"description": "802.11r mobility domain, 4 hex digits. Unset, wifi-scripts derives it from the SSID. With 802.11r, hostapd refuses its whole config for another form, so a write that leaves a stored value as it is is refused for its form only when it makes hostapd read it with 802.11r, for example by setting the SSID up or turning ieee80211r on"
 					},
 					"nasid": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "802.11r NAS identifier of this access point, which wifi-scripts passes to hostapd as nas_identifier"
+						"description": "NAS identifier of this access point, which wifi-scripts passes to hostapd as nas_identifier in mode ap: the 802.11r R0KH-ID, and the RADIUS NAS-Identifier. Unset, hostapd uses the BSSID without colons. A write refuses a newline and more than 1024 bytes, more than 48 with fast transition, which needs mode ap, ieee80211r and WPA2 or later other than owe, and more than 253 on an EAP access point, the limit of the RADIUS attribute. A write that leaves nasid as it is is refused for a problem that nasid already had only when it sets the SSID up or changes its mode, encryption or ieee80211r. uapi counts bytes, so a non-ASCII character counts for more than one. Another access point can list it in r0kh only with at most 47 bytes and no space or comma"
 					},
 					"reassociation_deadline": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1000,
-						"maximum": 65535,
-						"description": "802.11r reassociation deadline in time units of 1.024 ms. Unset, wifi-scripts uses 20000"
+						"description": "802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, wifi-scripts uses 20000. A read gives the number that wifi-scripts reads from the stored text: ` 500` is 500, `0x10` is 16, a fraction is cut, and other text is 0, as hostapd reads it. wifi-scripts stops the setup of the radio, with all its SSIDs, for a value outside the range on an enabled SSID in mode ap, sta, adhoc or mesh. A write that leaves a stored value as it is is refused for it only when it sets the SSID up or moves it into one of these modes"
 					},
 					"r0_key_lifetime": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"description": "802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 10000"
+						"description": "802.11r lifetime of the PMK-R0 in minutes, 0 or more. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. A read gives the number that wifi-scripts reads from the stored text, as for reassociation_deadline"
 					},
 					"r1_key_holder": {
 						"type": [
 							"string",
 							"null"
 						],
-						"pattern": "^[0-9A-Fa-f]{12}$",
-						"description": "802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID"
+						"description": "802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. hostapd refuses its whole config for another form, so a write that leaves a stored value as it is is refused for its form only when it makes hostapd read it, for example by setting the SSID up or turning ft_psk_generate_local off"
 					},
 					"pmk_r1_push": {
 						"type": "boolean",
@@ -29205,7 +30322,7 @@
 					"key": {
 						"type": "string",
 						"writeOnly": true,
-						"description": "Encryption passphrase; accepted on write, masked on read. Required when `encryption` is a PSK variant and no key is stored yet, which validate() enforces; it is not a schema conditional because a read-modify-write body cannot carry a masked field"
+						"description": "Encryption passphrase; accepted on write, masked on read. Required for every encryption other than none, wep and owe when no key is stored yet, which validate() enforces. It is not a schema conditional, because a read-modify-write body cannot carry a masked field. A key with a newline is refused, because wifi-scripts writes it into the daemon's config as one line. With psk, psk2, psk-mixed, sae or sae-mixed, a write also refuses a key that the daemon refuses or misreads. In mode ap, the key must be 8 to 63 bytes, or 64 hex digits other than with plain sae. In mode sta or adhoc, other than with plain sae, the key must be 8 to 63 bytes with no control character, because wifi-scripts gives wpa_supplicant every key as a passphrase, a key of 64 hex digits too. In mode sta, adhoc or mesh, the key must not hold a `#` after an odd number of double quotes. uapi counts bytes. A write that leaves the key as it is is refused for a problem that it already had only when it sets the SSID up or changes its mode or encryption"
 					},
 					"r0kh": {
 						"type": "array",
@@ -29213,7 +30330,7 @@
 							"type": "string"
 						},
 						"writeOnly": true,
-						"description": "802.11r R0 key holders as `<MAC>,<NAS id>,<key>` entries; accepted on write, masked on read, and kept by a PUT that leaves it out. Unset with ft_psk_generate_local off, wifi-scripts derives one entry from the mobility domain and the key"
+						"description": "802.11r R0 key holders as `<MAC>,<NAS id>,<key>` entries, accepted on write, masked on read, and kept by a PUT that leaves it out. An entry takes no newline and at most 1024 bytes, and while hostapd reads the lists, the form that hostapd parses. Unset with ft_psk_generate_local off, wifi-scripts derives one entry from the mobility domain and the key"
 					},
 					"r1kh": {
 						"type": "array",
@@ -29221,7 +30338,7 @@
 							"type": "string"
 						},
 						"writeOnly": true,
-						"description": "802.11r R1 key holders as `<MAC>,<R1KH id>,<key>` entries; accepted on write, masked on read, and kept by a PUT that leaves it out"
+						"description": "802.11r R1 key holders as `<MAC>,<R1KH id>,<key>` entries, accepted on write, masked on read, and kept by a PUT that leaves it out. An entry takes no newline and at most 1024 bytes, and while hostapd reads the lists, the form that hostapd parses"
 					}
 				},
 				"required": [
@@ -29257,18 +30374,19 @@
 							"ap",
 							"sta",
 							"adhoc",
-							"wds",
 							"monitor",
 							"mesh"
 						],
-						"default": "ap"
+						"default": "ap",
+						"description": "A write refuses mode wds, for which wifi-scripts sets up no interface. LuCI writes a WDS access point or station as mode ap or sta with option wds. A read reports a stored wds, and a write that leaves it as it is is refused for it only when it sets the SSID up. A create or a PUT that sends no mode stores ap, and a write that sends a null mode is refused. A PATCH that sends no mode leaves a section without one as it is, and the read of such a section reports ap"
 					},
 					"ssid": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "SSID broadcast (or joined in sta mode)"
+						"description": "SSID broadcast (or joined in sta mode). A write refuses more than 32 bytes, which hostapd and wpa_supplicant refuse in mode ap, sta and adhoc. uapi counts bytes, so a non-ASCII character counts for more than one. In mode monitor, adhoc or mesh, it must not hold a single quote. A write that leaves the SSID as it is is refused for a problem that it already had only when it sets the SSID up or moves it into a mode that the problem applies to",
+						"maxLength": 32
 					},
 					"encryption": {
 						"type": "string",
@@ -29371,7 +30489,7 @@
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Disable this iface at boot"
+						"description": "Disable this iface at boot. wifi-scripts sets an SSID up only while the SSID and a radio that `device` names are enabled, and that radio has a `type`, and the daemons read its values only then. A write sets the SSID up when it enables the SSID on an enabled radio, or moves an enabled SSID from a radio that is off or missing to an enabled one. A move between two enabled radios is not checked. wireless/devices refuses a write that turns a radio on while an enabled SSID of the radio holds a value that wifi-scripts or a daemon refuses, as the other fields describe"
 					},
 					"hidden": {
 						"type": "boolean",
@@ -29398,47 +30516,48 @@
 							"boolean",
 							"null"
 						],
-						"description": "Generate the 802.11r keys locally instead of using the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. 802.11r needs WPA2 or later, so plain psk gets no fast transition at all"
+						"description": "Generate the 802.11r keys locally instead of using the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. A stored value other than 1, true, 0 or false reads as false, as wifi-scripts takes it. 802.11r needs WPA2 or later, so plain psk gets no fast transition at all"
 					},
 					"mobility_domain": {
 						"type": [
 							"string",
 							"null"
 						],
-						"pattern": "^[0-9A-Fa-f]{4}$",
-						"description": "802.11r mobility domain, 4 hex digits. Unset, wifi-scripts derives it from the SSID"
+						"description": "802.11r mobility domain, 4 hex digits. Unset, wifi-scripts derives it from the SSID. With 802.11r, hostapd refuses its whole config for another form, so a write that leaves a stored value as it is is refused for its form only when it makes hostapd read it with 802.11r, for example by setting the SSID up or turning ieee80211r on",
+						"pattern": "^[0-9A-Fa-f]{4}$"
 					},
 					"nasid": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "802.11r NAS identifier of this access point, which wifi-scripts passes to hostapd as nas_identifier"
+						"description": "NAS identifier of this access point, which wifi-scripts passes to hostapd as nas_identifier in mode ap: the 802.11r R0KH-ID, and the RADIUS NAS-Identifier. Unset, hostapd uses the BSSID without colons. A write refuses a newline and more than 1024 bytes, more than 48 with fast transition, which needs mode ap, ieee80211r and WPA2 or later other than owe, and more than 253 on an EAP access point, the limit of the RADIUS attribute. A write that leaves nasid as it is is refused for a problem that nasid already had only when it sets the SSID up or changes its mode, encryption or ieee80211r. uapi counts bytes, so a non-ASCII character counts for more than one. Another access point can list it in r0kh only with at most 47 bytes and no space or comma",
+						"maxLength": 1024
 					},
 					"reassociation_deadline": {
 						"type": [
 							"integer",
 							"null"
 						],
+						"description": "802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, wifi-scripts uses 20000. A read gives the number that wifi-scripts reads from the stored text: ` 500` is 500, `0x10` is 16, a fraction is cut, and other text is 0, as hostapd reads it. wifi-scripts stops the setup of the radio, with all its SSIDs, for a value outside the range on an enabled SSID in mode ap, sta, adhoc or mesh. A write that leaves a stored value as it is is refused for it only when it sets the SSID up or moves it into one of these modes",
 						"minimum": 1000,
-						"maximum": 65535,
-						"description": "802.11r reassociation deadline in time units of 1.024 ms. Unset, wifi-scripts uses 20000"
+						"maximum": 65535
 					},
 					"r0_key_lifetime": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"description": "802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 10000"
+						"description": "802.11r lifetime of the PMK-R0 in minutes, 0 or more. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. A read gives the number that wifi-scripts reads from the stored text, as for reassociation_deadline",
+						"minimum": 0
 					},
 					"r1_key_holder": {
 						"type": [
 							"string",
 							"null"
 						],
-						"pattern": "^[0-9A-Fa-f]{12}$",
-						"description": "802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID"
+						"description": "802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. hostapd refuses its whole config for another form, so a write that leaves a stored value as it is is refused for its form only when it makes hostapd read it, for example by setting the SSID up or turning ft_psk_generate_local off",
+						"pattern": "^[0-9A-Fa-f]{12}$"
 					},
 					"pmk_r1_push": {
 						"type": "boolean",
@@ -29448,28 +30567,540 @@
 					"key": {
 						"type": "string",
 						"writeOnly": true,
-						"description": "Encryption passphrase; accepted on write, masked on read. Required when `encryption` is a PSK variant and no key is stored yet, which validate() enforces; it is not a schema conditional because a read-modify-write body cannot carry a masked field"
+						"description": "Encryption passphrase; accepted on write, masked on read. Required for every encryption other than none, wep and owe when no key is stored yet, which validate() enforces. It is not a schema conditional, because a read-modify-write body cannot carry a masked field. A key with a newline is refused, because wifi-scripts writes it into the daemon's config as one line. With psk, psk2, psk-mixed, sae or sae-mixed, a write also refuses a key that the daemon refuses or misreads. In mode ap, the key must be 8 to 63 bytes, or 64 hex digits other than with plain sae. In mode sta or adhoc, other than with plain sae, the key must be 8 to 63 bytes with no control character, because wifi-scripts gives wpa_supplicant every key as a passphrase, a key of 64 hex digits too. In mode sta, adhoc or mesh, the key must not hold a `#` after an odd number of double quotes. uapi counts bytes. A write that leaves the key as it is is refused for a problem that it already had only when it sets the SSID up or changes its mode or encryption"
 					},
 					"r0kh": {
 						"type": "array",
 						"items": {
-							"type": "string"
+							"type": "string",
+							"maxLength": 1024
 						},
 						"writeOnly": true,
-						"description": "802.11r R0 key holders as `<MAC>,<NAS id>,<key>` entries; accepted on write, masked on read, and kept by a PUT that leaves it out. Unset with ft_psk_generate_local off, wifi-scripts derives one entry from the mobility domain and the key"
+						"description": "802.11r R0 key holders as `<MAC>,<NAS id>,<key>` entries, accepted on write, masked on read, and kept by a PUT that leaves it out. An entry takes no newline and at most 1024 bytes, and while hostapd reads the lists, the form that hostapd parses. Unset with ft_psk_generate_local off, wifi-scripts derives one entry from the mobility domain and the key"
 					},
 					"r1kh": {
 						"type": "array",
 						"items": {
-							"type": "string"
+							"type": "string",
+							"maxLength": 1024
 						},
 						"writeOnly": true,
-						"description": "802.11r R1 key holders as `<MAC>,<R1KH id>,<key>` entries; accepted on write, masked on read, and kept by a PUT that leaves it out"
+						"description": "802.11r R1 key holders as `<MAC>,<R1KH id>,<key>` entries, accepted on write, masked on read, and kept by a PUT that leaves it out. An entry takes no newline and at most 1024 bytes, and while hostapd reads the lists, the form that hostapd parses"
 					}
 				},
 				"required": [
 					"device"
+				],
+				"allOf": [
+					{
+						"if": {
+							"properties": {
+								"mode": {
+									"const": "ap"
+								},
+								"ieee80211r": {
+									"const": true
+								},
+								"encryption": {
+									"enum": [
+										"psk2",
+										"psk-mixed",
+										"sae",
+										"sae-mixed",
+										"wpa2",
+										"wpa3",
+										"wpa3-mixed",
+										"psk2+ccmp",
+										"psk2+ccmp256",
+										"psk2+gcmp",
+										"psk2+gcmp256",
+										"psk2+tkip",
+										"psk2+tkip+ccmp",
+										"psk2+aes",
+										"psk2+tkip+aes",
+										"psk2+aes+tkip",
+										"psk2+ccmp+tkip",
+										"psk-mixed+ccmp",
+										"psk-mixed+ccmp256",
+										"psk-mixed+gcmp",
+										"psk-mixed+gcmp256",
+										"psk-mixed+tkip",
+										"psk-mixed+tkip+ccmp",
+										"psk-mixed+aes",
+										"psk-mixed+tkip+aes",
+										"psk-mixed+aes+tkip",
+										"psk-mixed+ccmp+tkip",
+										"sae+ccmp",
+										"sae+ccmp256",
+										"sae+gcmp",
+										"sae+gcmp256",
+										"sae+tkip",
+										"sae+tkip+ccmp",
+										"sae+aes",
+										"sae+tkip+aes",
+										"sae+aes+tkip",
+										"sae+ccmp+tkip",
+										"wpa2+ccmp",
+										"wpa2+ccmp256",
+										"wpa2+gcmp",
+										"wpa2+gcmp256",
+										"wpa2+tkip",
+										"wpa2+tkip+ccmp",
+										"wpa2+aes",
+										"wpa2+tkip+aes",
+										"wpa2+aes+tkip",
+										"wpa2+ccmp+tkip",
+										"wpa3+ccmp",
+										"wpa3+ccmp256",
+										"wpa3+gcmp",
+										"wpa3+gcmp256",
+										"wpa3+tkip",
+										"wpa3+tkip+ccmp",
+										"wpa3+aes",
+										"wpa3+tkip+aes",
+										"wpa3+aes+tkip",
+										"wpa3+ccmp+tkip",
+										"wpa3-mixed+ccmp",
+										"wpa3-mixed+ccmp256",
+										"wpa3-mixed+gcmp",
+										"wpa3-mixed+gcmp256",
+										"wpa3-mixed+tkip",
+										"wpa3-mixed+tkip+ccmp",
+										"wpa3-mixed+aes",
+										"wpa3-mixed+tkip+aes",
+										"wpa3-mixed+aes+tkip",
+										"wpa3-mixed+ccmp+tkip"
+									]
+								}
+							},
+							"required": [
+								"mode",
+								"ieee80211r",
+								"encryption"
+							]
+						},
+						"then": {
+							"properties": {
+								"nasid": {
+									"maxLength": 48
+								}
+							}
+						}
+					},
+					{
+						"if": {
+							"properties": {
+								"mode": {
+									"const": "ap"
+								},
+								"encryption": {
+									"enum": [
+										"wpa",
+										"wpa2",
+										"wpa3",
+										"wpa3-mixed",
+										"wpa+ccmp",
+										"wpa+ccmp256",
+										"wpa+gcmp",
+										"wpa+gcmp256",
+										"wpa+tkip",
+										"wpa+tkip+ccmp",
+										"wpa+aes",
+										"wpa+tkip+aes",
+										"wpa+aes+tkip",
+										"wpa+ccmp+tkip",
+										"wpa2+ccmp",
+										"wpa2+ccmp256",
+										"wpa2+gcmp",
+										"wpa2+gcmp256",
+										"wpa2+tkip",
+										"wpa2+tkip+ccmp",
+										"wpa2+aes",
+										"wpa2+tkip+aes",
+										"wpa2+aes+tkip",
+										"wpa2+ccmp+tkip",
+										"wpa3+ccmp",
+										"wpa3+ccmp256",
+										"wpa3+gcmp",
+										"wpa3+gcmp256",
+										"wpa3+tkip",
+										"wpa3+tkip+ccmp",
+										"wpa3+aes",
+										"wpa3+tkip+aes",
+										"wpa3+aes+tkip",
+										"wpa3+ccmp+tkip",
+										"wpa3-mixed+ccmp",
+										"wpa3-mixed+ccmp256",
+										"wpa3-mixed+gcmp",
+										"wpa3-mixed+gcmp256",
+										"wpa3-mixed+tkip",
+										"wpa3-mixed+tkip+ccmp",
+										"wpa3-mixed+aes",
+										"wpa3-mixed+tkip+aes",
+										"wpa3-mixed+aes+tkip",
+										"wpa3-mixed+ccmp+tkip"
+									]
+								}
+							},
+							"required": [
+								"mode",
+								"encryption"
+							]
+						},
+						"then": {
+							"properties": {
+								"nasid": {
+									"maxLength": 253
+								}
+							}
+						}
+					},
+					{
+						"if": {
+							"properties": {
+								"mode": {
+									"const": "ap"
+								},
+								"ieee80211r": {
+									"const": true
+								},
+								"encryption": {
+									"enum": [
+										"owe",
+										"psk2",
+										"psk-mixed",
+										"sae",
+										"sae-mixed",
+										"wpa2",
+										"wpa3",
+										"wpa3-mixed",
+										"psk2+ccmp",
+										"psk2+ccmp256",
+										"psk2+gcmp",
+										"psk2+gcmp256",
+										"psk2+tkip",
+										"psk2+tkip+ccmp",
+										"psk2+aes",
+										"psk2+tkip+aes",
+										"psk2+aes+tkip",
+										"psk2+ccmp+tkip",
+										"psk-mixed+ccmp",
+										"psk-mixed+ccmp256",
+										"psk-mixed+gcmp",
+										"psk-mixed+gcmp256",
+										"psk-mixed+tkip",
+										"psk-mixed+tkip+ccmp",
+										"psk-mixed+aes",
+										"psk-mixed+tkip+aes",
+										"psk-mixed+aes+tkip",
+										"psk-mixed+ccmp+tkip",
+										"sae+ccmp",
+										"sae+ccmp256",
+										"sae+gcmp",
+										"sae+gcmp256",
+										"sae+tkip",
+										"sae+tkip+ccmp",
+										"sae+aes",
+										"sae+tkip+aes",
+										"sae+aes+tkip",
+										"sae+ccmp+tkip",
+										"wpa2+ccmp",
+										"wpa2+ccmp256",
+										"wpa2+gcmp",
+										"wpa2+gcmp256",
+										"wpa2+tkip",
+										"wpa2+tkip+ccmp",
+										"wpa2+aes",
+										"wpa2+tkip+aes",
+										"wpa2+aes+tkip",
+										"wpa2+ccmp+tkip",
+										"wpa3+ccmp",
+										"wpa3+ccmp256",
+										"wpa3+gcmp",
+										"wpa3+gcmp256",
+										"wpa3+tkip",
+										"wpa3+tkip+ccmp",
+										"wpa3+aes",
+										"wpa3+tkip+aes",
+										"wpa3+aes+tkip",
+										"wpa3+ccmp+tkip",
+										"wpa3-mixed+ccmp",
+										"wpa3-mixed+ccmp256",
+										"wpa3-mixed+gcmp",
+										"wpa3-mixed+gcmp256",
+										"wpa3-mixed+tkip",
+										"wpa3-mixed+tkip+ccmp",
+										"wpa3-mixed+aes",
+										"wpa3-mixed+tkip+aes",
+										"wpa3-mixed+aes+tkip",
+										"wpa3-mixed+ccmp+tkip"
+									]
+								},
+								"ft_psk_generate_local": {
+									"const": false
+								}
+							},
+							"required": [
+								"mode",
+								"ieee80211r",
+								"encryption",
+								"ft_psk_generate_local"
+							]
+						},
+						"then": {
+							"properties": {
+								"r0kh": {
+									"items": {
+										"pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}[^ ,]*[ ,][^ ,]{0,47}[ ,][0-9A-Fa-f]{32}"
+									}
+								},
+								"r1kh": {
+									"items": {
+										"pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}[^ ,]*[ ,][0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}[^ ,]*[ ,][0-9A-Fa-f]{32}"
+									}
+								}
+							}
+						}
+					}
 				]
+			},
+			"WirelessInterfacesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of WirelessInterfacesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"device": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"network": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"mode": {
+						"type": "string",
+						"enum": [
+							"ap",
+							"sta",
+							"adhoc",
+							"monitor",
+							"mesh"
+						]
+					},
+					"ssid": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 32
+					},
+					"encryption": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"none",
+							"wep",
+							"owe",
+							"psk",
+							"psk2",
+							"psk-mixed",
+							"sae",
+							"sae-mixed",
+							"wpa",
+							"wpa2",
+							"wpa3",
+							"wpa3-mixed",
+							"psk+ccmp",
+							"psk+ccmp256",
+							"psk+gcmp",
+							"psk+gcmp256",
+							"psk+tkip",
+							"psk+tkip+ccmp",
+							"psk+aes",
+							"psk+tkip+aes",
+							"psk+aes+tkip",
+							"psk+ccmp+tkip",
+							"psk2+ccmp",
+							"psk2+ccmp256",
+							"psk2+gcmp",
+							"psk2+gcmp256",
+							"psk2+tkip",
+							"psk2+tkip+ccmp",
+							"psk2+aes",
+							"psk2+tkip+aes",
+							"psk2+aes+tkip",
+							"psk2+ccmp+tkip",
+							"psk-mixed+ccmp",
+							"psk-mixed+ccmp256",
+							"psk-mixed+gcmp",
+							"psk-mixed+gcmp256",
+							"psk-mixed+tkip",
+							"psk-mixed+tkip+ccmp",
+							"psk-mixed+aes",
+							"psk-mixed+tkip+aes",
+							"psk-mixed+aes+tkip",
+							"psk-mixed+ccmp+tkip",
+							"sae+ccmp",
+							"sae+ccmp256",
+							"sae+gcmp",
+							"sae+gcmp256",
+							"sae+tkip",
+							"sae+tkip+ccmp",
+							"sae+aes",
+							"sae+tkip+aes",
+							"sae+aes+tkip",
+							"sae+ccmp+tkip",
+							"wpa+ccmp",
+							"wpa+ccmp256",
+							"wpa+gcmp",
+							"wpa+gcmp256",
+							"wpa+tkip",
+							"wpa+tkip+ccmp",
+							"wpa+aes",
+							"wpa+tkip+aes",
+							"wpa+aes+tkip",
+							"wpa+ccmp+tkip",
+							"wpa2+ccmp",
+							"wpa2+ccmp256",
+							"wpa2+gcmp",
+							"wpa2+gcmp256",
+							"wpa2+tkip",
+							"wpa2+tkip+ccmp",
+							"wpa2+aes",
+							"wpa2+tkip+aes",
+							"wpa2+aes+tkip",
+							"wpa2+ccmp+tkip",
+							"wpa3+ccmp",
+							"wpa3+ccmp256",
+							"wpa3+gcmp",
+							"wpa3+gcmp256",
+							"wpa3+tkip",
+							"wpa3+tkip+ccmp",
+							"wpa3+aes",
+							"wpa3+tkip+aes",
+							"wpa3+aes+tkip",
+							"wpa3+ccmp+tkip",
+							"wpa3-mixed+ccmp",
+							"wpa3-mixed+ccmp256",
+							"wpa3-mixed+gcmp",
+							"wpa3-mixed+gcmp256",
+							"wpa3-mixed+tkip",
+							"wpa3-mixed+tkip+ccmp",
+							"wpa3-mixed+aes",
+							"wpa3-mixed+tkip+aes",
+							"wpa3-mixed+aes+tkip",
+							"wpa3-mixed+ccmp+tkip",
+							null
+						]
+					},
+					"disabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"hidden": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"isolate": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ieee80211r": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ft_over_ds": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ft_psk_generate_local": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"mobility_domain": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9A-Fa-f]{4}$"
+					},
+					"nasid": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 1024
+					},
+					"reassociation_deadline": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1000,
+						"maximum": 65535
+					},
+					"r0_key_lifetime": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"r1_key_holder": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9A-Fa-f]{12}$"
+					},
+					"pmk_r1_push": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"key": {
+						"type": "string",
+						"writeOnly": true
+					},
+					"r0kh": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"maxLength": 1024
+						},
+						"writeOnly": true
+					},
+					"r1kh": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"maxLength": 1024
+						},
+						"writeOnly": true
+					}
+				}
 			},
 			"DhcpHostsResponse": {
 				"type": "object",
@@ -29477,7 +31108,6 @@
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -29701,6 +31331,91 @@
 					}
 				]
 			},
+			"DhcpHostsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of DhcpHostsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"name": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"macs": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"duid": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"hostid": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ip": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"leasetime": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"tag": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"match_tag": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"dns": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"broadcast": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"instance": {
+						"type": [
+							"string",
+							"null"
+						]
+					}
+				}
+			},
 			"DhcpLeasesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci dhcp.lease",
@@ -29788,7 +31503,6 @@
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -29821,8 +31535,7 @@
 						"type": [
 							"string",
 							"null"
-						],
-						"pattern": "^[0-9]+[smhdwMY]?$"
+						]
 					},
 					"ignore": {
 						"type": "boolean",
@@ -29875,7 +31588,8 @@
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"description": "DNS search domains that dnsmasq or odhcpd announces over DHCPv6 and RA, separated by spaces. A list that LuCI stores reads as its entries joined with spaces."
 					},
 					"dhcp_option": {
 						"type": [
@@ -29884,7 +31598,8 @@
 						],
 						"items": {
 							"type": "string"
-						}
+						},
+						"description": "DHCP options that dnsmasq sends on this interface, one option per entry, in the form of a dnsmasq `dhcp-option` without its tag, such as `3,192.168.1.1`, `option:dns-server,192.168.1.1,192.168.1.2` or `15,\"my domain\"`. dnsmasq.init passes each entry to dnsmasq whole, so dnsmasq reads it as one option. An entry answers 422 `invalid_format` when, outside a quoted string, a field that reads as an address, such as `10.0.0.1`, `10.0.0.0/8` or `[::]`, is followed by whitespace and then by what starts a `dhcp-option` value: a number and a comma, `option:`, `option6:`, `tag:`, `net:`, `set:`, `vendor:`, `encap:` or `vi-encap:`, as in `3,10.0.0.1 6,10.0.0.1`. After the reload, uapi runs `dnsmasq --test` on the config that dnsmasq.init wrote for each instance, and a write whose config dnsmasq refuses to parse answers 500 `reload_failed_restored` and restores the previous list, or 500 `reload_failed_unrecovered` when dnsmasq refused the previous config too. dnsmasq refuses a value such as `3,not-an-address` in a section that it reads, which is one that is not ignored, on an interface that is up and static."
 					},
 					"runtime": {
 						"type": "object",
@@ -29997,7 +31712,9 @@
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"pattern": "^#*([^\"\n\r \t#*?[]#*|[ \t])*$",
+						"description": "DNS search domains that dnsmasq or odhcpd announces over DHCPv6 and RA, separated by spaces. A list that LuCI stores reads as its entries joined with spaces."
 					},
 					"dhcp_option": {
 						"type": [
@@ -30005,13 +31722,123 @@
 							"null"
 						],
 						"items": {
-							"type": "string"
-						}
+							"type": "string",
+							"pattern": "^#*((\"([^\"\\\\\n\r]|\\\\[^\n\r])*\")?([^\"\n\r \t#]#*|[ \t]))*(\"([^\"\\\\\n\r]|\\\\[^\n\r])*\")?$"
+						},
+						"description": "DHCP options that dnsmasq sends on this interface, one option per entry, in the form of a dnsmasq `dhcp-option` without its tag, such as `3,192.168.1.1`, `option:dns-server,192.168.1.1,192.168.1.2` or `15,\"my domain\"`. dnsmasq.init passes each entry to dnsmasq whole, so dnsmasq reads it as one option. An entry answers 422 `invalid_format` when, outside a quoted string, a field that reads as an address, such as `10.0.0.1`, `10.0.0.0/8` or `[::]`, is followed by whitespace and then by what starts a `dhcp-option` value: a number and a comma, `option:`, `option6:`, `tag:`, `net:`, `set:`, `vendor:`, `encap:` or `vi-encap:`, as in `3,10.0.0.1 6,10.0.0.1`. After the reload, uapi runs `dnsmasq --test` on the config that dnsmasq.init wrote for each instance, and a write whose config dnsmasq refuses to parse answers 500 `reload_failed_restored` and restores the previous list, or 500 `reload_failed_unrecovered` when dnsmasq refused the previous config too. dnsmasq refuses a value such as `3,not-an-address` in a section that it reads, which is one that is not ignored, on an interface that is up and static."
 					}
 				},
 				"required": [
 					"interface"
 				]
+			},
+			"DhcpServersPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of DhcpServersRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"interface": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"start": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 254
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 254
+					},
+					"leasetime": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9]+[smhdwMY]?$"
+					},
+					"ignore": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"force": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"dynamicdhcp": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ra": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"disabled",
+							"server",
+							"relay",
+							"hybrid",
+							null
+						]
+					},
+					"dhcpv6": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"disabled",
+							"server",
+							"relay",
+							"hybrid",
+							null
+						]
+					},
+					"ra_default": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 2
+					},
+					"domain": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^#*([^\"\n\r \t#*?[]#*|[ \t])*$"
+					},
+					"dhcp_option": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^#*((\"([^\"\\\\\n\r]|\\\\[^\n\r])*\")?([^\"\n\r \t#]#*|[ \t]))*(\"([^\"\\\\\n\r]|\\\\[^\n\r])*\")?$"
+						}
+					}
+				}
 			},
 			"DhcpDnsmasqResponse": {
 				"type": "object",
@@ -30142,13 +31969,15 @@
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
 					},
 					"local": {
 						"type": [
 							"string",
 							"null"
 						],
+						"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$",
 						"description": "Local domain pattern (e.g. /lan/) resolved authoritatively"
 					},
 					"noresolv": {
@@ -30203,13 +32032,15 @@
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"pattern": "^[^ \t\n\r\"*?[]*$"
 					},
 					"resolvfile": {
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"pattern": "^[^ \t\n\r\"*?[]*$"
 					},
 					"server": {
 						"type": [
@@ -30217,7 +32048,8 @@
 							"null"
 						],
 						"items": {
-							"type": "string"
+							"type": "string",
+							"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
 						}
 					},
 					"address": {
@@ -30226,12 +32058,143 @@
 							"null"
 						],
 						"items": {
-							"type": "string"
+							"type": "string",
+							"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
 						}
 					},
 					"nonwildcard": {
 						"type": "boolean",
 						"default": true
+					}
+				}
+			},
+			"DhcpDnsmasqPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of DhcpDnsmasqRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"domain": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
+					},
+					"local": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
+					},
+					"noresolv": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"rebind_protection": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"expandhosts": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"cachesize": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 1000000
+					},
+					"port": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65535
+					},
+					"domainneeded": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"boguspriv": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"filterwin2k": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"authoritative": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"readethers": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"leasefile": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r\"*?[]*$"
+					},
+					"resolvfile": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r\"*?[]*$"
+					},
+					"server": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
+						}
+					},
+					"address": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
+						}
+					},
+					"nonwildcard": {
+						"type": [
+							"boolean",
+							"null"
+						]
 					}
 				}
 			},
@@ -30323,6 +32286,44 @@
 					}
 				}
 			},
+			"DhcpOdhcpdPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of DhcpOdhcpdRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"maindhcp": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"leasefile": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"leasetrigger": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"loglevel": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 7
+					}
+				}
+			},
 			"SystemResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci system.system",
@@ -30342,7 +32343,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*$",
 						"description": "System hostname (alphanumerics, dashes, underscores, dots)"
 					},
 					"description": {
@@ -30491,13 +32491,86 @@
 					}
 				}
 			},
+			"SystemPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SystemRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"hostname": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*$"
+					},
+					"description": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"notes": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"timezone": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"zonename": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"log_size": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"log_ip": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"log_proto": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"log_remote": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"urandom_seed": {
+						"type": [
+							"string",
+							"null"
+						]
+					}
+				}
+			},
 			"SystemTimeserversResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci system.timeserver",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -30621,13 +32694,55 @@
 					}
 				]
 			},
+			"SystemTimeserversPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SystemTimeserversRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"enable_server": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"interface": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"server": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"use_dhcp": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"DropbearInstancesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci dropbear.dropbear",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -30735,13 +32850,72 @@
 					}
 				}
 			},
+			"DropbearInstancesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of DropbearInstancesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"enable": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"port": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65535
+					},
+					"password_auth": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"root_password_auth": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"root_login": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"banner_file": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"interface": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"gateway_ports": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"UhttpdInstancesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci uhttpd.uhttpd",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -30754,8 +32928,7 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+							"type": "string"
 						}
 					},
 					"listen_https": {
@@ -30764,8 +32937,7 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+							"type": "string"
 						}
 					},
 					"home": {
@@ -31043,13 +33215,159 @@
 					}
 				}
 			},
+			"UhttpdInstancesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of UhttpdInstancesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"listen_http": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+						}
+					},
+					"listen_https": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+						}
+					},
+					"home": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"cert": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"key": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"cgi_prefix": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"lua_prefix": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"ucode_prefix": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"max_requests": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"max_connections": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"script_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"network_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"http_keepalive": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"tcp_keepalive": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"index_page": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"error_page": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"no_dirlists": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"no_symlinks": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"rfc1918_filter": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
+			},
 			"UhttpdCertsResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci uhttpd.cert",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -31106,7 +33424,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[A-Za-z]{2}$",
 						"description": "ISO 3166-1 alpha-2 country code (case-insensitive; normalized to uppercase on write)"
 					},
 					"runtime": {
@@ -31184,6 +33501,62 @@
 				"required": [
 					"commonname"
 				]
+			},
+			"UhttpdCertsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of UhttpdCertsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"days": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 36500
+					},
+					"bits": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1024
+					},
+					"commonname": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"organization": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"location": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"state": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"country": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[A-Za-z]{2}$"
+					}
+				}
 			},
 			"UnboundServerResponse": {
 				"type": "object",
@@ -31548,7 +33921,8 @@
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"pattern": "^([A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*)?$"
 					},
 					"domain_type": {
 						"type": [
@@ -31568,6 +33942,192 @@
 							null
 						],
 						"description": "Local-zone type for the configured domain"
+					}
+				}
+			},
+			"UnboundServerPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of UnboundServerRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"listen_port": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65535
+					},
+					"dhcp_link": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"none",
+							"odhcpd",
+							"dnsmasq",
+							null
+						]
+					},
+					"add_local_fqdn": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 4
+					},
+					"add_wan_fqdn": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 4
+					},
+					"dnssec_enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"recursion": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"default",
+							"passive",
+							"aggressive",
+							null
+						]
+					},
+					"resource_limits": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"default",
+							"tiny",
+							"small",
+							"medium",
+							"large",
+							"big",
+							"huge",
+							null
+						]
+					},
+					"protocol": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"default",
+							"mixed",
+							"ip4_only",
+							"ip6_only",
+							"ip6_local",
+							"ip6_prefer",
+							null
+						]
+					},
+					"query_minimize": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"manual_conf": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"extended_stats": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"interface_auto": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"localservice": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"hide_binddata": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"rebind_protection": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"0",
+							"1",
+							"2",
+							null
+						]
+					},
+					"num_threads": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 64
+					},
+					"ttl_min": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 86400
+					},
+					"domain": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^([A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*)?$"
+					},
+					"domain_type": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"deny",
+							"refuse",
+							"static",
+							"transparent",
+							"redirect",
+							"nodefault",
+							"typetransparent",
+							"inform",
+							"inform_deny",
+							null
+						]
 					}
 				}
 			},
@@ -31602,8 +34162,7 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"pattern": "^[^\n]+$"
+							"type": "string"
 						},
 						"description": "Addresses unbound binds on (`addr` or `addr@port`). Pair with `unbound.@unbound[0].interface_auto = false` on the main unbound UCI for exclusive binding."
 					},
@@ -31613,8 +34172,7 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"pattern": "^[^\n]+$"
+							"type": "string"
 						},
 						"description": "Source addresses for upstream recursion (multi-WAN egress)."
 					},
@@ -31624,10 +34182,9 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"pattern": "^[^\n]+$"
+							"type": "string"
 						},
-						"description": "Verbatim passthrough lines inserted inside unbound's `server:` clause. One uci entry per rendered line; `unbound-checkconf` validates grammar after restart."
+						"description": "Verbatim passthrough lines inserted inside unbound's `server:` clause. One uci entry per rendered line. unbound parses the lines when it restarts, and a line that it cannot parse makes it refuse its whole config and stop. If unbound ran before the write and stops within 2 s of the restart, the write answers 500 `reload_failed_restored` and restores the previous lines."
 					},
 					"runtime": {
 						"type": "object",
@@ -31687,7 +34244,61 @@
 							"type": "string",
 							"pattern": "^[^\n]+$"
 						},
-						"description": "Verbatim passthrough lines inserted inside unbound's `server:` clause. One uci entry per rendered line; `unbound-checkconf` validates grammar after restart."
+						"description": "Verbatim passthrough lines inserted inside unbound's `server:` clause. One uci entry per rendered line. unbound parses the lines when it restarts, and a line that it cannot parse makes it refuse its whole config and stop. If unbound ran before the write and stops within 2 s of the restart, the write answers 500 `reload_failed_restored` and restores the previous lines."
+					}
+				}
+			},
+			"UnboundSrvPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of UnboundSrvRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ip_transparent": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"interface_bind": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^[^\n]+$"
+						}
+					},
+					"interface_outgoing": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^[^\n]+$"
+						}
+					},
+					"srv_line": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^[^\n]+$"
+						}
 					}
 				}
 			},
@@ -31715,10 +34326,9 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"pattern": "^[^\n]+$"
+							"type": "string"
 						},
-						"description": "Verbatim lines rendered into `/etc/unbound/unbound_ext.conf` (outside the `server:` clause). One uci entry per rendered line; build whole `forward-zone:`, `view:`, `stub:`, or `remote-control:` clauses by listing them in order. `unbound-checkconf` validates grammar after restart."
+						"description": "Verbatim lines rendered into `/etc/unbound/unbound_ext.conf` (outside the `server:` clause). One uci entry per rendered line. Build whole `forward-zone:`, `view:`, `stub:` or `remote-control:` clauses by listing them in order. unbound parses the lines when it restarts, and a line that it cannot parse makes it refuse its whole config and stop. If unbound ran before the write and stops within 2 s of the restart, the write answers 500 `reload_failed_restored` and restores the previous lines."
 					},
 					"runtime": {
 						"type": "object",
@@ -31749,7 +34359,35 @@
 							"type": "string",
 							"pattern": "^[^\n]+$"
 						},
-						"description": "Verbatim lines rendered into `/etc/unbound/unbound_ext.conf` (outside the `server:` clause). One uci entry per rendered line; build whole `forward-zone:`, `view:`, `stub:`, or `remote-control:` clauses by listing them in order. `unbound-checkconf` validates grammar after restart."
+						"description": "Verbatim lines rendered into `/etc/unbound/unbound_ext.conf` (outside the `server:` clause). One uci entry per rendered line. Build whole `forward-zone:`, `view:`, `stub:` or `remote-control:` clauses by listing them in order. unbound parses the lines when it restarts, and a line that it cannot parse makes it refuse its whole config and stop. If unbound ran before the write and stops within 2 s of the restart, the write answers 500 `reload_failed_restored` and restores the previous lines."
+					}
+				}
+			},
+			"UnboundExtPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of UnboundExtRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"ext_line": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^[^\n]+$"
+						}
 					}
 				}
 			},
@@ -31759,7 +34397,6 @@
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -31931,13 +34568,92 @@
 					"interface"
 				]
 			},
+			"SqmQueuesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SqmQueuesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"interface": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"download": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"upload": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"qdisc": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"cake",
+							"fq_codel",
+							"pie",
+							"htb",
+							null
+						]
+					},
+					"script": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"piece_of_cake.qos",
+							"simple.qos",
+							"simplest.qos",
+							"layer_cake.qos",
+							null
+						]
+					},
+					"linklayer": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"none",
+							"ethernet",
+							"atm",
+							null
+						]
+					},
+					"overhead": {
+						"type": [
+							"integer",
+							"null"
+						]
+					}
+				}
+			},
 			"SnmpdAgentsResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci snmpd.agent",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -31974,7 +34690,28 @@
 							"null"
 						],
 						"items": {
-							"type": "string"
+							"type": "string",
+							"pattern": "^[^\n\r]*$"
+						}
+					}
+				}
+			},
+			"SnmpdAgentsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SnmpdAgentsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"agentaddress": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^[^\n\r]*$"
 						}
 					}
 				}
@@ -31985,7 +34722,6 @@
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -32038,6 +34774,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "security name this community maps to"
 					},
 					"source": {
@@ -32045,6 +34782,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "source network/range or 'default'"
 					},
 					"community": {
@@ -32052,6 +34790,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "SNMP community string"
 					}
 				},
@@ -32061,13 +34800,43 @@
 					"community"
 				]
 			},
+			"SnmpdCom2secsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SnmpdCom2secsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"secname": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					},
+					"source": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					},
+					"community": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					}
+				}
+			},
 			"SnmpdGroupsResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci snmpd.group",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -32123,6 +34892,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "Group name referenced by snmpd/accesses entries"
 					},
 					"version": {
@@ -32142,6 +34912,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "Security name (community for v1/v2c, USM user for v3)"
 					}
 				},
@@ -32149,13 +34920,48 @@
 					"group"
 				]
 			},
+			"SnmpdGroupsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SnmpdGroupsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"group": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					},
+					"version": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"v1",
+							"v2c",
+							"usm",
+							null
+						]
+					},
+					"secname": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					}
+				}
+			},
 			"SnmpdAccessesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci snmpd.access",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -32174,7 +34980,7 @@
 							"string",
 							"null"
 						],
-						"description": "SNMPv3 context (usually empty)"
+						"description": "SNMPv3 context. `none` is the empty context, which is the usual value: snmpd.init writes it as \"\""
 					},
 					"version": {
 						"type": [
@@ -32256,6 +35062,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "snmpd group this access entry binds to (must exist in snmpd/groups)"
 					},
 					"context": {
@@ -32263,7 +35070,8 @@
 							"string",
 							"null"
 						],
-						"description": "SNMPv3 context (usually empty)"
+						"pattern": "^[^ \t\n\r*?[]*$",
+						"description": "SNMPv3 context. `none` is the empty context, which is the usual value: snmpd.init writes it as \"\""
 					},
 					"version": {
 						"type": [
@@ -32306,6 +35114,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "View name granted for read access"
 					},
 					"write": {
@@ -32313,6 +35122,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "View name granted for write access"
 					},
 					"notify": {
@@ -32320,12 +35130,94 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r]*$",
 						"description": "View name granted for notifications"
 					}
 				},
 				"required": [
 					"group"
 				]
+			},
+			"SnmpdAccessesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SnmpdAccessesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"group": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					},
+					"context": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r*?[]*$"
+					},
+					"version": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"any",
+							"v1",
+							"v2c",
+							"usm",
+							null
+						]
+					},
+					"level": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"noauth",
+							"auth",
+							"priv",
+							null
+						]
+					},
+					"prefix": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"exact",
+							"prefix",
+							null
+						]
+					},
+					"read": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					},
+					"write": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					},
+					"notify": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r]*$"
+					}
+				}
 			},
 			"SnmpdSystemResponse": {
 				"type": "object",
@@ -32406,6 +35298,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^\n\r]*$",
 						"description": "SNMPv2-MIB::sysLocation"
 					},
 					"sys_contact": {
@@ -32413,6 +35306,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^\n\r]*$",
 						"description": "SNMPv2-MIB::sysContact"
 					},
 					"sys_name": {
@@ -32420,6 +35314,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^\n\r]*$",
 						"description": "SNMPv2-MIB::sysName"
 					},
 					"sys_services": {
@@ -32436,6 +35331,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^\n\r]*$",
 						"description": "SNMPv2-MIB::sysDescr"
 					},
 					"sys_object_id": {
@@ -32443,7 +35339,63 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^\n\r]*$",
 						"description": "SNMPv2-MIB::sysObjectID OID"
+					}
+				}
+			},
+			"SnmpdSystemPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of SnmpdSystemRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"sys_location": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^\n\r]*$"
+					},
+					"sys_contact": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^\n\r]*$"
+					},
+					"sys_name": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^\n\r]*$"
+					},
+					"sys_services": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 127
+					},
+					"sys_descr": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^\n\r]*$"
+					},
+					"sys_object_id": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^\n\r]*$"
 					}
 				}
 			},
@@ -32566,6 +35518,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^\n\r\"\\\\]*$",
 						"description": "System description advertised in LLDP frames"
 					},
 					"lldp_capabilities": {
@@ -32578,6 +35531,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^\n\r\"\\\\]*$",
 						"description": "Management IP advertised in LLDP frames"
 					},
 					"interface": {
@@ -32586,7 +35540,82 @@
 							"null"
 						],
 						"items": {
-							"type": "string"
+							"type": "string",
+							"pattern": "^[^ \t\n\r\"'\\\\#]*$"
+						}
+					}
+				}
+			},
+			"LldpdConfigPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of LldpdConfigRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"enable_cdp": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"enable_fdp": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"enable_sonmp": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"enable_edp": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"lldp_class": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 4
+					},
+					"lldp_description": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^\n\r\"\\\\]*$"
+					},
+					"lldp_capabilities": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"lldp_mgmt_ip": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^\n\r\"\\\\]*$"
+					},
+					"interface": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"pattern": "^[^ \t\n\r\"'\\\\#]*$"
 						}
 					}
 				}
@@ -32655,6 +35684,32 @@
 					}
 				}
 			},
+			"PrometheusNodeExporterLuaConfigPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of PrometheusNodeExporterLuaConfigRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"listen_interface": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"listen_port": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65535
+					}
+				}
+			},
 			"VnstatConfigResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci vnstat.vnstat",
@@ -32707,6 +35762,27 @@
 					}
 				}
 			},
+			"VnstatConfigPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of VnstatConfigRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"interfaces": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"Mwan3GlobalsResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci mwan3.globals",
@@ -32726,7 +35802,6 @@
 							"string",
 							"null"
 						],
-						"pattern": "^0x[0-9A-Fa-f]+$",
 						"description": "Firewall mark mask for mwan3-tagged packets (hex, default 0x3F00)."
 					},
 					"logging": {
@@ -32801,13 +35876,54 @@
 					}
 				}
 			},
+			"Mwan3GlobalsPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of Mwan3GlobalsRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"mmx_mask": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^0x[0-9A-Fa-f]+$"
+					},
+					"logging": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"loglevel": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"emerg",
+							"alert",
+							"crit",
+							"err",
+							"warn",
+							"notice",
+							"info",
+							"debug",
+							null
+						]
+					}
+				}
+			},
 			"Mwan3InterfacesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci mwan3.interface",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -32828,7 +35944,7 @@
 							"ipv6",
 							null
 						],
-						"description": "Address family this interface tracks."
+						"description": "Address family this interface tracks. A null removes the option, and mwan3 then uses ipv4."
 					},
 					"track_ip": {
 						"type": [
@@ -33024,7 +36140,7 @@
 							"ipv6",
 							null
 						],
-						"description": "Address family this interface tracks."
+						"description": "Address family this interface tracks. A null removes the option, and mwan3 then uses ipv4."
 					},
 					"track_ip": {
 						"type": [
@@ -33193,13 +36309,197 @@
 					"family"
 				]
 			},
+			"Mwan3InterfacesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of Mwan3InterfacesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"family": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ipv4",
+							"ipv6",
+							null
+						]
+					},
+					"track_ip": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"track_method": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ping",
+							"arping",
+							"httping",
+							"nping-tcp",
+							"nping-udp",
+							null
+						]
+					},
+					"reliability": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1
+					},
+					"probe_count": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 10
+					},
+					"size": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65507
+					},
+					"max_ttl": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 255
+					},
+					"check_quality": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"failure_latency": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1
+					},
+					"failure_loss": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 100
+					},
+					"recovery_latency": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1
+					},
+					"recovery_loss": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 100
+					},
+					"timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 60
+					},
+					"interval": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 3600
+					},
+					"failure_interval": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 3600
+					},
+					"recovery_interval": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 3600
+					},
+					"keep_failure_interval": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"down": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1
+					},
+					"up": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1
+					},
+					"flush_conntrack": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"enum": [
+								"ifup",
+								"ifdown",
+								"connected",
+								"disconnected",
+								"never"
+							]
+						}
+					}
+				}
+			},
 			"Mwan3MembersResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci mwan3.member",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -33279,13 +36579,44 @@
 					"interface"
 				]
 			},
+			"Mwan3MembersPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of Mwan3MembersRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"interface": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"metric": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000
+					},
+					"weight": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000
+					}
+				}
+			},
 			"Mwan3PoliciesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci mwan3.policy",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -33361,13 +36692,43 @@
 					"use_members"
 				]
 			},
+			"Mwan3PoliciesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of Mwan3PoliciesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"last_resort": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"default",
+							"unreachable",
+							"blackhole",
+							null
+						]
+					},
+					"use_members": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"Mwan3RulesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci mwan3.rule",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -33511,6 +36872,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r*?[]*$",
 						"description": "Single port or 'lo-hi' range."
 					},
 					"dest_ip": {
@@ -33525,6 +36887,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r*?[]*$",
 						"description": "Single port or 'lo-hi' range."
 					},
 					"sticky": {
@@ -33545,6 +36908,7 @@
 							"string",
 							"null"
 						],
+						"pattern": "^[^ \t\n\r*?[]*$",
 						"description": "Match destination against an ipset; bypasses src/dest_ip."
 					},
 					"use_policy": {
@@ -33562,6 +36926,99 @@
 				"required": [
 					"use_policy"
 				]
+			},
+			"Mwan3RulesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of Mwan3RulesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"family": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"ipv4",
+							"ipv6",
+							null
+						]
+					},
+					"proto": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"tcp",
+							"udp",
+							"icmp",
+							"all",
+							null
+						]
+					},
+					"src_ip": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"src_port": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r*?[]*$"
+					},
+					"dest_ip": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"dest_port": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r*?[]*$"
+					},
+					"sticky": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 86400
+					},
+					"ipset": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[^ \t\n\r*?[]*$"
+					},
+					"use_policy": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"logging": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					}
+				}
 			},
 			"UsteerConfigResponse": {
 				"type": "object",
@@ -34021,13 +37478,239 @@
 					}
 				}
 			},
+			"UsteerConfigPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of UsteerConfigRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"network": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"syslog": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"debug_level": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 3
+					},
+					"ipv6": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"sta_block_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"local_sta_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"local_sta_update": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"max_neighbor_reports": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 255
+					},
+					"max_retry_band": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"seen_policy_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"measurement_report_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"load_balancing_threshold": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 255
+					},
+					"band_steering_threshold": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 255
+					},
+					"remote_update_interval": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"remote_node_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"assoc_steering": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"min_connect_snr": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"min_snr": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"min_snr_kick_delay": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"roam_kick_delay": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"roam_process_timeout": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"roam_scan_snr": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"roam_scan_tries": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"roam_scan_interval": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"roam_trigger_snr": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"roam_trigger_interval": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"signal_diff_threshold": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"node_up_script": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"event_log_types": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"ssid_list": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
 			"OpenvpnInstancesResponse": {
 				"type": "object",
 				"description": "uapi resource backed by uci openvpn.openvpn",
 				"properties": {
 					"id": {
 						"type": "string",
-						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$",
 						"description": "Optional at create: caller-supplied uci section name; becomes the response `id`. When omitted, the server emits a ULID. Read-only after create (rename via DELETE + POST). Charset and length follow uci section-name rules: 1 to 32 characters, start with a letter, alphanumerics and underscore only. Per-resource modules may tighten further (e.g. proto=wireguard interfaces are IFNAMSIZ-tight at 15 chars)."
 					},
 					"managed": {
@@ -34804,6 +38487,389 @@
 						"description": "Path to PKCS#12 bundle. Write-only; reads return has_pkcs12."
 					}
 				}
+			},
+			"OpenvpnInstancesPatch": {
+				"type": "object",
+				"description": "Merge-patch body (RFC 7396): any subset of OpenvpnInstancesRequest, which describes the fields.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+					},
+					"enabled": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"client": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"dev": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"dev_type": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"tun",
+							"tap",
+							null
+						]
+					},
+					"proto": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"udp",
+							"tcp",
+							"tcp-client",
+							"tcp-server",
+							"udp4",
+							"tcp4",
+							"tcp4-client",
+							"tcp4-server",
+							"udp6",
+							"tcp6",
+							"tcp6-client",
+							"tcp6-server",
+							null
+						]
+					},
+					"port": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65535
+					},
+					"lport": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 65535
+					},
+					"rport": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 65535
+					},
+					"remote": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"local": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"nobind": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"float": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"topology": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"net30",
+							"p2p",
+							"subnet",
+							null
+						]
+					},
+					"server": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"server_bridge": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"push": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"route": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"route_gateway": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ifconfig": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ifconfig_pool": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"client_to_client": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"duplicate_cn": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"keepalive": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ping": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 3600
+					},
+					"ping_restart": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 86400
+					},
+					"persist_key": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"persist_tun": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"comp_lzo": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"yes",
+							"no",
+							"adaptive",
+							null
+						]
+					},
+					"compress": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"lzo",
+							"lz4",
+							"lz4-v2",
+							"stub",
+							"stub-v2",
+							null
+						]
+					},
+					"cipher": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"auth": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ncp_ciphers": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ncp_disable": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"tls_server": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"tls_client": {
+						"type": [
+							"boolean",
+							"null"
+						]
+					},
+					"tls_crypt": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"ca": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"cert": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"dh": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"crl_verify": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"remote_cert_tls": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"client",
+							"server",
+							null
+						]
+					},
+					"verify_x509_name": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"user": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"group": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"status": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"log": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"log_append": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"verb": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 11
+					},
+					"mute": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0
+					},
+					"key": {
+						"type": "string",
+						"writeOnly": true
+					},
+					"tls_auth": {
+						"type": "string",
+						"writeOnly": true
+					},
+					"pkcs12": {
+						"type": "string",
+						"writeOnly": true
+					}
+				}
 			}
 		},
 		"securitySchemes": {
@@ -34865,7 +38931,7 @@
 				}
 			},
 			"XReloadStatus": {
-				"description": "Outcome of the post-commit daemon reload. `ok` = init script exited 0 (NOT a runtime-convergence promise; see docs/operations.md). `no_reload` = the resource has no reload services, which no shipped resource currently is, so responses today always say `ok`. Present on curated-resource writes only: raw passthrough, `POST /batch` and the non-uci writes do not run the reload machinery and return no reload headers at all.",
+				"description": "Outcome of the post-commit daemon reload. `ok` = init script exited 0 (NOT a runtime-convergence promise, see docs/operations.md). `no_reload` = no init script ran, because the write changed nothing in uci, such as a PATCH that names no field or sends the values that uci holds, or because the resource has no reload services, which no shipped resource is. Present on curated-resource writes and the `POST /batch` 207, where it covers the services of the packages that the batch changed. Raw passthrough and the non-uci writes return no reload headers.",
 				"schema": {
 					"type": "string",
 					"enum": [
@@ -34875,14 +38941,14 @@
 				}
 			},
 			"XReloadServices": {
-				"description": "Comma-separated list of init scripts that were reloaded after the write committed. Absent when X-Reload-Status: no_reload, and absent wherever X-Reload-Status itself is.",
+				"description": "Comma-separated list of init scripts that were reloaded after the write committed. A daemon that reads the config but that the router can lack, or that the operator stopped, is reloaded and listed only while procd runs it: a `dhcp/servers` or `dhcp/hosts` write answers `dnsmasq,odhcpd`, or `dnsmasq` when odhcpd does not run. The `POST /batch` 207 lists its services sorted. Absent when X-Reload-Status: no_reload, and absent wherever X-Reload-Status itself is.",
 				"schema": {
 					"type": "string",
 					"example": "firewall,dnsmasq"
 				}
 			},
 			"XKernelStatus": {
-				"description": "Whether the write reached the kernel as well as uci. `ok` = every targeted interface was applied. `partial` = some were skipped. `skipped` = none was, because the interface is down or netifd does not know it; uci is still committed and the change takes effect on the next ifup. `no_kernel` = the resource has no kernel path, which is the value on most writes. Absent on raw, non-uci and batch writes, which do not run the kernel apply.",
+				"description": "Whether the write reached the kernel as well as uci. `ok` = every targeted interface was applied. `partial` = some were skipped. `skipped` = none was, because the interface is down or netifd does not know it, and uci is still committed and the change takes effect on the next ifup. `no_kernel` = the write had nothing for the kernel, because the resource has no kernel path, which is the value on most writes, or the write changed nothing in uci. Absent on raw and non-uci writes, which do not run the kernel apply.",
 				"schema": {
 					"type": "string",
 					"enum": [
