@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	ephschema "github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
@@ -111,6 +112,13 @@ func (e *tokenEphemeral) Open(ctx context.Context, req ephemeral.OpenRequest, re
 	}
 	obj, _, err := e.client.Post(ctx, "/tokens", body, "")
 	if err != nil {
+		if client.IsConflict(err) {
+			name := m.Name.ValueString()
+			resp.Diagnostics.AddError("Error minting token", fmt.Sprintf(`%s
+
+A token named %q already exists. An interrupted create can leave it behind, without the provider ever seeing its bearer. Revoke it with DELETE /tokens/%s, or choose a different name. The provider leaves it in place, because the conflict can also be someone else's token.`, err.Error(), name, name))
+			return
+		}
 		resp.Diagnostics.AddError("Error minting token", err.Error())
 		return
 	}

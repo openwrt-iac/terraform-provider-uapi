@@ -22,14 +22,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// lockRetryBudget bounds, by wall-clock, how long a single request retries the
-// throttling statuses 423 (locked) and 429 (rate limited). Time-bounded rather
-// than attempt-bounded so the default Terraform parallelism (10 concurrent
-// same-package writers all contending one lock) drains through instead of
-// exhausting a small attempt count. maxThrottleAttempts is a runaway backstop.
+// retryBudget bounds, by wall-clock, how long a single request retries a
+// retryable failure: the throttling statuses 423 (locked) and 429 (rate
+// limited), and, on a POST, a transport error, where the idempotency key makes
+// each replay safe. Time-bounded rather than attempt-bounded so the default
+// Terraform parallelism (10 concurrent same-package writers all contending one
+// lock) drains through instead of exhausting a small attempt count.
+// maxAttempts is a runaway backstop.
 const (
-	lockRetryBudget     = 45 * time.Second
-	maxThrottleAttempts = 50
+	retryBudget = 45 * time.Second
+	maxAttempts = 50
 )
 
 // maxPages bounds cursor-pagination so a misbehaving server cannot loop forever.
@@ -113,8 +115,10 @@ func (e *APIError) Error() string {
 }
 
 // do performs a request, retrying the throttling statuses 423/429 (honoring
-// Retry-After). ifMatch and the POST idempotency key are sent as the ?if_match=
-// and ?idempotency_key= query parameters: uhttpd's CGI layer forwards a fixed
+// Retry-After) and, on a POST, a transport error, where the idempotency key
+// makes the replay safe. ifMatch and the POST idempotency key are sent as
+// the ?if_match= and ?idempotency_key= query parameters: uhttpd's CGI layer
+// forwards a fixed header allowlist that neither header is on, so the header
 // header allowlist that neither header is on, so the header form alone never
 // reaches uapi and both guarantees are silently inert. The headers are sent too,
 // for a deployment that does not front uapi with uhttpd. Returns the response
@@ -148,7 +152,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 	addQuery("if_match", ifMatch)
 	addQuery("idempotency_key", idemKey)
 
-	var throttleDeadline time.Time // set on the first 423/429; bounds retry wall-clock
+	var retryDeadline time.Time // set on the first retryable failure; bounds retry wall-clock
 	for attempt := 0; ; attempt++ {
 		var reader io.Reader
 		if payload != nil {
@@ -177,20 +181,32 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		})
 		resp, err := c.http.Do(req)
 		if err != nil {
+			if replayPost(ctx, method, err, &retryDeadline, attempt) {
+				tflog.Debug(ctx, "uapi transport error, retrying POST", map[string]any{
+					"method": method, "path": path, "attempt": attempt, "error": err.Error(),
+				})
+				continue
+			}
 			return nil, 0, "", "", err
 		}
 		raw, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if readErr != nil {
+			// A lost read of a POST response is the same failure class as a
+			// transport error: uapi may have committed, and the replay
+			// retrieves the cached answer.
+			if replayPost(ctx, method, readErr, &retryDeadline, attempt) {
+				continue
+			}
 			return nil, resp.StatusCode, "", "", fmt.Errorf("reading response body: %w", readErr)
 		}
 
 		throttled := resp.StatusCode == http.StatusLocked || resp.StatusCode == http.StatusTooManyRequests
 		if throttled {
-			if throttleDeadline.IsZero() {
-				throttleDeadline = time.Now().Add(lockRetryBudget)
+			if retryDeadline.IsZero() {
+				retryDeadline = time.Now().Add(retryBudget)
 			}
-			if attempt < maxThrottleAttempts && time.Now().Before(throttleDeadline) {
+			if attempt < maxAttempts && time.Now().Before(retryDeadline) {
 				wait := retryWait(resp.Header.Get("Retry-After"), attempt)
 				select {
 				case <-ctx.Done():
@@ -222,6 +238,34 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 			return raw, resp.StatusCode, etag, nextCursor, nil
 		}
 		return nil, resp.StatusCode, etag, nextCursor, decodeError(resp.StatusCode, raw)
+	}
+}
+
+// replayPost waits out the backoff and reports whether a failed POST attempt
+// can be replayed. Only POST: its idempotency key makes the replay safe, and
+// when uapi committed before the answer was lost, the replay retrieves the
+// cached answer instead of double-applying. Other methods fail at once: a
+// committed PUT or PATCH moves the ETag, so its guarded replay would answer
+// 412. Returns false when the context ended (the caller gave up, or the 60 s
+// client timeout hit) or the shared retry budget ran out; the caller then
+// reports the original failure.
+func replayPost(ctx context.Context, method string, err error, deadline *time.Time, attempt int) bool {
+	if method != http.MethodPost ||
+		errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if deadline.IsZero() {
+		*deadline = time.Now().Add(retryBudget)
+	}
+	if attempt >= maxAttempts || !time.Now().Before(*deadline) {
+		return false
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(retryWait("", attempt)):
+		return true
 	}
 }
 

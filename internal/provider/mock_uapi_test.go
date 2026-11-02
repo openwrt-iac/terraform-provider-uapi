@@ -282,6 +282,12 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		body := m.decode(r)
 		m.lastTokenCreate = body
 		name, _ := body["name"].(string)
+		// "dup" stands for a name that is already taken, so a test can check
+		// the 409 diagnostic.
+		if name == "dup" {
+			writeJSON(w, http.StatusConflict, map[string]any{"code": "conflict", "message": "a token with this name already exists"}, "")
+			return
+		}
 		writeJSON(w, http.StatusCreated, map[string]any{"name": name, "bearer": "deadbeefdeadbeefdeadbeefdeadbeef"}, "")
 		return
 	case strings.HasPrefix(path, "/tokens/") && r.Method == http.MethodDelete:
