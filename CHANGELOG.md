@@ -6,6 +6,15 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+- The client retries a POST that fails at the transport layer, with the same idempotency
+  key, within the existing retry budget. A create that uapi committed before the connection
+  dropped now replays uapi's cached answer instead of failing with no idea whether it
+  applied (#45).
+- `uapi_token` reports a 409 with the token named, and leaves the existing token in place.
+  An interrupted create can leave it on the router without the provider ever seeing its
+  bearer; revoke it with `DELETE /tokens/<name>` or choose a different name (#45).
+
 ## [3.2.0] - 2026-10-29
 
 Tracks uapi 3.2.0. **Upgrade the provider and uapi together.** Provider 3.1 fails

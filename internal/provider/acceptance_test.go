@@ -1280,6 +1280,23 @@ func TestAccTokenEphemeral(t *testing.T) {
 		TerraformVersionChecks:   []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_10_0)},
 		ProtoV6ProviderFactories: accProvidersWithEcho(),
 		Steps: []resource.TestStep{{
+			// A taken name must fail with the token named, not the bare
+			// server message: the operator has to know what to revoke. Runs
+			// first so lastTokenCreate below still reflects the minting step.
+			Config: providerHCL(m.URL) + `
+ephemeral "uapi_token" "t" {
+  name   = "dup"
+  scopes = ["network:write"]
+}
+
+provider "echo" {
+  data = ephemeral.uapi_token.t.token
+}
+
+resource "echo" "minted" {}
+`,
+			ExpectError: regexp.MustCompile(`A token named "dup" already exists`),
+		}, {
 			Config: providerHCL(m.URL) + `
 ephemeral "uapi_token" "t" {
   name   = "ci"

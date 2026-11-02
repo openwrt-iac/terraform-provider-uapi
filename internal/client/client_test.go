@@ -2,12 +2,15 @@ package client
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func testClient(url string) *Client {
@@ -382,5 +385,89 @@ func TestWriteWithoutWarningHeaderIsSilent(t *testing.T) {
 	}
 	if len(rec.summaries) != 0 {
 		t.Fatalf("expected no warning, got %v", rec.summaries)
+	}
+}
+
+// A POST that fails at the transport layer must replay with the same
+// idempotency key and body: uapi caches the 2xx answer to a keyed POST for
+// 24 h, so the replay either re-executes a request that never arrived or
+// retrieves the cached answer to one that committed before the connection
+// dropped (#45). The handler reads the request before aborting, to mirror a
+// uhttpd that stopped the request process after uapi committed.
+func TestPostRetriesTransportError(t *testing.T) {
+	var mu sync.Mutex
+	var keys, bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		defer mu.Unlock()
+		keys = append(keys, r.URL.Query().Get("idempotency_key"))
+		bodies = append(bodies, string(b))
+		if len(keys) == 1 {
+			panic(http.ErrAbortHandler)
+		}
+		_, _ = w.Write([]byte(`{"name":"ci","bearer":"tok"}`))
+	}))
+	defer srv.Close()
+
+	obj, _, err := testClient(srv.URL).Post(context.Background(), "/tokens", map[string]any{"name": "ci"}, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj["bearer"] != "tok" {
+		t.Errorf("bearer = %v, want the replayed answer", obj["bearer"])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(keys) != 2 {
+		t.Fatalf("expected 2 attempts (1 dropped + 1 replay), got %d", len(keys))
+	}
+	if keys[0] == "" || keys[0] != keys[1] {
+		t.Errorf("replay must reuse the idempotency key, got %q then %q", keys[0], keys[1])
+	}
+	if bodies[0] == "" || bodies[0] != bodies[1] {
+		t.Errorf("replay must resend the same body, got %q then %q", bodies[0], bodies[1])
+	}
+}
+
+// The replay loop must end with the context, not run its full 45 s budget
+// after the caller is gone.
+func TestPostTransportRetryEndsWithContext(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		panic(http.ErrAbortHandler)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, _, err := testClient(srv.URL).Post(ctx, "/tokens", map[string]any{"name": "ci"}, ""); err == nil {
+		t.Fatal("expected the aborting server to fail the POST")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("retry loop outlived the context: %v", elapsed)
+	}
+	if n := atomic.LoadInt32(&calls); n < 2 {
+		t.Errorf("expected at least one replay before the deadline, got %d calls", n)
+	}
+}
+
+// Only a POST replays: a committed PUT moves the ETag, so its guarded replay
+// would answer 412.
+func TestPutDoesNotRetryTransportError(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		panic(http.ErrAbortHandler)
+	}))
+	defer srv.Close()
+
+	if _, _, err := testClient(srv.URL).Put(context.Background(), "/network/interfaces/lan", map[string]any{}, ""); err == nil {
+		t.Fatal("expected a transport error")
+	}
+	if n := atomic.LoadInt32(&calls); n != 1 {
+		t.Errorf("PUT must fail at once, got %d calls", n)
 	}
 }
