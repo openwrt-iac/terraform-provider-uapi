@@ -38,6 +38,10 @@ func resAttr(f field) string {
 		default:
 			return fmt.Sprintf("%q: optionalComputedString(%q),", f.Name, f.Desc)
 		}
+	case "intstr":
+		// Optional + Computed String: the read keeps the keyword ("auto"), and
+		// putIntOrStr sends a numeric value back as a number.
+		return fmt.Sprintf("%q: optionalComputedString(%q),", f.Name, f.Desc)
 	case "optclear":
 		// Plain Optional (clear-on-omit): a string, or a list since uapi 3.2.0 made
 		// network_interface.ip6prefix one. Fail loudly on another type rather than
@@ -96,6 +100,11 @@ func dsAttr(f field) string {
 func bodyStmt(f field, mv, mp string) string {
 	if f.Kind == "computedbool" || f.Kind == "computedstring" {
 		return "" // read-only: never sent
+	}
+	if f.Kind == "intstr" {
+		// A numeric text goes back as a number (uapi is type-strict), the
+		// keyword as a string.
+		return fmt.Sprintf("putIntOrStr(%s, %q, %s.%s)", mp, f.Name, mv, f.GoName)
 	}
 	switch f.GoType {
 	case "types.List":

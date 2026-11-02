@@ -83,6 +83,10 @@ func TestPutHelpers(t *testing.T) {
 	putStr(out, "skip_unknown", types.StringUnknown())
 	putBool(out, "flag", types.BoolValue(true))
 	putBool(out, "skip_bool", types.BoolNull())
+	putIntOrStr(out, "channel_num", types.StringValue("6"))
+	putIntOrStr(out, "channel_auto", types.StringValue("auto"))
+	putIntOrStr(out, "skip_union_null", types.StringNull())
+	putIntOrStr(out, "skip_union_unknown", types.StringUnknown())
 
 	list, _ := types.ListValueFrom(ctx, types.StringType, []string{"x"})
 	var diags diag.Diagnostics
@@ -103,6 +107,20 @@ func TestPutHelpers(t *testing.T) {
 	}
 	if out["flag"] != true {
 		t.Errorf("flag = %v", out["flag"])
+	}
+	// A numeric text goes back as a number (uapi is type-strict), so the wire
+	// keeps the integer branch of the union; anything else stays a string.
+	if got, ok := out["channel_num"].(int); !ok || got != 6 {
+		t.Errorf("channel_num = %#v, want int 6", out["channel_num"])
+	}
+	if out["channel_auto"] != "auto" {
+		t.Errorf("channel_auto = %v, want the string \"auto\"", out["channel_auto"])
+	}
+	if _, ok := out["skip_union_null"]; ok {
+		t.Error("null union string should be omitted")
+	}
+	if _, ok := out["skip_union_unknown"]; ok {
+		t.Error("unknown union string should be omitted")
 	}
 	if _, ok := out["skip_bool"]; ok {
 		t.Error("null bool should be omitted")

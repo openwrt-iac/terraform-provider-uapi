@@ -29,7 +29,7 @@ resource "uapi_wireless_device" "example" {
 
 - `band` (String) uci option band.
 - `cell_density` (Number) Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later.
-- `channel` (Number) uci option channel.
+- `channel` (String) Channel number (0-233, where 6 GHz uses up to 233) or `auto`. A numeric value may be written as a number or as its decimal text; any other string is refused by uapi.
 - `country` (String) uci option country.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `htmode` (String) uci option htmode.

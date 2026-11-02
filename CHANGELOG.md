@@ -7,6 +7,12 @@ line). Format follows Keep a Changelog.
 ## [Unreleased]
 
 ### Fixed
+- **`uapi_wireless_device.channel` keeps `auto`.** The attribute is now a number-or-keyword
+  string: `channel = 36`, `channel = "36"` and `channel = "auto"` all work, a bare number keeps
+  converting, and prior state written by an earlier provider still decodes. Before, a radio set
+  to `channel 'auto'` read the keyword as null, so the first apply on an imported radio removed
+  the option and `auto` could not be configured (#39). The generator now refuses an
+  integer-or-string union that no descriptor declares, instead of silently taking the number.
 - The client retries a POST that fails at the transport layer, with the same idempotency
   key, within the existing retry budget. A create that uapi committed before the connection
   dropped now replays uapi's cached answer instead of failing with no idea whether it

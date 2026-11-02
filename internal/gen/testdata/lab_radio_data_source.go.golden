@@ -24,6 +24,7 @@ type labRadioDSModel struct {
 	Secret     types.String                   `tfsdk:"secret"`
 	Secretlist types.List                     `tfsdk:"secretlist"`
 	Tags       types.List                     `tfsdk:"tags"`
+	Tuner      types.String                   `tfsdk:"tuner"`
 	Weight     types.Int64                    `tfsdk:"weight"`
 	Runtime    *wirelessInterfaceRuntimeModel `tfsdk:"runtime"`
 }
@@ -61,6 +62,7 @@ func (d *labRadioDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"secret":     dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"secretlist": dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"tags":       dsComputedStringList("uci option tags."),
+			"tuner":      dsComputedString("uci option tuner."),
 			"weight":     dsComputedInt64("uci option weight."),
 			"runtime":    wirelessInterfaceRuntimeAttribute(),
 		},
@@ -97,6 +99,7 @@ func (d *labRadioDataSource) Read(ctx context.Context, req datasource.ReadReques
 		Secret:     base.Secret,
 		Secretlist: types.ListNull(types.StringType),
 		Tags:       base.Tags,
+		Tuner:      base.Tuner,
 		Weight:     base.Weight,
 		Runtime:    parseWirelessInterfaceRuntime(obj),
 	}

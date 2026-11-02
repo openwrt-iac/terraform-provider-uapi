@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -124,6 +125,21 @@ func putStr(m map[string]any, key string, v types.String) {
 	if !v.IsNull() && !v.IsUnknown() {
 		m[key] = v.ValueString()
 	}
+}
+
+// putIntOrStr sends an integer-or-string union field: a value that parses as a
+// whole number goes back as a number (uapi is type-strict), anything else as
+// the string itself, such as `auto` on a wireless channel.
+func putIntOrStr(m map[string]any, key string, v types.String) {
+	if v.IsNull() || v.IsUnknown() {
+		return
+	}
+	s := v.ValueString()
+	if n, err := strconv.Atoi(s); err == nil {
+		m[key] = n
+		return
+	}
+	m[key] = s
 }
 
 func putBool(m map[string]any, key string, v types.Bool) {

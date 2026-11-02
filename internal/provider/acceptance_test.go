@@ -469,6 +469,92 @@ data "uapi_wireless_interface" "home" {
 	})
 }
 
+// channel is an integer-or-string union: a number 0-233 or the keyword `auto`
+// (#39). The number may be written bare (an HCL number converts) or quoted,
+// `auto` only quoted, and both must survive a round trip: the body sends a
+// numeric value back as a number, so uapi's type-strict request keeps taking it.
+func TestAccWirelessChannel(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	cfg := func(channel string) string {
+		return providerHCL(m.URL) + `
+resource "uapi_wireless_device" "radio0" {
+  id      = "radio0"
+  type    = "mac80211"
+  channel = ` + channel + `
+}`
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("6"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "channel", "6"),
+					m.checkStored("/wireless/devices", "radio0", "channel", float64(6)),
+				),
+			},
+			{
+				Config: cfg(`"auto"`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "channel", "auto"),
+					m.checkStored("/wireless/devices", "radio0", "channel", "auto"),
+				),
+			},
+			{
+				Config: cfg("36"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "channel", "36"),
+					m.checkStored("/wireless/devices", "radio0", "channel", float64(36)),
+				),
+			},
+		},
+	})
+}
+
+// An imported radio that LuCI set to `channel 'auto'` must keep it through an
+// update that does not touch the channel: the read used to turn `auto` into
+// null, the PUT then omitted the key, and uapi's diff_apply removed the option.
+func TestAccWirelessChannel_importKeepsAuto(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/wireless/devices", "radio0", map[string]any{
+		"type": "mac80211", "channel": "auto", "band": "2g", "htmode": "HT20",
+	})
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + `
+resource "uapi_wireless_device" "radio0" {
+  id     = "radio0"
+  type   = "mac80211"
+  htmode = "HT40"
+}`,
+				ResourceName:       "uapi_wireless_device.radio0",
+				ImportState:        true,
+				ImportStateId:      "radio0",
+				ImportStatePersist: true,
+				Check:              resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "channel", "auto"),
+			},
+			{
+				// The channel is not in the config; the PUT must still carry it.
+				Config: providerHCL(m.URL) + `
+resource "uapi_wireless_device" "radio0" {
+  id     = "radio0"
+  type   = "mac80211"
+  htmode = "HT40"
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_wireless_device.radio0", "channel", "auto"),
+					m.checkStored("/wireless/devices", "radio0", "channel", "auto"),
+					m.checkStored("/wireless/devices", "radio0", "htmode", "HT40"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccSystem_singleton(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

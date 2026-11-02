@@ -29,6 +29,7 @@ func fixtureProps() map[string]specProp {
 		"lockedname": {Type: "string", Description: "Strict create-only name."},
 		"clearable":  {Type: "string", Description: "Clear-on-omit field.", XClearOnOmit: true},
 		"clearlist":  {Type: []any{"array", "string", "null"}, Description: "Clear-on-omit list.", XClearOnOmit: true},
+		"tuner":      {Type: []any{"integer", "string", "null"}, Description: "Number-or-keyword union."},
 	}
 }
 
@@ -43,12 +44,12 @@ func goldenCases() map[string]string {
 	collection := descriptor{
 		Type: "lab_thing", Schema: "LabThings", Collection: "lab/things",
 		Kind: "collection", Label: "lab thing", GenDataSource: true, Nested: fixtureNested(),
-		CreateOnly: []string{"wgname", "lockedname"},
+		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
 	}
 	singleton := descriptor{
 		Type: "lab_single", Schema: "LabSingle", Collection: "lab/single",
 		Kind: "singleton", Label: "lab single", GenDataSource: true,
-		CreateOnly: []string{"wgname", "lockedname"},
+		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
 	}
 	// v3 splits request and response. The fixture uses the same property set for
 	// both, so every field stays writable and the split is exercised without the
@@ -77,7 +78,7 @@ func goldenCases() map[string]string {
 	withRuntime := descriptor{
 		Type: "lab_radio", Schema: "LabRadios", Collection: "lab/radios",
 		Kind: "collection", Label: "lab radio", GenDataSource: true, Runtime: "wireless",
-		CreateOnly: []string{"wgname", "lockedname"},
+		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
 	}
 	rr := buildResource(withRuntime, fixtureProps(), fixtureProps(), []string{"name"})
 	return map[string]string{
