@@ -38,6 +38,7 @@ func (d *labThingDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"clearlist":  dsComputedStringList("uci option clearlist."),
 			"flag":       dsComputedBool("uci option flag. Applies only to name `on`."),
 			"has_secret": dsComputedBool("uci option has_secret."),
+			"level":      dsComputedInt64("uci option level."),
 			"lockedname": dsComputedString("Strict create-only name."),
 			"name":       dsComputedString("Optional section name."),
 			"note":       dsComputedString("uci option note."),

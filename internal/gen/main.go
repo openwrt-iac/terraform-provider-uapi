@@ -22,13 +22,13 @@ import (
 )
 
 type specProp struct {
-	Type         any      `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
-	WriteOnly    bool     `json:"writeOnly"`
-	ReadOnly     bool     `json:"readOnly"`
-	Description  string   `json:"description"`
-	Deprecated   bool     `json:"deprecated"`
-	XClearOnOmit bool     `json:"x-uapi-clear-on-omit"`
-	Enum         []string `json:"enum"`
+	Type         any    `json:"type"` // "string" | ["string","null"] | "integer" | "boolean" | "array" | "object"
+	WriteOnly    bool   `json:"writeOnly"`
+	ReadOnly     bool   `json:"readOnly"`
+	Description  string `json:"description"`
+	Deprecated   bool   `json:"deprecated"`
+	XClearOnOmit bool   `json:"x-uapi-clear-on-omit"`
+	Enum         []any  `json:"enum"`
 }
 
 // specCond is one `allOf` entry of a request schema: `if` names a discriminator

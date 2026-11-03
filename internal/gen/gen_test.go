@@ -30,6 +30,10 @@ func fixtureProps() map[string]specProp {
 		"clearable":  {Type: "string", Description: "Clear-on-omit field.", XClearOnOmit: true},
 		"clearlist":  {Type: []any{"array", "string", "null"}, Description: "Clear-on-omit list.", XClearOnOmit: true},
 		"tuner":      {Type: []any{"integer", "string", "null"}, Description: "Number-or-keyword union."},
+		// A non-discriminator field may publish its accepted write values as
+		// numbers (uapi 3.3.0 network rules `tos`): the parse must tolerate
+		// them, and the field loop reads the enum nowhere else.
+		"level": {Type: "integer", Enum: []any{0, 4, 8}, Description: "Numeric-enum integer."},
 	}
 }
 
@@ -58,7 +62,7 @@ func goldenCases() map[string]string {
 	// A scope table switching on `name`: `off` takes neither `flag` nor `tags`.
 	// The entry that only requires a field is skipped, as uapi enforces it.
 	scoped := fixtureProps()
-	scoped["name"] = specProp{Type: "string", Enum: []string{"on", "off"}}
+	scoped["name"] = specProp{Type: "string", Enum: []any{"on", "off"}}
 	var conds []specCond
 	if err := json.Unmarshal([]byte(`[
 		{"if": {"properties": {"name": {"const": "on"}}}, "then": {"required": ["weight"]}},

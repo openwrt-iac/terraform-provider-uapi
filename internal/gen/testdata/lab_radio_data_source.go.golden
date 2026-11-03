@@ -19,6 +19,7 @@ type labRadioDSModel struct {
 	Clearlist  types.List                     `tfsdk:"clearlist"`
 	Flag       types.Bool                     `tfsdk:"flag"`
 	HasSecret  types.Bool                     `tfsdk:"has_secret"`
+	Level      types.Int64                    `tfsdk:"level"`
 	Name       types.String                   `tfsdk:"name"`
 	Note       types.String                   `tfsdk:"note"`
 	Secret     types.String                   `tfsdk:"secret"`
@@ -57,6 +58,7 @@ func (d *labRadioDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"clearlist":  dsComputedStringList("uci option clearlist."),
 			"flag":       dsComputedBool("uci option flag."),
 			"has_secret": dsComputedBool("uci option has_secret."),
+			"level":      dsComputedInt64("uci option level."),
 			"name":       dsComputedString("Optional section name."),
 			"note":       dsComputedString("uci option note."),
 			"secret":     dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
@@ -94,6 +96,7 @@ func (d *labRadioDataSource) Read(ctx context.Context, req datasource.ReadReques
 		Clearlist:  base.Clearlist,
 		Flag:       base.Flag,
 		HasSecret:  base.HasSecret,
+		Level:      base.Level,
 		Name:       base.Name,
 		Note:       base.Note,
 		Secret:     base.Secret,
