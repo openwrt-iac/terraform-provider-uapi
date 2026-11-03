@@ -6,6 +6,12 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+- The `suppress_prefixlength` description of `uapi_network_rule` and its data source
+  said that 0 ignores every connected route: the lookup ignores only the default
+  route, so the connected routes are what the rule keeps. The overlay prose inverted
+  the example; the vendored uapi spec text was right. (#60)
+
 ## [3.3.0] - 2026-11-03
 
 Tracks uapi 3.3.0. The new attributes and data sources need uapi >= 3.3.0; the
