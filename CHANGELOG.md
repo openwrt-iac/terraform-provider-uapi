@@ -24,6 +24,15 @@ line). Format follows Keep a Changelog.
   valid, and wg sets it with none (#44). This needs uapi 3.3.0 or later.
 
 ### Fixed
+- Descriptions corrected against the uapi 3.3.0 spec, found by re-reading it after the
+  tracking PR: `uapi_dhcp_server.dhcpv4` (odhcpd has no DHCPv4 relay: dnsmasq and odhcpd
+  each serve on every value but `disabled`, odhcpd only under `maindhcp`);
+  `uapi_dhcp_dnsmasq.server` and `.address` and `uapi_dhcp_odhcpd.maindhcp` get their
+  real read semantics instead of placeholders (a stored scalar option that dnsmasq
+  ignores reads null; `maindhcp` reads true only for `1` in the `odhcpd` section, and a
+  write makes both daemons agree); `uapi_dhcp_host.macs` gains the `*` octet and the
+  odhcpd caveat, `tag` the word-split read, `ra_flags` the LuCI `none` note, `ra_slaac`
+  the stored-value rule.
 - **`uapi_wireless_device.channel` keeps `auto`.** The attribute is now a number-or-keyword
   string: `channel = 36`, `channel = "36"` and `channel = "auto"` all work, a bare number keeps
   converting, and prior state written by an earlier provider still decodes. Before, a radio set

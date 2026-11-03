@@ -61,7 +61,7 @@ func (r *dhcpDnsmasqResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"id":                computedIDAttribute(),
 			"managed":           managedAttribute(),
 			"etag":              etagAttribute(),
-			"address":           optionalComputedStringList("uci option address."),
+			"address":           optionalComputedStringList("Fixed DNS answers, one per entry, each a dnsmasq `address`, such as `/example.lan/192.0.2.1`. From uapi 3.3.0, a read gives what dnsmasq gets: dnsmasq.init passes only the entries of a list, so a stored scalar `option address`, which dnsmasq ignores, reads as null, and a write that sends a list stores the list in its place."),
 			"authoritative":     optionalComputedBool("uci option authoritative."),
 			"boguspriv":         optionalComputedBool("uci option boguspriv."),
 			"cachesize":         optionalComputedInt64("uci option cachesize."),
@@ -77,7 +77,7 @@ func (r *dhcpDnsmasqResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"readethers":        optionalComputedBool("uci option readethers."),
 			"rebind_protection": optionalComputedBool("uci option rebind_protection."),
 			"resolvfile":        optionalComputedString("uci option resolvfile."),
-			"server":            optionalComputedStringList("uci option server."),
+			"server":            optionalComputedStringList("Upstream DNS servers, one per entry, each a dnsmasq `server`, such as `10.128.2.1` or `/example.com/192.0.2.1`. From uapi 3.3.0, a read gives what dnsmasq gets: dnsmasq.init passes only the entries of a list, so a stored scalar `option server`, which dnsmasq ignores, reads as null, and a write that sends a list stores the list in its place."),
 		},
 	}
 }

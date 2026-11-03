@@ -22,7 +22,7 @@ resource "uapi_dhcp_dnsmasq" "example" {
 
 ### Optional
 
-- `address` (List of String) uci option address.
+- `address` (List of String) Fixed DNS answers, one per entry, each a dnsmasq `address`, such as `/example.lan/192.0.2.1`. From uapi 3.3.0, a read gives what dnsmasq gets: dnsmasq.init passes only the entries of a list, so a stored scalar `option address`, which dnsmasq ignores, reads as null, and a write that sends a list stores the list in its place.
 - `authoritative` (Boolean) uci option authoritative.
 - `boguspriv` (Boolean) uci option boguspriv.
 - `cachesize` (Number) uci option cachesize.
@@ -38,7 +38,7 @@ resource "uapi_dhcp_dnsmasq" "example" {
 - `readethers` (Boolean) uci option readethers.
 - `rebind_protection` (Boolean) uci option rebind_protection.
 - `resolvfile` (String) uci option resolvfile.
-- `server` (List of String) uci option server.
+- `server` (List of String) Upstream DNS servers, one per entry, each a dnsmasq `server`, such as `10.128.2.1` or `/example.com/192.0.2.1`. From uapi 3.3.0, a read gives what dnsmasq gets: dnsmasq.init passes only the entries of a list, so a stored scalar `option server`, which dnsmasq ignores, reads as null, and a write that sends a list stores the list in its place.
 
 ### Read-Only
 
