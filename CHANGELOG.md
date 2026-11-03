@@ -7,6 +7,11 @@ line). Format follows Keep a Changelog.
 ## [Unreleased]
 
 ### Changed
+- The `uapi_token` `name` description admitted a hyphen, which the uapi server always
+  refused with 422 (`must match [A-Za-z0-9_]+`). It now says letters, digits and
+  underscores, 1 to 63 characters. Found in the 3.3.0 examination round and verified
+  live: a hyphenated name answers 422, an underscored one 200 (uapi #287 corrected the
+  spec's pattern; the provider description was written from the old one).
 - **The wireless resources update with a merge PATCH.** `uapi_wireless_device` and
   `uapi_wireless_interface` now send only the changed keys, and Terraform owns the
   modelled footprint instead of the whole section: a uci option that the resource does not
