@@ -346,7 +346,24 @@ func crudCollection(r resModel) string {
 	c := r.Camel
 	coll := c + "Collection"
 	createArg, updateArg := bodyCreateArgs(r)
+	// A scoped resource picks its method per update; a PatchUpdates resource
+	// has no discriminator to switch on, so the two never combine.
+	if r.PatchUpdates && r.Scope != nil {
+		fail("resource %s has both a scope table and PatchUpdates; pick one", r.Type)
+	}
+	if r.PatchUpdates && r.Kind == "singleton" {
+		fail("resource %s is a singleton with PatchUpdates; a singleton already updates with a merge PATCH", r.Type)
+	}
 	write := fmt.Sprintf("obj, etag, err := r.client.Put(ctx, \"/\"+%s+\"/\"+plan.ID.ValueString(), body, state.ETag.ValueString())", coll)
+	if r.PatchUpdates {
+		// A merge PATCH (RFC 7396 through mergeDelta) owns only the modelled
+		// footprint: a uci option that the resource does not model and that
+		// LuCI wrote survives the update, where a PUT would remove it. This
+		// holds only while no sent attribute plans unknown: mergeDelta reads
+		// an unknown as a removal, so a field whose update plans unknown needs
+		// its own emission instead of this flag.
+		write = fmt.Sprintf("obj, etag, err := r.client.Patch(ctx, \"/\"+%s+\"/\"+plan.ID.ValueString(), mergeDelta(body, r.body(ctx, state, ds%s)), state.ETag.ValueString())", coll, updateArg)
+	}
 	if r.Scope != nil {
 		// uapi refuses a PUT with a discriminator outside the request enum, such as
 		// a proto it does not model, and a PUT would drop the options of that

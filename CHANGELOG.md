@@ -6,6 +6,16 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Changed
+- **The wireless resources update with a merge PATCH.** `uapi_wireless_device` and
+  `uapi_wireless_interface` now send only the changed keys, and Terraform owns the
+  modelled footprint instead of the whole section: a uci option that the resource does not
+  model and that LuCI wrote, such as a radio's `num_global_macaddr` or `noscan` or the
+  802.11k and 802.11v options, survives an apply, where a PUT removed it on the first
+  update of an imported section (#40). Write-only secrets keep their stored value for an absent or null
+  key as before, `r0kh = []` stays the only way to remove the entries, and the ETag
+  contract is unchanged.
+
 ### Added
 - `uapi_network_rule.suppress_prefixlength`, `tos`, `uidrange`, `ipproto`, `sport` and
   `dport`, the match options that netifd reads and LuCI writes, so a PUT of a rule that
@@ -23,7 +33,7 @@ line). Format follows Keep a Changelog.
 - `uapi_network_wireguard_peer.allowed_ips` is optional: a peer without allowed IPs is
   valid, and wg sets it with none (#44). This needs uapi 3.3.0 or later.
 - **`data.uapi_network_wireguard_peer.runtime`**: what the kernel holds for the peer, read
-  on a GET only — `in_kernel`, `endpoint`, `allowed_ips` (the kernel's canonical form),
+  on a GET only: `in_kernel`, `endpoint`, `allowed_ips` (the kernel's canonical form),
   `persistent_keepalive`, `latest_handshake`, `rx_bytes`, `tx_bytes`. Observed state
   only: it never feeds a plan diff. An all-null block means uapi did not read the kernel
   (the interface is not up, or wg failed), which is not the same as a missing peer (#46).
@@ -31,7 +41,7 @@ line). Format follows Keep a Changelog.
   claims, so a client lists the drift without walking every peer (#46). Both need
   uapi 3.3.0 or later.
 - **`data.uapi_diagnostics.state_dirs`**: each state directory under /var/run, keyed by
-  path — `true` when uapi uses it, `false` when the path holds something else, `null`
+  path: `true` when uapi uses it, `false` when the path holds something else, `null`
   when it does not exist yet (uapi creates it at its first write there). The read
   creates and changes nothing. Needs uapi 3.3.0 or later; reads as null against an
   older server (uapi #287).

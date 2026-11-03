@@ -205,7 +205,7 @@ func (r *wirelessInterfaceResource) Update(ctx context.Context, req resource.Upd
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	obj, etag, err := r.client.Put(ctx, "/"+wirelessInterfaceCollection+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
+	obj, etag, err := r.client.Patch(ctx, "/"+wirelessInterfaceCollection+"/"+plan.ID.ValueString(), mergeDelta(body, r.body(ctx, state, ds, false)), state.ETag.ValueString())
 	if err != nil {
 		writeErr(&resp.Diagnostics, "updating", "wireless interface", err)
 		return
