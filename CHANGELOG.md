@@ -6,6 +6,12 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-11-03
+
+Tracks uapi 3.3.0. The new attributes and data sources need uapi >= 3.3.0; the
+wireless merge-PATCH update works against every uapi the provider supports. Everything
+else works against uapi 3.0, 3.1 and 3.2.
+
 ### Changed
 - The `uapi_token` `name` description admitted a hyphen, which the uapi server always
   refused with 422 (`must match [A-Za-z0-9_]+`). It now says letters, digits and

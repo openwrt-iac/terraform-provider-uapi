@@ -19,7 +19,11 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
   `uapi_network_interface` attributes `broadcast_flag`, `sourcefilter`, `ip6class` and
   `ip6weight`, the list form of `ip6prefix`, and the new `uapi_wireless_device` and
   `uapi_wireless_interface` attributes, such as `path` and the 802.11r settings, need
-  uapi >= 3.2.0.
+  uapi >= 3.2.0. The `uapi_dhcp_server` odhcpd options (`dhcpv4`, `ra_flags`,
+  `ra_slaac`), the `uapi_network_rule` match options (`suppress_prefixlength`, `tos`,
+  `uidrange`, `ipproto`, `sport`, `dport`), a wireguard peer without `allowed_ips`,
+  the wireguard `runtime` block and the `uapi_wireguard_kernel_peers` data source,
+  and `uapi_diagnostics.state_dirs` need uapi >= 3.3.0.
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
 - Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
 
