@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -32,6 +33,7 @@ type diagnosticsModel struct {
 	SweptResources  types.List            `tfsdk:"swept_resources"`
 	SkippedForScope types.List            `tfsdk:"skipped_for_scope"`
 	RequestID       types.String          `tfsdk:"request_id"`
+	StateDirs       types.Map             `tfsdk:"state_dirs"`
 }
 
 type managementPathModel struct {
@@ -149,6 +151,15 @@ func (d *diagnosticsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"swept_resources":   dsComputedStringList("Resources the sweep checked, in colon form. Populated only when `validate` is set."),
 			"skipped_for_scope": dsComputedStringList("Resources left out because the token lacks `:ro` on them. Populated only when `validate` is set."),
 			"request_id":        dsComputedString("Request id assigned to this diagnostics call."),
+			"state_dirs": dsschema.MapAttribute{
+				ElementType: types.BoolType,
+				Computed:    true,
+				Description: "State directories under /var/run, keyed by path, as uapi finds them; the read creates " +
+					"and changes nothing. `true`: a directory owned by uapi's request uid, mode 0700, which uapi uses. " +
+					"`false`: the path holds anything else, and uapi does not use it as it stands. `null`: the path does " +
+					"not exist yet, and uapi creates it at its first write there. Needs uapi 3.3.0 or later; reads as " +
+					"null against an older server.",
+			},
 		},
 	}
 }
@@ -186,6 +197,10 @@ func (d *diagnosticsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		SweptResources:  swept,
 		SkippedForScope: skipped,
 		RequestID:       strVal(obj, "request_id"),
+		// Explicitly null: a server older than uapi 3.3.0 answers no
+		// state_dirs, and a zero MapValue carries no element type, which
+		// the state encode rejects as a hard provider error.
+		StateDirs: types.MapNull(types.BoolType),
 	}
 	if mp, ok := obj["management_path"].(map[string]any); ok {
 		out.ManagementPath = &managementPathModel{
@@ -260,6 +275,22 @@ func (d *diagnosticsDataSource) Read(ctx context.Context, req datasource.ReadReq
 				Message:   strVal(m, "message"),
 			})
 		}
+	}
+	// A state_dirs value may be null: a directory that does not exist yet
+	// reads null, and the map element carries it instead of collapsing.
+	if sd, ok := obj["state_dirs"].(map[string]any); ok {
+		vals := map[string]attr.Value{}
+		for k, v := range sd {
+			if v == nil {
+				vals[k] = types.BoolNull()
+				continue
+			}
+			b, _ := v.(bool)
+			vals[k] = types.BoolValue(b)
+		}
+		m, md := types.MapValue(types.BoolType, vals)
+		resp.Diagnostics.Append(md...)
+		out.StateDirs = m
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &out)...)
 }
