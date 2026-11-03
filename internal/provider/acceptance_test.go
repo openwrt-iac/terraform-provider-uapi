@@ -668,6 +668,101 @@ resource "uapi_network_wireguard_peer" "p" {
 	})
 }
 
+// The wireguard peer runtime is observed kernel state (#46): the data source
+// exposes it, and a change to it never feeds a plan diff of the resource. A
+// missing runtime (uapi did not read the kernel) reads as all null, never as
+// in_kernel false.
+func TestAccWireguardPeerRuntime(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.wgPeerRuntime = map[string]any{
+		"in_kernel": true, "endpoint": "192.0.2.1:51820",
+		"allowed_ips": []any{"10.0.0.0/24"}, "persistent_keepalive": 25,
+		"latest_handshake": 1893456000, "rx_bytes": 1000, "tx_bytes": 2000,
+	}
+	cfg := `
+resource "uapi_network_wireguard_peer" "p" {
+  interface   = "wg0"
+  public_key  = "xS2is7dJlXKtWgCEUoKZwqVfhSSyMtdBNk+SxCdEK2k="
+  allowed_ips = ["10.0.0.0/24"]
+}
+
+data "uapi_network_wireguard_peer" "p" {
+  id = uapi_network_wireguard_peer.p.id
+}`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: providerHCL(m.URL) + cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.in_kernel", "true"),
+					resource.TestCheckResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.endpoint", "192.0.2.1:51820"),
+					resource.TestCheckResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.allowed_ips.0", "10.0.0.0/24"),
+					resource.TestCheckResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.rx_bytes", "1000"),
+					resource.TestCheckResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.persistent_keepalive", "25"),
+				),
+			},
+			{
+				// The counters moved; the resource's plan must stay empty.
+				PreConfig: func() {
+					m.wgPeerRuntime = map[string]any{
+						"in_kernel": true, "endpoint": "192.0.2.2:51820",
+						"allowed_ips": []any{"10.0.0.0/24"}, "persistent_keepalive": 25,
+						"latest_handshake": 1893457000, "rx_bytes": 9999, "tx_bytes": 8888,
+					}
+				},
+				Config: providerHCL(m.URL) + cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.rx_bytes", "9999"),
+					resource.TestCheckResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.endpoint", "192.0.2.2:51820"),
+				),
+			},
+			{
+				// uapi did not read the kernel: every field reads null, and
+				// in_kernel is not false.
+				PreConfig: func() { m.wgPeerRuntime = nil },
+				Config:    providerHCL(m.URL) + cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.in_kernel"),
+					resource.TestCheckNoResourceAttr("data.uapi_network_wireguard_peer.p", "runtime.rx_bytes"),
+				),
+			},
+		},
+	})
+}
+
+// The kernel peers collection lists the peers the kernel holds that no uci
+// section claims (#46).
+func TestAccWireguardKernelPeers(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.kernelPeers = []map[string]any{{
+		"id": "a1b2c3d4e5f6", "interface": "wg0",
+		"public_key": "yS2is7dJlXKtWgCEUoKZwqVfhSSyMtdBNk+SxCdEK2k=",
+		"endpoint":   "192.0.2.9:51820", "allowed_ips": []any{"10.9.0.0/24"},
+		"persistent_keepalive": 0, "latest_handshake": 1893456000,
+		"rx_bytes": 111, "tx_bytes": 222,
+	}}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{{
+			Config: providerHCL(m.URL) + `
+data "uapi_wireguard_kernel_peers" "all" {}`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.#", "1"),
+				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.id", "a1b2c3d4e5f6"),
+				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.interface", "wg0"),
+				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.allowed_ips.0", "10.9.0.0/24"),
+				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.rx_bytes", "111"),
+			),
+		}},
+	})
+}
+
 func TestAccSystem_singleton(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

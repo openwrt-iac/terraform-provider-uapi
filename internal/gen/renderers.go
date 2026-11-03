@@ -483,6 +483,7 @@ func (r *%[1]sResource) ImportState(ctx context.Context, req resource.ImportStat
 var runtimeBits = map[string]struct{ model, attr, parse string }{
 	"interface": {"networkInterfaceRuntimeModel", "networkInterfaceRuntimeAttribute()", "parseNetworkInterfaceRuntime"},
 	"wireless":  {"wirelessInterfaceRuntimeModel", "wirelessInterfaceRuntimeAttribute()", "parseWirelessInterfaceRuntime"},
+	"wireguard": {"wireguardPeerRuntimeModel", "wireguardPeerRuntimeAttribute()", "parseWireguardPeerRuntime"},
 }
 
 // renderRuntimeDataSource emits a data source with a computed runtime block. It

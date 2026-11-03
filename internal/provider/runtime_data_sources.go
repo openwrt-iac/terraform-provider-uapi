@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -42,6 +43,37 @@ type wirelessInterfaceRuntimeModel struct {
 	Noise          types.Int64  `tfsdk:"noise"`
 	TxpowerActual  types.Int64  `tfsdk:"txpower_actual"`
 	AssoclistCount types.Int64  `tfsdk:"assoclist_count"`
+}
+
+// One wg show dump per interface: what the kernel holds beside what uci holds.
+// Every field is null when the kernel holds no peer under the stored key, and
+// the whole object is empty when uapi did not read the kernel, which the
+// fallback map turns into all-null too: a failed read never reads as a missing
+// peer.
+type wireguardPeerRuntimeModel struct {
+	InKernel            types.Bool   `tfsdk:"in_kernel"`
+	Endpoint            types.String `tfsdk:"endpoint"`
+	AllowedIPs          types.List   `tfsdk:"allowed_ips"`
+	PersistentKeepalive types.Int64  `tfsdk:"persistent_keepalive"`
+	LatestHandshake     types.Int64  `tfsdk:"latest_handshake"`
+	RxBytes             types.Int64  `tfsdk:"rx_bytes"`
+	TxBytes             types.Int64  `tfsdk:"tx_bytes"`
+}
+
+// kernelStringList builds the runtime form of a string list without a context,
+// as the generated parse call has none.
+func kernelStringList(raw any) types.List {
+	arr, ok := raw.([]any)
+	if !ok {
+		return types.ListNull(types.StringType)
+	}
+	vals := make([]attr.Value, 0, len(arr))
+	for _, e := range arr {
+		s, _ := e.(string)
+		vals = append(vals, types.StringValue(s))
+	}
+	l, _ := types.ListValue(types.StringType, vals)
+	return l
 }
 
 func addrList(raw any) []ifaceAddrModel {
@@ -110,6 +142,22 @@ func parseWirelessInterfaceRuntime(obj map[string]any) *wirelessInterfaceRuntime
 	}
 }
 
+func parseWireguardPeerRuntime(obj map[string]any) *wireguardPeerRuntimeModel {
+	rt, ok := obj["runtime"].(map[string]any)
+	if !ok {
+		rt = map[string]any{}
+	}
+	return &wireguardPeerRuntimeModel{
+		InKernel:            boolVal(rt, "in_kernel"),
+		Endpoint:            strVal(rt, "endpoint"),
+		AllowedIPs:          kernelStringList(rt["allowed_ips"]),
+		PersistentKeepalive: int64Val(rt, "persistent_keepalive"),
+		LatestHandshake:     int64Val(rt, "latest_handshake"),
+		RxBytes:             int64Val(rt, "rx_bytes"),
+		TxBytes:             int64Val(rt, "tx_bytes"),
+	}
+}
+
 func networkInterfaceRuntimeAttribute() dsschema.SingleNestedAttribute {
 	addr := dsschema.NestedAttributeObject{Attributes: map[string]dsschema.Attribute{
 		"address": dsschema.StringAttribute{Computed: true, Description: "Address."},
@@ -155,6 +203,24 @@ func wirelessInterfaceRuntimeAttribute() dsschema.SingleNestedAttribute {
 			"noise":           dsschema.Int64Attribute{Computed: true, Description: "Noise floor (dBm)."},
 			"txpower_actual":  dsschema.Int64Attribute{Computed: true, Description: "Actual transmit power (dBm)."},
 			"assoclist_count": dsschema.Int64Attribute{Computed: true, Description: "Number of associated clients."},
+		},
+	}
+}
+
+func wireguardPeerRuntimeAttribute() dsschema.SingleNestedAttribute {
+	return dsschema.SingleNestedAttribute{
+		Computed: true,
+		Description: "What the kernel holds for the peer, read on a GET only; a write answers every field null. " +
+			"Never part of the desired state: latest_handshake, rx_bytes, tx_bytes and a roaming endpoint change on every read. " +
+			"An all-null block means uapi did not read the kernel (the interface is not up, or wg failed), which is not the same as a missing peer.",
+		Attributes: map[string]dsschema.Attribute{
+			"in_kernel":            dsschema.BoolAttribute{Computed: true, Description: "Whether the kernel holds a peer under the stored public key."},
+			"endpoint":             dsschema.StringAttribute{Computed: true, Description: "Endpoint of the peer in the kernel, as an address and port. Null when the kernel holds no peer under the key."},
+			"allowed_ips":          dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Description: "Allowed IPs of the peer in the kernel, in its canonical form (host bits cleared, short lower-case IPv6, /32 or /128 on a bare address). Compare with the configuration only after normalizing both sides. Null when the kernel holds no peer under the key."},
+			"persistent_keepalive": dsschema.Int64Attribute{Computed: true, Description: "Keepalive interval of the peer in the kernel, in seconds; 0 when it is off."},
+			"latest_handshake":     dsschema.Int64Attribute{Computed: true, Description: "Time of the latest handshake with the peer, in seconds since the epoch; 0 when there was none."},
+			"rx_bytes":             dsschema.Int64Attribute{Computed: true, Description: "Bytes the kernel received from the peer since it added the peer."},
+			"tx_bytes":             dsschema.Int64Attribute{Computed: true, Description: "Bytes the kernel sent to the peer since it added the peer."},
 		},
 	}
 }

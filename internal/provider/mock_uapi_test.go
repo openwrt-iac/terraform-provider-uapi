@@ -30,6 +30,12 @@ type mockUAPI struct {
 	runtime map[string]map[string]any
 	// lastTokenCreate is the decoded body of the most recent POST /tokens.
 	lastTokenCreate map[string]any
+	// wgPeerRuntime is the runtime block answered on a GET of a wireguard peer:
+	// nil mirrors "uapi did not read the kernel", which reads as all null. A write
+	// answers no runtime key, as uapi answers {}.
+	wgPeerRuntime map[string]any
+	// kernelPeers answers GET /network/wireguard_kernel_peers.
+	kernelPeers []map[string]any
 	// emptySweep answers a ?validate=1 with an empty invalid_sections, which is what
 	// a router with nothing wrong sends: the key is present and empty, verified
 	// against a real 2.5.0 build.
@@ -254,6 +260,10 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 	case path == "/system/password" && r.Method == http.MethodPost:
 		w.WriteHeader(http.StatusNoContent)
 		return
+	case path == "/network/wireguard_kernel_peers" && r.Method == http.MethodGet:
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(m.kernelPeers)
+		return
 	case path == "/dhcp/leases" && r.Method == http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]map[string]any{
@@ -428,7 +438,16 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 			apiErr(w, http.StatusNotFound, "not_found")
 			return
 		}
-		writeJSON(w, http.StatusOK, m.withRuntime(coll, obj), etagOf(obj))
+		out := m.withRuntime(coll, obj)
+		if coll == "/network/wireguard_peers" {
+			// Only a GET reads the kernel; a write answers {}, which the parse of a
+			// missing runtime key gives as all null. A nil block is "not read",
+			// which must never read as in_kernel false.
+			if m.wgPeerRuntime != nil {
+				out["runtime"] = m.wgPeerRuntime
+			}
+		}
+		writeJSON(w, http.StatusOK, out, etagOf(obj))
 	case http.MethodPut, http.MethodPatch:
 		if obj == nil {
 			apiErr(w, http.StatusNotFound, "not_found")

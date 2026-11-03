@@ -40,3 +40,17 @@ data "uapi_network_wireguard_peer" "example" {
 - `preshared_key` (String, Sensitive) Always null; never returned by the API.
 - `public_key` (String) uci option public_key.
 - `route_allowed_ips` (Boolean) uci option route_allowed_ips.
+- `runtime` (Attributes) What the kernel holds for the peer, read on a GET only; a write answers every field null. Never part of the desired state: latest_handshake, rx_bytes, tx_bytes and a roaming endpoint change on every read. An all-null block means uapi did not read the kernel (the interface is not up, or wg failed), which is not the same as a missing peer. (see [below for nested schema](#nestedatt--runtime))
+
+<a id="nestedatt--runtime"></a>
+### Nested Schema for `runtime`
+
+Read-Only:
+
+- `allowed_ips` (List of String) Allowed IPs of the peer in the kernel, in its canonical form (host bits cleared, short lower-case IPv6, /32 or /128 on a bare address). Compare with the configuration only after normalizing both sides. Null when the kernel holds no peer under the key.
+- `endpoint` (String) Endpoint of the peer in the kernel, as an address and port. Null when the kernel holds no peer under the key.
+- `in_kernel` (Boolean) Whether the kernel holds a peer under the stored public key.
+- `latest_handshake` (Number) Time of the latest handshake with the peer, in seconds since the epoch; 0 when there was none.
+- `persistent_keepalive` (Number) Keepalive interval of the peer in the kernel, in seconds; 0 when it is off.
+- `rx_bytes` (Number) Bytes the kernel received from the peer since it added the peer.
+- `tx_bytes` (Number) Bytes the kernel sent to the peer since it added the peer.

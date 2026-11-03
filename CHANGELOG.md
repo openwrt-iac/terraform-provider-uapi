@@ -22,6 +22,14 @@ line). Format follows Keep a Changelog.
   and are also on the data source.
 - `uapi_network_wireguard_peer.allowed_ips` is optional: a peer without allowed IPs is
   valid, and wg sets it with none (#44). This needs uapi 3.3.0 or later.
+- **`data.uapi_network_wireguard_peer.runtime`**: what the kernel holds for the peer, read
+  on a GET only — `in_kernel`, `endpoint`, `allowed_ips` (the kernel's canonical form),
+  `persistent_keepalive`, `latest_handshake`, `rx_bytes`, `tx_bytes`. Observed state
+  only: it never feeds a plan diff. An all-null block means uapi did not read the kernel
+  (the interface is not up, or wg failed), which is not the same as a missing peer (#46).
+- **`data.uapi_wireguard_kernel_peers`**: the peers the kernel holds that no uci section
+  claims, so a client lists the drift without walking every peer (#46). Both need
+  uapi 3.3.0 or later.
 
 ### Fixed
 - Descriptions corrected against the uapi 3.3.0 spec, found by re-reading it after the
