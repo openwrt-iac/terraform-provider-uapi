@@ -34,7 +34,7 @@ func (d *dhcpDnsmasqDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"id":                dsComputedString("Stable id."),
 			"managed":           dsManagedAttribute(),
 			"etag":              dsComputedString("Opaque ETag of the resource's current state."),
-			"address":           dsComputedStringList("uci option address."),
+			"address":           dsComputedStringList("Fixed DNS answers, one per entry, each a dnsmasq `address`, such as `/example.lan/192.0.2.1`. From uapi 3.3.0, a read gives what dnsmasq gets: dnsmasq.init passes only the entries of a list, so a stored scalar `option address`, which dnsmasq ignores, reads as null, and a write that sends a list stores the list in its place."),
 			"authoritative":     dsComputedBool("uci option authoritative."),
 			"boguspriv":         dsComputedBool("uci option boguspriv."),
 			"cachesize":         dsComputedInt64("uci option cachesize."),
@@ -50,7 +50,7 @@ func (d *dhcpDnsmasqDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"readethers":        dsComputedBool("uci option readethers."),
 			"rebind_protection": dsComputedBool("uci option rebind_protection."),
 			"resolvfile":        dsComputedString("uci option resolvfile."),
-			"server":            dsComputedStringList("uci option server."),
+			"server":            dsComputedStringList("Upstream DNS servers, one per entry, each a dnsmasq `server`, such as `10.128.2.1` or `/example.com/192.0.2.1`. From uapi 3.3.0, a read gives what dnsmasq gets: dnsmasq.init passes only the entries of a list, so a stored scalar `option server`, which dnsmasq ignores, reads as null, and a write that sends a list stores the list in its place."),
 		},
 	}
 }

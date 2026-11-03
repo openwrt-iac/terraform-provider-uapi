@@ -37,7 +37,7 @@ func (d *dhcpOdhcpdDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"leasefile":    dsComputedString("uci option leasefile."),
 			"leasetrigger": dsComputedString("uci option leasetrigger."),
 			"loglevel":     dsComputedInt64("uci option loglevel."),
-			"maindhcp":     dsComputedBool("uci option maindhcp."),
+			"maindhcp":     dsComputedBool("Whether odhcpd serves DHCPv4 in place of dnsmasq. dnsmasq.init reads only the section named `odhcpd`: dnsmasq stops serving DHCPv4 for a value above 0 there, while odhcpd is installed. From uapi 3.3.0, a read gives what dnsmasq.init reads: true only for `1` in that section. A write of true stores `1` and of false `0`, so a write that sends the field makes both daemons agree. A stored `true` or `2` reads false: odhcpd keeps its own value, which a reload does not reset. null removes the option, and odhcpd then keeps its value until it restarts."),
 		},
 	}
 }
