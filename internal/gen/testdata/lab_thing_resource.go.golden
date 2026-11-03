@@ -52,6 +52,7 @@ type labThingModel struct {
 	Secret     types.String   `tfsdk:"secret"`
 	Secretlist types.List     `tfsdk:"secretlist"`
 	Tags       types.List     `tfsdk:"tags"`
+	Tuner      types.String   `tfsdk:"tuner"`
 	Weight     types.Int64    `tfsdk:"weight"`
 	Wgname     types.String   `tfsdk:"wgname"`
 	Match      *labThingMatch `tfsdk:"match"`
@@ -87,6 +88,7 @@ func (r *labThingResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"secret":     schema.StringAttribute{Optional: true, Sensitive: true, Description: "uci option secret."},
 			"secretlist": schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: "uci option secretlist."},
 			"tags":       optionalComputedStringList("uci option tags. Applies only to name `on`."),
+			"tuner":      optionalComputedString("uci option tuner."),
 			"weight":     optionalComputedInt64("uci option weight."),
 			"wgname":     schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Create-only kernel name."},
 			"match": schema.SingleNestedAttribute{
@@ -116,6 +118,7 @@ func (r *labThingResource) body(ctx context.Context, m labThingModel, diags *dia
 	putStr(out, "secret", m.Secret)
 	putList(ctx, out, "secretlist", m.Secretlist, diags.d)
 	putList(ctx, out, "tags", m.Tags, diags.d)
+	putIntOrStr(out, "tuner", m.Tuner)
 	putInt64(out, "weight", m.Weight)
 	if create {
 		putStr(out, "wgname", m.Wgname)
@@ -142,6 +145,7 @@ func (r *labThingResource) read(ctx context.Context, obj map[string]any, m *labT
 	// secret is write-only: preserve the planned value (the API never returns it).
 	// secretlist is write-only: preserve the planned value (the API never returns it).
 	m.Tags = diags.list(listValKeepEmpty(ctx, obj, "tags", m.Tags))
+	m.Tuner = strVal(obj, "tuner")
 	m.Weight = int64Val(obj, "weight")
 	// wgname is create-only: preserve the planned value (the API never returns it).
 	nested, _ := obj["match"].(map[string]any)

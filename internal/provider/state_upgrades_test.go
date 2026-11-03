@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -258,5 +259,42 @@ func TestUpgradeNetworkInterface_ip6prefixFormattedArray(t *testing.T) {
 	got := stringList(t, s, "ip6prefix")
 	if strings.Join(got, ",") != "2001:db8:1::/48,2001:db8:2::/48" {
 		t.Errorf("ip6prefix = %v, want the two prefixes without brackets", got)
+	}
+}
+
+// channel was types.Int64 until the fix for #39, so prior state holds it as a
+// JSON number. The passthrough decoder coerces between scalars, so the change
+// to String needs no SchemaVersion bump; this pins that with the instrument
+// CLAUDE.md prescribes, against the real regenerated schema.
+func TestPriorStateNumericChannelDecodes(t *testing.T) {
+	ctx := context.Background()
+	r := &wirelessDeviceResource{}
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	if schemaResp.Schema.Version != 0 {
+		t.Fatalf("schema version = %d, want 0: a bump here means a StateUpgrader is required", schemaResp.Schema.Version)
+	}
+
+	// Prior state as the old Int64 provider wrote it: every attribute null,
+	// channel a JSON number, one bool alongside.
+	prior := map[string]any{}
+	for n := range schemaResp.Schema.Attributes {
+		prior[n] = nil
+	}
+	prior["id"] = "radio0"
+	prior["type"] = "mac80211"
+	prior["channel"] = 6
+	prior["disabled"] = false
+	rawJSON, err := json.Marshal(prior)
+	if err != nil {
+		t.Fatalf("marshaling prior state: %v", err)
+	}
+	val, err := (&tfprotov6.RawState{JSON: rawJSON}).Unmarshal(schemaResp.Schema.Type().TerraformType(ctx))
+	if err != nil {
+		t.Fatalf("prior state with a numeric channel must decode into the String attribute: %v", err)
+	}
+	s := tfsdk.State{Schema: schemaResp.Schema, Raw: val}
+	if got := attrString(t, s, "channel"); got != "6" {
+		t.Errorf("channel = %q, want \"6\"", got)
 	}
 }

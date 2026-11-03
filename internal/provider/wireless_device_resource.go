@@ -28,7 +28,7 @@ type wirelessDeviceModel struct {
 	ETag        types.String `tfsdk:"etag"`
 	Band        types.String `tfsdk:"band"`
 	CellDensity types.Int64  `tfsdk:"cell_density"`
-	Channel     types.Int64  `tfsdk:"channel"`
+	Channel     types.String `tfsdk:"channel"`
 	Country     types.String `tfsdk:"country"`
 	Disabled    types.Bool   `tfsdk:"disabled"`
 	Htmode      types.String `tfsdk:"htmode"`
@@ -58,7 +58,7 @@ func (r *wirelessDeviceResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"etag":         etagAttribute(),
 			"band":         optionalComputedString("uci option band."),
 			"cell_density": optionalComputedInt64("Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later."),
-			"channel":      optionalComputedInt64("uci option channel."),
+			"channel":      optionalComputedString("Channel number (0-233, where 6 GHz uses up to 233) or `auto`. A numeric value may be written as a number or as its decimal text; any other string is refused by uapi."),
 			"country":      optionalComputedString("uci option country."),
 			"disabled":     optionalComputedBool("Whether the entry is disabled."),
 			"htmode":       optionalComputedString("uci option htmode."),
@@ -80,7 +80,7 @@ func (r *wirelessDeviceResource) body(ctx context.Context, m wirelessDeviceModel
 	}
 	putStr(out, "band", m.Band)
 	putInt64(out, "cell_density", m.CellDensity)
-	putInt64(out, "channel", m.Channel)
+	putIntOrStr(out, "channel", m.Channel)
 	putStr(out, "country", m.Country)
 	putBool(out, "disabled", m.Disabled)
 	putStr(out, "htmode", m.Htmode)
@@ -99,7 +99,7 @@ func (r *wirelessDeviceResource) read(ctx context.Context, obj map[string]any, m
 	m.Managed = boolVal(obj, "managed")
 	m.Band = strVal(obj, "band")
 	m.CellDensity = int64Val(obj, "cell_density")
-	m.Channel = int64Val(obj, "channel")
+	m.Channel = strVal(obj, "channel")
 	m.Country = strVal(obj, "country")
 	m.Disabled = boolVal(obj, "disabled")
 	m.Htmode = strVal(obj, "htmode")

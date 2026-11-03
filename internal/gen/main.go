@@ -93,7 +93,7 @@ type field struct {
 	Name       string // tfsdk + wire name
 	GoName     string
 	GoType     string // "types.String" | "types.Int64" | "types.Bool" | "types.List"
-	Kind       string // "required" | "optcomp" | "optclear" | "writeonly" | "createonly" | "computedbool" | "computedstring"
+	Kind       string // "required" | "optcomp" | "optclear" | "writeonly" | "createonly" | "computedbool" | "computedstring" | "intstr"
 	Desc       string
 	Deprecated bool // spec `deprecated: true`: emit a DeprecationMessage
 }
@@ -173,6 +173,10 @@ func buildResource(d descriptor, props, writable map[string]specProp, required [
 	for _, x := range d.CreateOnly {
 		createOnly[x] = true
 	}
+	intStr := map[string]bool{}
+	for _, x := range d.IntStr {
+		intStr[x] = true
+	}
 	names := make([]string, 0, len(props))
 	for n := range props {
 		names = append(names, n)
@@ -200,6 +204,32 @@ func buildResource(d descriptor, props, writable map[string]specProp, required [
 			if p.Description != "" {
 				f.Desc = p.Description
 			}
+			r.Fields = append(r.Fields, f)
+			continue
+		}
+		// An integer-or-string union carries a number or a keyword on the wire
+		// (today only wireless channel: 0-233 or "auto"). Int64 silently drops
+		// the keyword, so the state goes null where the router stores text, a
+		// PUT then omits the key, and uapi's diff_apply removes the option.
+		// Such a union must be declared intstr in the descriptor; fail rather
+		// than guess.
+		if intStrUnion(p) {
+			if !intStr[n] {
+				fail("field %q on %s is an integer-or-string union, which has no default emission; declare it in the descriptor's IntStr", n, d.Type)
+			}
+			if createOnly[n] {
+				fail("field %q on %s is declared both create-only and intstr; pick one", n, d.Type)
+			}
+			if p.ReadOnly || p.WriteOnly {
+				fail("intstr field %q on %s is read-only or write-only, which the kind does not emit", n, d.Type)
+			}
+			if req[n] {
+				fail("intstr field %q on %s is required, which the kind does not emit", n, d.Type)
+			}
+			if f.Deprecated {
+				fail("intstr field %q on %s is deprecated, but the DeprecationMessage emission was removed in 3.0.0", n, d.Type)
+			}
+			f.GoType, f.Kind = "types.String", "intstr"
 			r.Fields = append(r.Fields, f)
 			continue
 		}
@@ -277,6 +307,25 @@ func typeOf(p specProp) string {
 		}
 	}
 	return "string"
+}
+
+// intStrUnion reports whether p is a type union admitting both an integer and
+// a string (null allowed): the wire value is a number or a keyword.
+func intStrUnion(p specProp) bool {
+	t, ok := p.Type.([]any)
+	if !ok {
+		return false
+	}
+	var hasInt, hasStr bool
+	for _, e := range t {
+		switch s, _ := e.(string); s {
+		case "integer":
+			hasInt = true
+		case "string":
+			hasStr = true
+		}
+	}
+	return hasInt && hasStr
 }
 
 func goType(p specProp) string {

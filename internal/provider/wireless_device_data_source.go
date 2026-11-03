@@ -36,7 +36,7 @@ func (d *wirelessDeviceDataSource) Schema(_ context.Context, _ datasource.Schema
 			"etag":         dsComputedString("Opaque ETag of the resource's current state."),
 			"band":         dsComputedString("uci option band."),
 			"cell_density": dsComputedInt64("Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later."),
-			"channel":      dsComputedInt64("uci option channel."),
+			"channel":      dsComputedString("Channel number (0-233, where 6 GHz uses up to 233) or `auto`. A numeric value may be written as a number or as its decimal text; any other string is refused by uapi."),
 			"country":      dsComputedString("uci option country."),
 			"disabled":     dsComputedBool("Whether the entry is disabled."),
 			"htmode":       dsComputedString("uci option htmode."),
