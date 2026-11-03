@@ -71,7 +71,16 @@ func applyScope(r *resModel, conds []specCond, props map[string]specProp) {
 	if len(all) == 0 {
 		fail("%s: discriminator %q has no enum, so the values that take a scoped field are unknown", r.Type, s.Field)
 	}
-	s.Known = all
+	// The discriminator is a string field, but a non-discriminator field may carry
+	// a numeric enum (such as network rules `tos`: uapi publishes its accepted
+	// write values), which the field loop reads nowhere else.
+	for _, e := range all {
+		v, ok := e.(string)
+		if !ok {
+			fail("%s: discriminator %q has a non-string enum value %v", r.Type, s.Field, e)
+		}
+		s.Known = append(s.Known, v)
+	}
 	for i := range r.Fields {
 		f := &r.Fields[i]
 		excluded := map[string]bool{}
@@ -88,7 +97,7 @@ func applyScope(r *resModel, conds []specCond, props map[string]specProp) {
 			continue
 		}
 		var takes []string
-		for _, v := range all {
+		for _, v := range s.Known {
 			if !excluded[v] {
 				takes = append(takes, "`"+v+"`")
 			}

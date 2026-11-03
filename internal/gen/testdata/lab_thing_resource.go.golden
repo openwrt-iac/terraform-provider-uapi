@@ -46,6 +46,7 @@ type labThingModel struct {
 	Clearlist  types.List     `tfsdk:"clearlist"`
 	Flag       types.Bool     `tfsdk:"flag"`
 	HasSecret  types.Bool     `tfsdk:"has_secret"`
+	Level      types.Int64    `tfsdk:"level"`
 	Lockedname types.String   `tfsdk:"lockedname"`
 	Name       types.String   `tfsdk:"name"`
 	Note       types.String   `tfsdk:"note"`
@@ -82,6 +83,7 @@ func (r *labThingResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"clearlist":  optionalStringList("uci option clearlist."),
 			"flag":       optionalComputedBool("uci option flag. Applies only to name `on`."),
 			"has_secret": schema.BoolAttribute{Computed: true, Description: "uci option has_secret."},
+			"level":      optionalComputedInt64("uci option level."),
 			"lockedname": schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Strict create-only name."},
 			"name":       schema.StringAttribute{Required: true, Description: "Optional section name."},
 			"note":       schema.StringAttribute{Computed: true, Description: "uci option note."},
@@ -111,6 +113,7 @@ func (r *labThingResource) body(ctx context.Context, m labThingModel, diags *dia
 	putStr(out, "clearable", m.Clearable)
 	putList(ctx, out, "clearlist", m.Clearlist, diags.d)
 	putBool(out, "flag", m.Flag)
+	putInt64(out, "level", m.Level)
 	if create {
 		putStr(out, "lockedname", m.Lockedname)
 	}
@@ -139,6 +142,7 @@ func (r *labThingResource) read(ctx context.Context, obj map[string]any, m *labT
 	m.Clearlist = diags.list(listValKeepEmpty(ctx, obj, "clearlist", m.Clearlist))
 	m.Flag = boolVal(obj, "flag")
 	m.HasSecret = boolValDefault(obj, "has_secret")
+	m.Level = int64Val(obj, "level")
 	// lockedname is create-only: preserve the planned value (the API never returns it).
 	m.Name = strVal(obj, "name")
 	m.Note = strVal(obj, "note")
