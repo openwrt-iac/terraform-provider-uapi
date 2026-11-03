@@ -766,6 +766,99 @@ data "uapi_wireguard_kernel_peers" "all" {}`,
 	})
 }
 
+// The wireless resources update with a merge PATCH (#40): Terraform owns the
+// modelled footprint, and a uci option that the resource does not model and
+// that another tool wrote survives the update, where a PUT removed it.
+func TestAccWireless_mergePatch(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/wireless/devices", "radio0", map[string]any{
+		"type": "mac80211", "band": "2g", "channel": 1, "htmode": "HT20",
+		"num_global_macaddr": "2", // unmodelled: another tool wrote it
+	})
+	cfg := func(htmode string) string {
+		return providerHCL(m.URL) + `
+resource "uapi_wireless_device" "radio0" {
+  id     = "radio0"
+  type   = "mac80211"
+  htmode = "` + htmode + `"
+}`
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg("HT20"),
+				ResourceName:       "uapi_wireless_device.radio0",
+				ImportState:        true,
+				ImportStateId:      "radio0",
+				ImportStatePersist: true,
+			},
+			{
+				// The update is a merge PATCH: num_global_macaddr is not in the
+				// model, so the delta never names it and it survives.
+				Config: cfg("HT40"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					m.checkStored("/wireless/devices", "radio0", "htmode", "HT40"),
+					m.checkStored("/wireless/devices", "radio0", "num_global_macaddr", "2"),
+				),
+			},
+			{
+				Config: cfg("HT40"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+}
+
+// Same contract on the interface, where an unmodelled 802.11v option that LuCI
+// wrote must survive an ssid change.
+func TestAccWirelessInterface_mergePatch(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/wireless/interfaces", "wlan0", map[string]any{
+		"device": "radio0", "mode": "ap", "ssid": "home", "encryption": "psk2+ccmp",
+		"key": "supersecret", "bss_transition": "1", // unmodelled: LuCI's 802.11v
+	})
+	cfg := func(ssid string) string {
+		return providerHCL(m.URL) + `
+resource "uapi_wireless_interface" "wlan0" {
+  id        = "wlan0"
+  device    = "radio0"
+  ssid      = "` + ssid + `"
+  encryption = "psk2+ccmp"
+  key       = "supersecret"
+}`
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg("home"),
+				ResourceName:       "uapi_wireless_interface.wlan0",
+				ImportState:        true,
+				ImportStateId:      "wlan0",
+				ImportStatePersist: true,
+			},
+			{
+				Config: cfg("away"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					m.checkStored("/wireless/interfaces", "wlan0", "ssid", "away"),
+					m.checkStored("/wireless/interfaces", "wlan0", "bss_transition", "1"),
+				),
+			},
+			{
+				Config: cfg("away"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+}
+
 func TestAccSystem_singleton(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()

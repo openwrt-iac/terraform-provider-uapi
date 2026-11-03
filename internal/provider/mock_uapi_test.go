@@ -178,6 +178,15 @@ func keepWriteOnly(coll string, stored, body map[string]any) {
 // normalizeStored applies the per-collection server-side shaping the provider has
 // to round-trip against.
 func normalizeStored(coll string, obj map[string]any) {
+	if coll == "/wireless/interfaces" {
+		// uci cannot store an empty list, so uapi drops a `[]` on write and the
+		// read answers null: has_r0kh and friends must answer false for it.
+		for _, k := range wirelessWriteOnly {
+			if arr, ok := obj[k].([]any); ok && len(arr) == 0 {
+				delete(obj, k)
+			}
+		}
+	}
 	if coll == "/network/interfaces" {
 		// toUci drops what the proto does not take, so a read leaves it out.
 		proto, _ := obj["proto"].(string)
@@ -239,6 +248,9 @@ func apiErr(w http.ResponseWriter, status int, code string) {
 }
 
 // seedUnmanaged inserts a pre-existing anonymous section (managed=false) for adopt tests.
+// The section is round-tripped through JSON so the store holds wire-shaped values
+// (numbers as float64, like a decode), which a merge PATCH then leaves untouched
+// in the same shape a real read answers.
 func (m *mockUAPI) seedUnmanaged(coll, id string, obj map[string]any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -247,6 +259,13 @@ func (m *mockUAPI) seedUnmanaged(coll, id string, obj map[string]any) {
 	}
 	obj["id"] = id
 	obj["managed"] = false
+	if raw, err := json.Marshal(obj); err == nil {
+		stored := map[string]any{}
+		if err := json.Unmarshal(raw, &stored); err == nil {
+			m.store[coll][id] = stored
+			return
+		}
+	}
 	m.store[coll][id] = obj
 }
 
@@ -478,13 +497,18 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 			normalizeStored(coll, body)
 			m.store[coll][id] = body
 		} else {
-			// RFC 7396: null removes the key.
+			// RFC 7396: null removes the key. A write-only secret is the one
+			// exception: uapi keeps the stored secret for an absent key and
+			// for null, with both methods.
 			for k, v := range body {
 				if v == nil {
+					if coll == "/wireless/interfaces" && slices.Contains(wirelessWriteOnly, k) {
+						continue
+					}
 					delete(obj, k)
-				} else {
-					obj[k] = v
+					continue
 				}
+				obj[k] = v
 			}
 			normalizeStored(coll, obj)
 		}

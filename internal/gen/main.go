@@ -116,6 +116,9 @@ type resModel struct {
 	Scope      *scope
 	GenDS      bool
 	Runtime    string
+	// PatchUpdates makes the generated Update a merge PATCH (RFC 7396 through
+	// mergeDelta) instead of a PUT.
+	PatchUpdates bool
 	// SchemaVersion mirrors the descriptor's; > 0 emits a schema Version and
 	// requires a matching StateUpgrader (see state_upgrades.go).
 	SchemaVersion int
@@ -158,7 +161,7 @@ func buildResource(d descriptor, props, writable map[string]specProp, required [
 	r := resModel{
 		Type: d.Type, Pascal: pascal(d.Type), Camel: camel(d.Type),
 		Collection: d.Collection, Kind: d.Kind, Label: d.Label,
-		GenDS: d.GenDataSource, Runtime: d.Runtime,
+		GenDS: d.GenDataSource, Runtime: d.Runtime, PatchUpdates: d.PatchUpdates,
 		SchemaVersion: d.SchemaVersion,
 	}
 	// required-ness comes from the spec's top-level `required` array (the

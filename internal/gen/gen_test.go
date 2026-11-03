@@ -92,12 +92,20 @@ func goldenCases() map[string]string {
 		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
 	}
 	wr := buildResource(withWgRuntime, fixtureProps(), fixtureProps(), []string{"name"})
+	// A PatchUpdates resource: the Update is an unconditional merge PATCH.
+	withPatch := descriptor{
+		Type: "lab_patch", Schema: "LabPatches", Collection: "lab/patches",
+		Kind: "collection", Label: "lab patch", GenDataSource: true, PatchUpdates: true,
+		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
+	}
+	pr := buildResource(withPatch, fixtureProps(), fixtureProps(), []string{"name"})
 	return map[string]string{
 		"lab_thing_resource.go.golden":    renderResource(cr),
 		"lab_thing_data_source.go.golden": renderDataSource(cr),
 		"lab_single_resource.go.golden":   renderResource(sr),
 		"lab_radio_data_source.go.golden": renderDataSource(rr),
 		"lab_wg_data_source.go.golden":    renderDataSource(wr),
+		"lab_patch_resource.go.golden":    renderResource(pr),
 	}
 }
 

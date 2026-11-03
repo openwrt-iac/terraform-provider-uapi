@@ -15,6 +15,7 @@ type descriptor struct {
 	Runtime       string   // "" | "interface" | "wireless": adds a computed runtime block to the data source
 	CreateOnly    []string // fields that are create-time only and immutable (Optional + RequiresReplace, sent only on create, never returned), e.g. an interface `name`
 	IntStr        []string // integer-or-string union fields (a number or a keyword on the wire), emitted as String; the body sends a numeric value as a number
+	PatchUpdates  bool     // the generated Update sends a merge PATCH instead of a PUT: Terraform owns the modelled footprint, and unmodelled uci options that another tool wrote survive the update
 	Descs         map[string]string
 	// SchemaVersion is emitted as the schema's Version. Bump it when an
 	// attribute's Terraform type changes shape (list <-> string), which makes
@@ -215,7 +216,7 @@ var descriptors = []descriptor{
 		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1, and wg then cannot bring the interface up. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.",
 	}},
 	// wireless
-	{Type: "wireless_device", Schema: "WirelessDevices", Collection: "wireless/devices", Kind: "collection", Label: "wireless device", GenDataSource: true, IntStr: []string{"channel"}, Descs: map[string]string{
+	{Type: "wireless_device", Schema: "WirelessDevices", Collection: "wireless/devices", Kind: "collection", Label: "wireless device", GenDataSource: true, IntStr: []string{"channel"}, PatchUpdates: true, Descs: map[string]string{
 		"channel":      "Channel number (0-233, where 6 GHz uses up to 233) or `auto`. A numeric value may be written as a number or as its decimal text; any other string is refused by uapi.",
 		"path":         "Device path of the phy under /sys/devices, as `wifi config` writes it. With `macaddr` and `phy`, it binds the radio to its hardware: OpenWrt tries `path`, then `macaddr`, then `phy`, and a radio that none of them matches does not come up. Needs uapi 3.2.0 or later.",
 		"macaddr":      "MAC address of the phy. Older `wifi detect` configurations bind a radio with it instead of `path`. Needs uapi 3.2.0 or later.",
@@ -224,7 +225,7 @@ var descriptors = []descriptor{
 		"cell_density": "Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later.",
 		"legacy_rates": "Whether the legacy 802.11b rates are allowed. Defaults to false. Needs uapi 3.2.0 or later.",
 	}},
-	{Type: "wireless_interface", Schema: "WirelessInterfaces", Collection: "wireless/interfaces", Kind: "collection", Label: "wireless interface", GenDataSource: true, Runtime: "wireless", Descs: map[string]string{
+	{Type: "wireless_interface", Schema: "WirelessInterfaces", Collection: "wireless/interfaces", Kind: "collection", Label: "wireless interface", GenDataSource: true, Runtime: "wireless", PatchUpdates: true, Descs: map[string]string{
 		"encryption":             "Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`.",
 		"ieee80211r":             "Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later.",
 		"ft_over_ds":             "Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later.",

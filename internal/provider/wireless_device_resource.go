@@ -168,7 +168,7 @@ func (r *wirelessDeviceResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	obj, etag, err := r.client.Put(ctx, "/"+wirelessDeviceCollection+"/"+plan.ID.ValueString(), body, state.ETag.ValueString())
+	obj, etag, err := r.client.Patch(ctx, "/"+wirelessDeviceCollection+"/"+plan.ID.ValueString(), mergeDelta(body, r.body(ctx, state, ds, false)), state.ETag.ValueString())
 	if err != nil {
 		writeErr(&resp.Diagnostics, "updating", "wireless device", err)
 		return
