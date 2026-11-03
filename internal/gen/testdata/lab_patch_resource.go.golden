@@ -159,6 +159,7 @@ func (r *labPatchResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 	ds := newDiagsink(&resp.Diagnostics)
 	r.read(ctx, obj, &state, ds)
+	labWarn(obj, ds.d)
 	state.ETag = types.StringValue(etag)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

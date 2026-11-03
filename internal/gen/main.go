@@ -119,6 +119,11 @@ type resModel struct {
 	// PatchUpdates makes the generated Update a merge PATCH (RFC 7396 through
 	// mergeDelta) instead of a PUT.
 	PatchUpdates bool
+	// PostReadWarn names a hand-written func(obj map[string]any, diags
+	// *diag.Diagnostics) that the generated resource Read calls after the
+	// model fill, for a refresh-time warning. The function decides silence for
+	// itself.
+	PostReadWarn string
 	// SchemaVersion mirrors the descriptor's; > 0 emits a schema Version and
 	// requires a matching StateUpgrader (see state_upgrades.go).
 	SchemaVersion int
@@ -161,7 +166,7 @@ func buildResource(d descriptor, props, writable map[string]specProp, required [
 	r := resModel{
 		Type: d.Type, Pascal: pascal(d.Type), Camel: camel(d.Type),
 		Collection: d.Collection, Kind: d.Kind, Label: d.Label,
-		GenDS: d.GenDataSource, Runtime: d.Runtime, PatchUpdates: d.PatchUpdates,
+		GenDS: d.GenDataSource, Runtime: d.Runtime, PatchUpdates: d.PatchUpdates, PostReadWarn: d.PostReadWarn,
 		SchemaVersion: d.SchemaVersion,
 	}
 	// required-ness comes from the spec's top-level `required` array (the

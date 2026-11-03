@@ -354,6 +354,9 @@ func crudCollection(r resModel) string {
 	if r.PatchUpdates && r.Kind == "singleton" {
 		fail("resource %s is a singleton with PatchUpdates; a singleton already updates with a merge PATCH", r.Type)
 	}
+	if r.PostReadWarn != "" && r.Kind == "singleton" {
+		fail("resource %s is a singleton with PostReadWarn; the singleton Read emits no warning hook", r.Type)
+	}
 	write := fmt.Sprintf("obj, etag, err := r.client.Put(ctx, \"/\"+%s+\"/\"+plan.ID.ValueString(), body, state.ETag.ValueString())", coll)
 	if r.PatchUpdates {
 		// A merge PATCH (RFC 7396 through mergeDelta) owns only the modelled
@@ -378,7 +381,13 @@ func crudCollection(r resModel) string {
 		obj, etag, err = r.client.Put(ctx, itemPath, body, state.ETag.ValueString())
 	}`, coll, c, pascal(r.Scope.Field), updateArg)
 	}
-	return fmt.Sprintf(`
+	// The WARNHOOK marker line lets a refresh-time warning ride the resource
+	// Read without a blank line in the resources that warn about nothing.
+	warnHook := ""
+	if r.PostReadWarn != "" {
+		warnHook = "\t" + r.PostReadWarn + "(obj, ds.d)\n"
+	}
+	return strings.Replace(fmt.Sprintf(`
 func (r *%[1]sResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan %[1]sModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -403,6 +412,7 @@ func (r *%[1]sResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if !found { resp.State.RemoveResource(ctx); return }
 	ds := newDiagsink(&resp.Diagnostics)
 	r.read(ctx, obj, &state, ds)
+	WARNHOOK
 	state.ETag = types.StringValue(etag)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -436,7 +446,7 @@ func (r *%[1]sResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 func (r *%[1]sResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importByID(ctx, r.client, %[2]s, %[3]q, req, resp)
 }
-`, c, coll, r.Label, createArg, updateArg, write)
+`, c, coll, r.Label, createArg, updateArg, write), "\tWARNHOOK\n", warnHook, 1)
 }
 
 func crudSingleton(r resModel) string {

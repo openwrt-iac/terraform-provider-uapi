@@ -45,6 +45,14 @@ line). Format follows Keep a Changelog.
   when it does not exist yet (uapi creates it at its first write there). The read
   creates and changes nothing. Needs uapi 3.3.0 or later; reads as null against an
   older server (uapi #287).
+- **`uapi_network_wireguard_peer` warns at refresh when the kernel holds no peer under
+  its public key.** Only when uapi read the kernel and the peer is enabled: an interface
+  that is down answers an empty runtime, which is not the same state and stays silent,
+  and wireguard.sh does not apply a disabled peer. The warning names drift that a manual
+  `wg` command or a failed apply left. A write to the peer or its interface restores the
+  kernel peer, and a no-change apply does not: the warning text says both (#53). Comparing
+  the kernel `allowed_ips` with the configured list stays an idea in the closed issue,
+  which would need wg's normalization of both sides.
 
 ### Fixed
 - Descriptions corrected against the uapi 3.3.0 spec, found by re-reading it after the

@@ -142,6 +142,7 @@ func (r *networkWireguardPeerResource) Read(ctx context.Context, req resource.Re
 	}
 	ds := newDiagsink(&resp.Diagnostics)
 	r.read(ctx, obj, &state, ds)
+	warnWireguardPeerNotInKernel(obj, ds.d)
 	state.ETag = types.StringValue(etag)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
