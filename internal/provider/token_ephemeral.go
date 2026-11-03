@@ -56,7 +56,7 @@ func (e *tokenEphemeral) Schema(_ context.Context, _ ephemeral.SchemaRequest, re
 		Attributes: map[string]ephschema.Attribute{
 			"name": ephschema.StringAttribute{
 				Required:    true,
-				Description: "Token name (matches [A-Za-z0-9_][A-Za-z0-9_-]{0,62}). Doubles as the token id.",
+				Description: "Token name: letters, digits and underscores, 1 to 63 characters; the server refuses a hyphen with 422. Doubles as the token id.",
 			},
 			"scopes": ephschema.ListAttribute{
 				ElementType: types.StringType,
