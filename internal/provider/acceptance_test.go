@@ -559,7 +559,7 @@ resource "uapi_wireless_device" "radio0" {
 }
 
 // A network rule that falls back to main ahead of a VPN table is one section
-// once suppress_prefixlength exists (#42): 0 ignores every connected route the
+// once suppress_prefixlength exists (#42): 0 ignores only the default route the
 // lookup finds. LuCI's other match options ride along (tos, uidrange, ipproto,
 // sport, dport).
 func TestAccNetworkRule_suppressPrefixlength(t *testing.T) {
