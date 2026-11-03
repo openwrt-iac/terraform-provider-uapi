@@ -119,6 +119,7 @@ func (p *uapiProvider) DataSources(_ context.Context) []func() datasource.DataSo
 	return append(generatedDataSources(),
 		NewDHCPLeasesDataSource,
 		NewDHCPLeases6DataSource,
+		NewWireguardKernelPeersDataSource,
 		NewAuthorizedKeyDataSource,
 		NewCronJobDataSource,
 		NewPackageDataSource,

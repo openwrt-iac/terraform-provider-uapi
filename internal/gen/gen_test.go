@@ -85,11 +85,19 @@ func goldenCases() map[string]string {
 		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
 	}
 	rr := buildResource(withRuntime, fixtureProps(), fixtureProps(), []string{"name"})
+	// The wireguard runtime shape, for the peer data source.
+	withWgRuntime := descriptor{
+		Type: "lab_wg", Schema: "LabWgs", Collection: "lab/wgs",
+		Kind: "collection", Label: "lab wg", GenDataSource: true, Runtime: "wireguard",
+		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
+	}
+	wr := buildResource(withWgRuntime, fixtureProps(), fixtureProps(), []string{"name"})
 	return map[string]string{
 		"lab_thing_resource.go.golden":    renderResource(cr),
 		"lab_thing_data_source.go.golden": renderDataSource(cr),
 		"lab_single_resource.go.golden":   renderResource(sr),
 		"lab_radio_data_source.go.golden": renderDataSource(rr),
+		"lab_wg_data_source.go.golden":    renderDataSource(wr),
 	}
 }
 

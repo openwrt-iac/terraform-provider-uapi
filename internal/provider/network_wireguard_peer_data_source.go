@@ -6,9 +6,28 @@ import (
 	"context"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/openwrt-iac/terraform-provider-uapi/internal/client"
 )
+
+type networkWireguardPeerDSModel struct {
+	ID                  types.String               `tfsdk:"id"`
+	Managed             types.Bool                 `tfsdk:"managed"`
+	ETag                types.String               `tfsdk:"etag"`
+	AllowedIps          types.List                 `tfsdk:"allowed_ips"`
+	Description         types.String               `tfsdk:"description"`
+	Disabled            types.Bool                 `tfsdk:"disabled"`
+	EndpointHost        types.String               `tfsdk:"endpoint_host"`
+	EndpointPort        types.Int64                `tfsdk:"endpoint_port"`
+	HasPresharedKey     types.Bool                 `tfsdk:"has_preshared_key"`
+	Interface           types.String               `tfsdk:"interface"`
+	PersistentKeepalive types.Int64                `tfsdk:"persistent_keepalive"`
+	PresharedKey        types.String               `tfsdk:"preshared_key"`
+	PublicKey           types.String               `tfsdk:"public_key"`
+	RouteAllowedIps     types.Bool                 `tfsdk:"route_allowed_ips"`
+	Runtime             *wireguardPeerRuntimeModel `tfsdk:"runtime"`
+}
 
 var (
 	_ datasource.DataSource              = &networkWireguardPeerDataSource{}
@@ -47,17 +66,18 @@ func (d *networkWireguardPeerDataSource) Schema(_ context.Context, _ datasource.
 			"preshared_key":        dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"public_key":           dsComputedString("uci option public_key."),
 			"route_allowed_ips":    dsComputedBool("uci option route_allowed_ips."),
+			"runtime":              wireguardPeerRuntimeAttribute(),
 		},
 	}
 }
 
 func (d *networkWireguardPeerDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var m networkWireguardPeerModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &m)...)
+	var id types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("id"), &id)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	obj, etag, found, err := d.client.GetObject(ctx, "/"+networkWireguardPeerCollection+"/"+m.ID.ValueString())
+	obj, etag, found, err := d.client.GetObject(ctx, "/"+networkWireguardPeerCollection+"/"+id.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading network WireGuard peer", err.Error())
 		return
@@ -66,8 +86,24 @@ func (d *networkWireguardPeerDataSource) Read(ctx context.Context, req datasourc
 		resp.Diagnostics.AddError("network WireGuard peer not found", "not found")
 		return
 	}
+	var base networkWireguardPeerModel
 	ds := newDiagsink(&resp.Diagnostics)
-	(&networkWireguardPeerResource{}).read(ctx, obj, &m, ds)
-	m.ETag = types.StringValue(etag)
+	(&networkWireguardPeerResource{}).read(ctx, obj, &base, ds)
+	base.ETag = types.StringValue(etag)
+	m := networkWireguardPeerDSModel{
+		ID: base.ID, Managed: base.Managed, ETag: base.ETag,
+		AllowedIps:          base.AllowedIps,
+		Description:         base.Description,
+		Disabled:            base.Disabled,
+		EndpointHost:        base.EndpointHost,
+		EndpointPort:        base.EndpointPort,
+		HasPresharedKey:     base.HasPresharedKey,
+		Interface:           base.Interface,
+		PersistentKeepalive: base.PersistentKeepalive,
+		PresharedKey:        base.PresharedKey,
+		PublicKey:           base.PublicKey,
+		RouteAllowedIps:     base.RouteAllowedIps,
+		Runtime:             parseWireguardPeerRuntime(obj),
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
