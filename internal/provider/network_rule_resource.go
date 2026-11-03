@@ -23,20 +23,26 @@ type networkRuleResource struct{ client *client.Client }
 func NewNetworkRuleResource() resource.Resource { return &networkRuleResource{} }
 
 type networkRuleModel struct {
-	ID       types.String `tfsdk:"id"`
-	Managed  types.Bool   `tfsdk:"managed"`
-	ETag     types.String `tfsdk:"etag"`
-	Action   types.String `tfsdk:"action"`
-	Dest     types.String `tfsdk:"dest"`
-	Disabled types.Bool   `tfsdk:"disabled"`
-	Goto     types.Int64  `tfsdk:"goto"`
-	In       types.String `tfsdk:"in"`
-	Invert   types.Bool   `tfsdk:"invert"`
-	Lookup   types.Int64  `tfsdk:"lookup"`
-	Mark     types.String `tfsdk:"mark"`
-	Out      types.String `tfsdk:"out"`
-	Priority types.Int64  `tfsdk:"priority"`
-	Src      types.String `tfsdk:"src"`
+	ID                   types.String `tfsdk:"id"`
+	Managed              types.Bool   `tfsdk:"managed"`
+	ETag                 types.String `tfsdk:"etag"`
+	Action               types.String `tfsdk:"action"`
+	Dest                 types.String `tfsdk:"dest"`
+	Disabled             types.Bool   `tfsdk:"disabled"`
+	Dport                types.String `tfsdk:"dport"`
+	Goto                 types.Int64  `tfsdk:"goto"`
+	In                   types.String `tfsdk:"in"`
+	Invert               types.Bool   `tfsdk:"invert"`
+	Ipproto              types.String `tfsdk:"ipproto"`
+	Lookup               types.Int64  `tfsdk:"lookup"`
+	Mark                 types.String `tfsdk:"mark"`
+	Out                  types.String `tfsdk:"out"`
+	Priority             types.Int64  `tfsdk:"priority"`
+	Sport                types.String `tfsdk:"sport"`
+	Src                  types.String `tfsdk:"src"`
+	SuppressPrefixlength types.Int64  `tfsdk:"suppress_prefixlength"`
+	Tos                  types.Int64  `tfsdk:"tos"`
+	Uidrange             types.String `tfsdk:"uidrange"`
 }
 
 func (r *networkRuleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -51,20 +57,26 @@ func (r *networkRuleResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = schema.Schema{
 		Description: "Network rule.",
 		Attributes: map[string]schema.Attribute{
-			"id":       optionalComputedIDAttribute(),
-			"managed":  managedAttribute(),
-			"etag":     etagAttribute(),
-			"action":   optionalComputedString("uci option action."),
-			"dest":     optionalComputedString("uci option dest."),
-			"disabled": optionalComputedBool("Whether the entry is disabled."),
-			"goto":     optionalComputedInt64("uci option goto."),
-			"in":       optionalComputedString("uci option in."),
-			"invert":   optionalComputedBool("uci option invert."),
-			"lookup":   optionalComputedInt64("uci option lookup."),
-			"mark":     optionalComputedString("uci option mark."),
-			"out":      optionalComputedString("uci option out."),
-			"priority": optionalComputedInt64("uci option priority."),
-			"src":      optionalComputedString("uci option src."),
+			"id":                    optionalComputedIDAttribute(),
+			"managed":               managedAttribute(),
+			"etag":                  etagAttribute(),
+			"action":                optionalComputedString("uci option action."),
+			"dest":                  optionalComputedString("uci option dest."),
+			"disabled":              optionalComputedBool("Whether the entry is disabled."),
+			"dport":                 optionalComputedString("Match this destination port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later."),
+			"goto":                  optionalComputedInt64("uci option goto."),
+			"in":                    optionalComputedString("uci option in."),
+			"invert":                optionalComputedBool("uci option invert."),
+			"ipproto":               optionalComputedString("Match this IP protocol, as an integer from 1 to 255 that LuCI writes, or as the spelling that uci holds, such as a protocol name. A decimal reads as an integer. Needs uapi 3.3.0 or later."),
+			"lookup":                optionalComputedInt64("uci option lookup."),
+			"mark":                  optionalComputedString("uci option mark."),
+			"out":                   optionalComputedString("uci option out."),
+			"priority":              optionalComputedInt64("uci option priority."),
+			"sport":                 optionalComputedString("Match this source port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later."),
+			"src":                   optionalComputedString("uci option src."),
+			"suppress_prefixlength": optionalComputedInt64("Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores every connected route. A rule that looks up `main` with 0, placed ahead of a rule that sends a source subnet to a VPN table, keeps the LAN reachable in one section, which otherwise needs one rule per destination. 0 to 32. Needs uapi 3.3.0 or later."),
+			"tos":                   optionalComputedInt64("Match this TOS value: 0, 4, 8, 12, 16, 20, 24 or 28, as netifd reads an integer. Needs uapi 3.3.0 or later."),
+			"uidrange":              optionalComputedString("Match traffic of local sockets owned by this uid, or by a range such as `1000-1005`, each from 0 to 4294967294. Needs uapi 3.3.0 or later."),
 		},
 	}
 }
@@ -77,14 +89,20 @@ func (r *networkRuleResource) body(ctx context.Context, m networkRuleModel, diag
 	putStr(out, "action", m.Action)
 	putStr(out, "dest", m.Dest)
 	putBool(out, "disabled", m.Disabled)
+	putStr(out, "dport", m.Dport)
 	putInt64(out, "goto", m.Goto)
 	putStr(out, "in", m.In)
 	putBool(out, "invert", m.Invert)
+	putIntOrStr(out, "ipproto", m.Ipproto)
 	putInt64(out, "lookup", m.Lookup)
 	putStr(out, "mark", m.Mark)
 	putStr(out, "out", m.Out)
 	putInt64(out, "priority", m.Priority)
+	putStr(out, "sport", m.Sport)
 	putStr(out, "src", m.Src)
+	putInt64(out, "suppress_prefixlength", m.SuppressPrefixlength)
+	putInt64(out, "tos", m.Tos)
+	putStr(out, "uidrange", m.Uidrange)
 	return out
 }
 
@@ -94,14 +112,20 @@ func (r *networkRuleResource) read(ctx context.Context, obj map[string]any, m *n
 	m.Action = strVal(obj, "action")
 	m.Dest = strVal(obj, "dest")
 	m.Disabled = boolVal(obj, "disabled")
+	m.Dport = strVal(obj, "dport")
 	m.Goto = int64Val(obj, "goto")
 	m.In = strVal(obj, "in")
 	m.Invert = boolVal(obj, "invert")
+	m.Ipproto = strVal(obj, "ipproto")
 	m.Lookup = int64Val(obj, "lookup")
 	m.Mark = strVal(obj, "mark")
 	m.Out = strVal(obj, "out")
 	m.Priority = int64Val(obj, "priority")
+	m.Sport = strVal(obj, "sport")
 	m.Src = strVal(obj, "src")
+	m.SuppressPrefixlength = int64Val(obj, "suppress_prefixlength")
+	m.Tos = int64Val(obj, "tos")
+	m.Uidrange = strVal(obj, "uidrange")
 }
 
 func (r *networkRuleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

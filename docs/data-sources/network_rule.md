@@ -30,13 +30,19 @@ data "uapi_network_rule" "example" {
 - `action` (String) uci option action.
 - `dest` (String) uci option dest.
 - `disabled` (Boolean) Whether the entry is disabled.
+- `dport` (String) Match this destination port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `goto` (Number) uci option goto.
 - `in` (String) uci option in.
 - `invert` (Boolean) uci option invert.
+- `ipproto` (String) Match this IP protocol, as an integer from 1 to 255 that LuCI writes, or as the spelling that uci holds, such as a protocol name. A decimal reads as an integer. Needs uapi 3.3.0 or later.
 - `lookup` (Number) uci option lookup.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `mark` (String) uci option mark.
 - `out` (String) uci option out.
 - `priority` (Number) uci option priority.
+- `sport` (String) Match this source port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later.
 - `src` (String) uci option src.
+- `suppress_prefixlength` (Number) Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores every connected route. A rule that looks up `main` with 0, placed ahead of a rule that sends a source subnet to a VPN table, keeps the LAN reachable in one section, which otherwise needs one rule per destination. 0 to 32. Needs uapi 3.3.0 or later.
+- `tos` (Number) Match this TOS value: 0, 4, 8, 12, 16, 20, 24 or 28, as netifd reads an integer. Needs uapi 3.3.0 or later.
+- `uidrange` (String) Match traffic of local sockets owned by this uid, or by a range such as `1000-1005`, each from 0 to 4294967294. Needs uapi 3.3.0 or later.

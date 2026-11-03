@@ -200,9 +200,17 @@ var descriptors = []descriptor{
 		"target":    "Destination IPv4 address or CIDR for this route.",
 		"interface": "Parent network interface name.",
 	}},
-	{Type: "network_rule", Schema: "NetworkRules", Collection: "network/rules", Kind: "collection", Label: "network rule", GenDataSource: true},
+	{Type: "network_rule", Schema: "NetworkRules", Collection: "network/rules", Kind: "collection", Label: "network rule", GenDataSource: true, IntStr: []string{"ipproto"}, Descs: map[string]string{
+		"suppress_prefixlength": "Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores every connected route. A rule that looks up `main` with 0, placed ahead of a rule that sends a source subnet to a VPN table, keeps the LAN reachable in one section, which otherwise needs one rule per destination. 0 to 32. Needs uapi 3.3.0 or later.",
+		"tos":                   "Match this TOS value: 0, 4, 8, 12, 16, 20, 24 or 28, as netifd reads an integer. Needs uapi 3.3.0 or later.",
+		"uidrange":              "Match traffic of local sockets owned by this uid, or by a range such as `1000-1005`, each from 0 to 4294967294. Needs uapi 3.3.0 or later.",
+		"ipproto":               "Match this IP protocol, as an integer from 1 to 255 that LuCI writes, or as the spelling that uci holds, such as a protocol name. A decimal reads as an integer. Needs uapi 3.3.0 or later.",
+		"sport":                 "Match this source port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later.",
+		"dport":                 "Match this destination port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later.",
+	}},
 	{Type: "network_bridge_vlan", Schema: "NetworkBridgeVlans", Collection: "network/bridge_vlans", Kind: "collection", Label: "network bridge VLAN", GenDataSource: true},
 	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true, Descs: map[string]string{
+		"allowed_ips":          "Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional.",
 		"endpoint_port":        "UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0, and wg then cannot bring the interface up. uapi refuses a write of 0, so an update of such a peer fails until a port is set.",
 		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1, and wg then cannot bring the interface up. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.",
 	}},
@@ -240,6 +248,9 @@ var descriptors = []descriptor{
 		"match_tag": "dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it. Only a tag that dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does. A comma, a double quote, a `#`, a control character or a blank value is refused.",
 	}, SchemaVersion: 1},
 	{Type: "dhcp_server", Schema: "DhcpServers", Collection: "dhcp/servers", Kind: "collection", Label: "dhcp server", GenDataSource: true, Descs: map[string]string{
+		"dhcpv4":      "Whether odhcpd serves DHCPv4: `server`, `disabled`, `relay` or `hybrid`, as odhcpd parses it. LuCI offers only `server` and `disabled`. odhcpd.defaults writes it into the stock `lan`, and it matters only when `maindhcp` sets odhcpd to serve DHCPv4. Reads null when unset. Needs uapi 3.3.0 or later.",
+		"ra_flags":    "Flags of the router advertisements: `managed-config` (clients ask for a DHCPv6 address), `other-config`, `home-agent`, or `none`. The stock `lan` carries `managed-config` and `other-config`, and a PUT that left the field out removed them, so clients that follow the managed flag stopped asking DHCPv6. Unset reads null, which odhcpd takes as `other-config` only, and `none` sets no flag. Needs uapi 3.3.0 or later.",
+		"ra_slaac":    "Whether the router advertisements offer SLAAC addressing. odhcpd.defaults writes it into the stock `lan`, and a PUT that left the field out removed it. Reads true when unset, as odhcpd takes unset. Needs uapi 3.3.0 or later.",
 		"dhcp_option": "DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole, and dnsmasq reads it as one option. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it. uapi 3.2.0 also refuses an entry in which an address is followed by whitespace and another option, such as `3,10.0.0.1 6,10.0.0.1`. A space in a text option, such as `15,my domain`, is valid.",
 	}},
 	{Type: "dhcp_dnsmasq", Schema: "DhcpDnsmasq", Collection: "dhcp/dnsmasq", Kind: "singleton", Label: "dnsmasq settings", GenDataSource: true},

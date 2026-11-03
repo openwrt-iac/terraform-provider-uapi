@@ -3,7 +3,7 @@
 	"info": {
 		"title": "uapi",
 		"version": "3.2.0",
-		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}` (computed; clients ignore for drift detection).\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.interfaces.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: snapshot, validate, commit, reload, restore-on-failure. `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means that the reload action of each init script that ran **exited 0**, and `X-Reload-Status: no_reload` says that none ran, because the write changed nothing in uci. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - no init script ran, because the write changed nothing in uci\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/openwrt-iac/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major, apart from the carve-outs that docs/versioning.md lists. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nThis major accepts both forms for everything below, and v4 removes the old one. The canonical list with migration notes is `docs/deprecations.md`.\n\n- **`network/interfaces.ip6prefix` will stop accepting a space-separated string on write.** Responses are always an array, the list that netifd reads and that LuCI writes for wireguard and 6in4. The string remains valid in a request because the 3.1 spec declared one. v4 drops it and the field becomes array-only in both directions.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/openwrt-iac/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/openwrt-iac/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/openwrt-iac/uapi/tree/main/docs)",
+		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}`: it is read-only and never part of the desired state or of a plan diff. Where it shows what a daemon or the kernel holds beside what uci holds, a client can report the difference.\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.interfaces.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: validate, stage, snapshot, commit, reload, restore-on-failure. A write that leaves uci as it was commits and reloads nothing.  `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means that the reload action of each init script that ran **exited 0**, and `X-Reload-Status: no_reload` says that none ran, because the write changed nothing in uci, or because procd runs none of the daemons that read a `dhcp` write. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - no init script ran, because the write changed nothing in uci or no daemon that reads it runs\n- `X-Reload-Status: unverified` - the write kept its commit, and whether its daemons take the new config is unknown: an init script was still running when uapi stopped waiting for the reloads, 20 s after the first started, or the `dnsmasq --test` check after a dhcp write did not finish within 10 s\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/openwrt-iac/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major, apart from the carve-outs that docs/versioning.md lists. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nThis major accepts both forms for everything below, and v4 removes the old one. The canonical list with migration notes is `docs/deprecations.md`.\n\n- **`network/interfaces.ip6prefix` will stop accepting a space-separated string on write.** Responses are always an array, the list that netifd reads and that LuCI writes for wireguard and 6in4. The string remains valid in a request because the 3.1 spec declared one. v4 drops it and the field becomes array-only in both directions.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/openwrt-iac/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/openwrt-iac/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/openwrt-iac/uapi/tree/main/docs)",
 		"contact": {
 			"name": "uapi",
 			"url": "https://github.com/openwrt-iac/uapi"
@@ -70,7 +70,11 @@
 		},
 		{
 			"name": "Network / Wireguard Peers",
-			"description": "WireGuard peers (dynamic uci type `wireguard_<iface>`); preshared_key write-only."
+			"description": "WireGuard peers (dynamic uci type `wireguard_<iface>`); preshared_key write-only. `runtime` carries what the kernel holds for the peer, from `wg show`."
+		},
+		{
+			"name": "Network / Wireguard Kernel Peers",
+			"description": "Read-only collection of the WireGuard peers the kernel holds that no uci section claims, from `wg show`: drift that no other read reports."
 		},
 		{
 			"name": "Wireless / Devices",
@@ -277,7 +281,8 @@
 				"Network / Routes",
 				"Network / Rules",
 				"Network / Bridge Vlans",
-				"Network / Wireguard Peers"
+				"Network / Wireguard Peers",
+				"Network / Wireguard Kernel Peers"
 			]
 		},
 		{
@@ -532,6 +537,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -717,6 +725,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -824,6 +835,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -993,6 +1007,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -1169,6 +1186,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -1354,6 +1374,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -1461,6 +1484,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -1630,6 +1656,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -1806,6 +1835,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -1991,6 +2023,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -2098,6 +2133,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -2267,6 +2305,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -2443,6 +2484,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -2628,6 +2672,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -2735,6 +2782,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -2904,6 +2954,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -3080,6 +3133,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -3265,6 +3321,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -3372,6 +3431,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -3541,6 +3603,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -3731,6 +3796,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -3899,6 +3967,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -4087,6 +4158,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -4197,6 +4271,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -4369,6 +4446,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -4548,6 +4628,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -4736,6 +4819,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -4846,6 +4932,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -5018,6 +5107,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -5194,6 +5286,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -5379,6 +5474,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -5486,6 +5584,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -5655,6 +5756,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -5831,6 +5935,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -6016,6 +6123,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -6123,6 +6233,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -6292,6 +6405,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -6471,6 +6587,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -6659,6 +6778,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -6769,6 +6891,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -6941,6 +7066,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -7117,6 +7245,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -7302,6 +7433,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -7409,6 +7543,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -7578,6 +7715,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -7593,6 +7733,111 @@
 						},
 						"description": "Equivalent to the `Idempotency-Key` header, which uhttpd's CGI env strips. Replays the cached response for 24 h; the same key with a different body gives 409."
 					}
+				]
+			}
+		},
+		"/network/wireguard_kernel_peers": {
+			"get": {
+				"summary": "List wireguard_kernel_peers (read-only)",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/NetworkWireguardKernelPeersResponse"
+									}
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					}
+				},
+				"tags": [
+					"Network / Wireguard Kernel Peers"
+				]
+			}
+		},
+		"/network/wireguard_kernel_peers/{id}": {
+			"parameters": [
+				{
+					"name": "id",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"get": {
+				"summary": "Get one wireguard_kernel_peers by id",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NetworkWireguardKernelPeersResponse"
+								}
+							}
+						},
+						"headers": {
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						}
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"429": {
+						"$ref": "#/components/responses/TooManyRequests"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/ServiceUnavailable"
+					}
+				},
+				"tags": [
+					"Network / Wireguard Kernel Peers"
 				]
 			}
 		},
@@ -7754,6 +7999,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -7939,6 +8187,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -8046,6 +8297,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -8215,6 +8469,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -8391,6 +8648,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -8576,6 +8836,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -8683,6 +8946,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -8852,6 +9118,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -9028,6 +9297,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -9213,6 +9485,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -9320,6 +9595,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -9489,6 +9767,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -9875,6 +10156,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -10060,6 +10344,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -10167,6 +10454,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -10336,6 +10626,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -10526,6 +10819,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -10705,6 +11001,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -10884,6 +11183,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -11049,6 +11351,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -11234,6 +11539,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -11341,6 +11649,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -11510,6 +11821,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -11686,6 +12000,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -11871,6 +12188,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -11978,6 +12298,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -12147,6 +12470,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -12323,6 +12649,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -12508,6 +12837,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -12615,6 +12947,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -12784,6 +13119,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -12960,6 +13298,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -13145,6 +13486,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -13252,6 +13596,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -13421,6 +13768,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -13611,6 +13961,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -13790,6 +14143,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -13969,6 +14325,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -14134,6 +14493,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -14319,6 +14681,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -14426,6 +14791,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -14595,6 +14963,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -14771,6 +15142,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -14956,6 +15330,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -15063,6 +15440,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -15232,6 +15612,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -15408,6 +15791,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -15593,6 +15979,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -15700,6 +16089,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -15869,6 +16261,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -16045,6 +16440,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -16230,6 +16628,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -16337,6 +16738,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -16506,6 +16910,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -16682,6 +17089,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -16867,6 +17277,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -16974,6 +17387,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -17143,6 +17559,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -17333,6 +17752,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -17512,6 +17934,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -17691,6 +18116,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -17870,6 +18298,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -18049,6 +18480,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -18214,6 +18648,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -18399,6 +18836,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -18506,6 +18946,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -18675,6 +19118,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -18851,6 +19297,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -19036,6 +19485,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -19143,6 +19595,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -19312,6 +19767,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -19488,6 +19946,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -19673,6 +20134,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -19780,6 +20244,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -19949,6 +20416,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -20125,6 +20595,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -20310,6 +20783,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -20417,6 +20893,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -20586,6 +21065,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -20776,6 +21258,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -20941,6 +21426,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -21126,6 +21614,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -21233,6 +21724,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -21402,6 +21896,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -21547,6 +22044,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -21688,6 +22188,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -21754,6 +22257,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -21921,6 +22427,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -22155,6 +22664,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -22335,6 +22847,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -22464,6 +22979,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -22544,6 +23062,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -22733,6 +23254,9 @@
 							},
 							"Idempotent-Replayed": {
 								"$ref": "#/components/headers/IdempotentReplayed"
+							},
+							"X-Reload-Status": {
+								"$ref": "#/components/headers/XReloadStatus"
 							}
 						}
 					},
@@ -22768,6 +23292,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -22857,6 +23384,9 @@
 						"headers": {
 							"X-Request-Id": {
 								"$ref": "#/components/headers/XRequestId"
+							},
+							"X-Reload-Status": {
+								"$ref": "#/components/headers/XReloadStatus"
 							}
 						}
 					},
@@ -23226,6 +23756,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -23535,6 +24068,9 @@
 					},
 					"423": {
 						"$ref": "#/components/responses/Locked"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
 					}
 				},
 				"tags": [
@@ -23580,6 +24116,7 @@
 							"unmanaged_resource",
 							"idempotency_key_conflict",
 							"precondition_failed",
+							"payload_too_large",
 							"unsupported_media_type",
 							"validation_failed",
 							"locked",
@@ -24212,7 +24749,7 @@
 				"properties": {
 					"name": {
 						"type": "string",
-						"pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$"
+						"pattern": "^[A-Za-z0-9_]{1,63}$"
 					},
 					"scopes": {
 						"type": "array",
@@ -24279,6 +24816,7 @@
 					"uptime_seconds",
 					"resources_loaded",
 					"lock_state",
+					"state_dirs",
 					"request_id"
 				],
 				"properties": {
@@ -24311,6 +24849,16 @@
 								}
 							}
 						}
+					},
+					"state_dirs": {
+						"type": "object",
+						"additionalProperties": {
+							"type": [
+								"boolean",
+								"null"
+							]
+						},
+						"description": "Each state directory under /var/run, keyed by its path, as uapi finds it. The read creates and changes nothing. true: a directory owned by the effective uid of the request process, with mode 0700, which uapi uses. false: the path holds anything else, and uapi does not use it as it stands. null: the path does not exist yet, and uapi creates it at its first write there."
 					},
 					"management_path": {
 						"type": "object",
@@ -27107,7 +27655,7 @@
 					"private_key": {
 						"type": "string",
 						"writeOnly": true,
-						"description": "WireGuard private key; accepted on write, masked on read"
+						"description": "WireGuard private key; accepted on write, masked on read. A PATCH or PUT that switches the interface to another proto removes it."
 					},
 					"has_private_key": {
 						"type": "boolean",
@@ -27692,7 +28240,7 @@
 					"private_key": {
 						"type": "string",
 						"writeOnly": true,
-						"description": "WireGuard private key; accepted on write, masked on read"
+						"description": "WireGuard private key; accepted on write, masked on read. A PATCH or PUT that switches the interface to another proto removes it."
 					},
 					"listen_port": {
 						"type": [
@@ -28945,7 +29493,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 32766
+						"maximum": 32766,
+						"description": "Position of the rule: a lower one runs first. Without one, netifd numbers the rule by its place among the rules, from 1 up, which puts it ahead of `main` at 32766. A rule without a selector matches every packet, so with a table that holds a default route it routes all traffic, the management session included. LuCI allows the same."
 					},
 					"lookup": {
 						"type": [
@@ -28989,6 +29538,54 @@
 						],
 						"description": "Match fwmark (value or value/mask)"
 					},
+					"suppress_prefixlength": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": -2147483648,
+						"maximum": 2147483647,
+						"description": "Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores only a default route. A write takes 0 to 32, as LuCI does. A read reports what netifd reads: `0x10` reads 16, and a value that it cannot parse reads null, because netifd ignores it. The kernel takes any other value, -1 as unset and 32 or more as ignoring every IPv4 route, so a stored one reads as it is and a write may send it back unchanged."
+					},
+					"tos": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": -2147483648,
+						"maximum": 2147483647,
+						"description": "Match this TOS value. A write takes 0, 4, 8, 12, 16, 20, 24 or 28: netifd drops a rule whose tos is above 255, and the kernel refuses an IPv4 rule whose tos sets a bit outside 0x1c, so the rule is not installed. 0 matches every packet. A read reports what netifd reads, as for `suppress_prefixlength`, so the 10 that LuCI suggests reads 10."
+					},
+					"uidrange": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Match traffic of local sockets owned by this uid, or by a range of uids such as `1000-1005`, each from 0 to 4294967294. The kernel refuses a range that runs backwards or holds 4294967295, and netifd wraps a larger number. A read reports the stored text, and a write may send back unchanged a form that it refuses, such as `1000-1005x`, which netifd reads as 1000-1005."
+					},
+					"ipproto": {
+						"type": [
+							"integer",
+							"string",
+							"null"
+						],
+						"minimum": 0,
+						"description": "Match this IP protocol. A write takes an integer from 1 to 255, as LuCI writes it: netifd drops a rule whose ipproto is 0, and sends the kernel only the low byte of a larger one. A stored decimal reads as an integer. netifd also takes a number in another spelling, such as `06` or `0x6`, or a name in musl's table, such as `tcp`, where `ip` resolves to 0, which matches every protocol. Those read as the stored text, and a write may send one back unchanged."
+					},
+					"sport": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Match this source port, or a range of ports such as `1000-2000`, each from 1 to 65534. The kernel refuses a range that holds 0 or 65535 or runs backwards, as the `0-65535` that LuCI suggests does, and netifd wraps a larger number. A read reports the stored text, as for `uidrange`."
+					},
+					"dport": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Match this destination port, or a range of ports such as `1000-2000`, each from 1 to 65534. The kernel refuses a range that holds 0 or 65535 or runs backwards, as the `0-65535` that LuCI suggests does, and netifd wraps a larger number. A read reports the stored text, as for `uidrange`."
+					},
 					"disabled": {
 						"type": "boolean",
 						"default": false,
@@ -29000,35 +29597,6 @@
 					}
 				},
 				"allOf": [
-					{
-						"anyOf": [
-							{
-								"required": [
-									"in"
-								]
-							},
-							{
-								"required": [
-									"out"
-								]
-							},
-							{
-								"required": [
-									"src"
-								]
-							},
-							{
-								"required": [
-									"dest"
-								]
-							},
-							{
-								"required": [
-									"mark"
-								]
-							}
-						]
-					},
 					{
 						"if": {
 							"properties": {
@@ -29108,7 +29676,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 32766
+						"maximum": 32766,
+						"description": "Position of the rule: a lower one runs first. Without one, netifd numbers the rule by its place among the rules, from 1 up, which puts it ahead of `main` at 32766. A rule without a selector matches every packet, so with a table that holds a default route it routes all traffic, the management session included. LuCI allows the same."
 					},
 					"lookup": {
 						"type": [
@@ -29152,6 +29721,69 @@
 						],
 						"description": "Match fwmark (value or value/mask)"
 					},
+					"suppress_prefixlength": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 32,
+						"description": "Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores only a default route. A write takes 0 to 32, as LuCI does. A read reports what netifd reads: `0x10` reads 16, and a value that it cannot parse reads null, because netifd ignores it. The kernel takes any other value, -1 as unset and 32 or more as ignoring every IPv4 route, so a stored one reads as it is and a write may send it back unchanged."
+					},
+					"tos": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": -2147483648,
+						"maximum": 2147483647,
+						"description": "Match this TOS value. A write takes 0, 4, 8, 12, 16, 20, 24 or 28: netifd drops a rule whose tos is above 255, and the kernel refuses an IPv4 rule whose tos sets a bit outside 0x1c, so the rule is not installed. 0 matches every packet. A read reports what netifd reads, as for `suppress_prefixlength`, so the 10 that LuCI suggests reads 10.",
+						"enum": [
+							null,
+							0,
+							4,
+							8,
+							12,
+							16,
+							20,
+							24,
+							28
+						]
+					},
+					"uidrange": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Match traffic of local sockets owned by this uid, or by a range of uids such as `1000-1005`, each from 0 to 4294967294. The kernel refuses a range that runs backwards or holds 4294967295, and netifd wraps a larger number. A read reports the stored text, and a write may send back unchanged a form that it refuses, such as `1000-1005x`, which netifd reads as 1000-1005.",
+						"pattern": "^[0-9]{1,10}(-[0-9]{1,10})?$"
+					},
+					"ipproto": {
+						"type": [
+							"integer",
+							"string",
+							"null"
+						],
+						"minimum": 1,
+						"description": "Match this IP protocol. A write takes an integer from 1 to 255, as LuCI writes it: netifd drops a rule whose ipproto is 0, and sends the kernel only the low byte of a larger one. A stored decimal reads as an integer. netifd also takes a number in another spelling, such as `06` or `0x6`, or a name in musl's table, such as `tcp`, where `ip` resolves to 0, which matches every protocol. Those read as the stored text, and a write may send one back unchanged.",
+						"maximum": 255
+					},
+					"sport": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Match this source port, or a range of ports such as `1000-2000`, each from 1 to 65534. The kernel refuses a range that holds 0 or 65535 or runs backwards, as the `0-65535` that LuCI suggests does, and netifd wraps a larger number. A read reports the stored text, as for `uidrange`.",
+						"pattern": "^[0-9]{1,5}(-[0-9]{1,5})?$"
+					},
+					"dport": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Match this destination port, or a range of ports such as `1000-2000`, each from 1 to 65534. The kernel refuses a range that holds 0 or 65535 or runs backwards, as the `0-65535` that LuCI suggests does, and netifd wraps a larger number. A read reports the stored text, as for `uidrange`.",
+						"pattern": "^[0-9]{1,5}(-[0-9]{1,5})?$"
+					},
 					"disabled": {
 						"type": "boolean",
 						"default": false,
@@ -29159,35 +29791,6 @@
 					}
 				},
 				"allOf": [
-					{
-						"anyOf": [
-							{
-								"required": [
-									"in"
-								]
-							},
-							{
-								"required": [
-									"out"
-								]
-							},
-							{
-								"required": [
-									"src"
-								]
-							},
-							{
-								"required": [
-									"dest"
-								]
-							},
-							{
-								"required": [
-									"mark"
-								]
-							}
-						]
-					},
 					{
 						"if": {
 							"properties": {
@@ -29306,6 +29909,63 @@
 							"string",
 							"null"
 						]
+					},
+					"suppress_prefixlength": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"maximum": 32
+					},
+					"tos": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": -2147483648,
+						"maximum": 2147483647,
+						"enum": [
+							null,
+							0,
+							4,
+							8,
+							12,
+							16,
+							20,
+							24,
+							28
+						]
+					},
+					"uidrange": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9]{1,10}(-[0-9]{1,10})?$"
+					},
+					"ipproto": {
+						"type": [
+							"integer",
+							"string",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 255
+					},
+					"sport": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9]{1,5}(-[0-9]{1,5})?$"
+					},
+					"dport": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[0-9]{1,5}(-[0-9]{1,5})?$"
 					},
 					"disabled": {
 						"type": [
@@ -29479,7 +30139,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host"
+						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host. A read gives the entries as wg gets them: wireguard.sh joins a list with spaces, leaving out an empty entry, makes each space a comma, and expands the backslash escapes of printf %b, and wg cuts the line at a NUL byte and at `#` and splits it at commas. So `10.0.0.0/8\\054192.168.0.0/16` reads as two entries, and so does a comma, while two prefixes that a tab separates read as one entry, and a space at either end or next to another adds an empty entry, and wg refuses the config for either, so the interface does not come up. A value that the escapes would give a second line, the end of the config or a byte that is not printable ASCII, or that holds a backslash and is longer than 512 bytes, reads unexpanded. A value that wg reads as an empty line, such as one that starts with `#`, reads as one empty entry, because wireguard.sh still writes the line and wg refuses it. The routes of `route_allowed_ips` go to each word of the value as stored, before the escapes, with the address before the first `/` of the word and the length after its last, read as netifd reads it. Each entry that a write leaves on an enabled peer must be an address or CIDR, and a write that leaves the peer disabled checks only the entries that it sends. A stored entry that starts with `+` or `-` marks an incremental update to wg, which adds the prefixes of the whole list to what the peer already holds instead of replacing them, and refuses the command for one marked `-`, in `wg set` as in the `wg syncconf` of an ifup. A write refuses such an entry wherever it leaves the peer enabled, because it is not an address or CIDR, and the kernel apply and the restore refuse a peer that stores one."
 					},
 					"endpoint_host": {
 						"type": [
@@ -29518,6 +30178,63 @@
 					},
 					"runtime": {
 						"type": "object",
+						"description": "What the kernel holds for the peer, read-only. It is never part of the desired state or of a plan diff: it shows what the kernel holds beside the fields that uci holds, so that a client can report the difference, which a peer that `wg` changed by hand or a failed apply leaves. uapi compares nothing and corrects nothing. A GET reads it with one `wg show <interface> dump` for each interface of the peers that it reads. A write answers {} and reads no kernel state: read in a write, it would come from before the kernel apply, and `X-Kernel-Status` says whether the apply landed. A GET in a `/batch` that writes answers {} too, since it runs before the apply of the batch. Also {} when uapi did not read the kernel, because netifd does not report the interface up, wg fails, or wg prints a dump in a shape that uapi does not read, so that a failed read never looks like a missing peer. Also {} when the stored `public_key` gives wg more than a key through the escapes of printf %b, a second line or the end of the config, or holds a backslash and is longer than 512 bytes, which uapi does not expand: uapi then does not match the value to a peer of the kernel.",
+						"properties": {
+							"in_kernel": {
+								"type": "boolean",
+								"description": "The kernel holds a peer under the key that wg reads from the stored `public_key`, which wireguard.sh gives wg through printf %b. false for a stored value that is not a key. The other fields are null when this is false. Two peers of an interface that store the same key share the one peer of the kernel, and both report it, a disabled one included."
+							},
+							"endpoint": {
+								"type": [
+									"string",
+									"null"
+								],
+								"description": "The endpoint of the peer in the kernel, as an address and a port, such as `192.0.2.1:51820` or `[2001:db8::1]:51820`. wg resolves a host name when it sets the peer, and the kernel moves the endpoint to the address that an authenticated packet of the peer comes from, so this can differ from `endpoint_host` and `endpoint_port` with no write: a peer without `endpoint_host` reads the address that it last sent from. null when the kernel holds no endpoint for the peer."
+							},
+							"allowed_ips": {
+								"type": [
+									"array",
+									"null"
+								],
+								"items": {
+									"type": "string"
+								},
+								"description": "The allowed IPs of the peer in the kernel, in the form that the kernel prints: an address and a prefix length, with the host bits cleared and an IPv6 address in its short lower-case form, so a stored `10.0.0.2` reads `10.0.0.2/32`, `10.0.0.5/24` reads `10.0.0.0/24` and `FD00:0::1/64` reads `fd00::/64`. A write takes host bits and any IPv6 spelling, so a client compares the two in that form. Empty when the kernel holds none for the peer."
+							},
+							"persistent_keepalive": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0,
+								"maximum": 65535,
+								"description": "The keepalive interval of the peer in the kernel, in seconds, 0 when it is off."
+							},
+							"latest_handshake": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0,
+								"description": "The time of the latest handshake with the peer, in seconds since the epoch, 0 when there was none."
+							},
+							"rx_bytes": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0,
+								"description": "Bytes that the kernel received from the peer since it added the peer."
+							},
+							"tx_bytes": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0,
+								"description": "Bytes that the kernel sent to the peer since it added the peer."
+							}
+						},
 						"readOnly": true
 					},
 					"preshared_key": {
@@ -29568,7 +30285,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host"
+						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host. A read gives the entries as wg gets them: wireguard.sh joins a list with spaces, leaving out an empty entry, makes each space a comma, and expands the backslash escapes of printf %b, and wg cuts the line at a NUL byte and at `#` and splits it at commas. So `10.0.0.0/8\\054192.168.0.0/16` reads as two entries, and so does a comma, while two prefixes that a tab separates read as one entry, and a space at either end or next to another adds an empty entry, and wg refuses the config for either, so the interface does not come up. A value that the escapes would give a second line, the end of the config or a byte that is not printable ASCII, or that holds a backslash and is longer than 512 bytes, reads unexpanded. A value that wg reads as an empty line, such as one that starts with `#`, reads as one empty entry, because wireguard.sh still writes the line and wg refuses it. The routes of `route_allowed_ips` go to each word of the value as stored, before the escapes, with the address before the first `/` of the word and the length after its last, read as netifd reads it. Each entry that a write leaves on an enabled peer must be an address or CIDR, and a write that leaves the peer disabled checks only the entries that it sends. A stored entry that starts with `+` or `-` marks an incremental update to wg, which adds the prefixes of the whole list to what the peer already holds instead of replacing them, and refuses the command for one marked `-`, in `wg set` as in the `wg syncconf` of an ifup. A write refuses such an entry wherever it leaves the peer enabled, because it is not an address or CIDR, and the kernel apply and the restore refuse a peer that stores one."
 					},
 					"endpoint_host": {
 						"type": [
@@ -29614,8 +30331,7 @@
 				},
 				"required": [
 					"interface",
-					"public_key",
-					"allowed_ips"
+					"public_key"
 				]
 			},
 			"NetworkWireguardPeersPatch": {
@@ -29689,6 +30405,59 @@
 						"type": "string",
 						"writeOnly": true,
 						"pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$"
+					}
+				}
+			},
+			"NetworkWireguardKernelPeersResponse": {
+				"type": "object",
+				"description": "uapi resource backed by uci network.wireguard_kernel_peer",
+				"properties": {
+					"id": {
+						"type": "string",
+						"description": "Stable id of the peer on its interface: the first 12 hex characters of the sha256 of the interface name and the public key, so a client tells one entry from another across reads"
+					},
+					"interface": {
+						"type": "string",
+						"description": "The interface that holds the peer, up and with proto=wireguard"
+					},
+					"public_key": {
+						"type": "string",
+						"description": "The public key that the kernel holds the peer under, as wg prints it"
+					},
+					"endpoint": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The endpoint of the peer in the kernel, as an address and a port, such as `192.0.2.1:51820` or `[2001:db8::1]:51820`. null when the kernel holds no endpoint for the peer."
+					},
+					"allowed_ips": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The allowed IPs of the peer in the kernel, in the form that the kernel prints, with the host bits cleared and an IPv6 address in its short lower-case form. Empty when the kernel holds none for the peer."
+					},
+					"persistent_keepalive": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 65535,
+						"description": "The keepalive interval of the peer in the kernel, in seconds, 0 when it is off."
+					},
+					"latest_handshake": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "The time of the latest handshake with the peer, in seconds since the epoch, 0 when there was none."
+					},
+					"rx_bytes": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Bytes that the kernel received from the peer since it added the peer."
+					},
+					"tx_bytes": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Bytes that the kernel sent to the peer since it added the peer."
 					}
 				}
 			},
@@ -31129,7 +31898,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "MAC addresses for this reservation, the whole uci `list mac`."
+						"description": "MAC addresses for this reservation, the whole uci `list mac`. dnsmasq.init splits the entries into words, and a read gives those words. An octet can be `*`, which dnsmasq matches against any value, as in `00:11:22:33:44:*`. odhcpd skips the whole host when it cannot parse one of its MACs, as it cannot parse one with `*`, so it then gives this host no lease, not even for its duid."
 					},
 					"duid": {
 						"type": [
@@ -31167,7 +31936,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). A stored `option tag 'a b'` reads back as an array, because dnsmasq word-splits it the same way. A comma, a double quote, a `#` or a control character is refused."
+						"description": "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). dnsmasq.init joins a list with spaces and splits the tags into words, and a read gives those words, so a stored `option tag 'a b'` and a list entry `a b` both read as two tags. A comma, a double quote, a `#` or a control character is refused."
 					},
 					"match_tag": {
 						"type": [
@@ -31244,7 +32013,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "MAC addresses for this reservation, the whole uci `list mac`."
+						"description": "MAC addresses for this reservation, the whole uci `list mac`. dnsmasq.init splits the entries into words, and a read gives those words. An octet can be `*`, which dnsmasq matches against any value, as in `00:11:22:33:44:*`. odhcpd skips the whole host when it cannot parse one of its MACs, as it cannot parse one with `*`, so it then gives this host no lease, not even for its duid."
 					},
 					"duid": {
 						"type": [
@@ -31282,7 +32051,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). A stored `option tag 'a b'` reads back as an array, because dnsmasq word-splits it the same way. A comma, a double quote, a `#` or a control character is refused."
+						"description": "dnsmasq tags set on a request this reservation matches, for other options to match on (LuCI's Set Tag). dnsmasq.init joins a list with spaces and splits the tags into words, and a read gives those words, so a stored `option tag 'a b'` and a list entry `a b` both read as two tags. A comma, a double quote, a `#` or a control character is refused."
 					},
 					"match_tag": {
 						"type": [
@@ -31582,7 +32351,42 @@
 						],
 						"minimum": 0,
 						"maximum": 2,
-						"description": "0 default, 1 deprecate prefix, 2 advertise as router"
+						"description": "When odhcpd announces this device as default router in its router advertisements. 0 or null, when the router has an IPv6 default route and the interface a global prefix. 1, when the interface has a prefix, a ULA one included. 2, always."
+					},
+					"dhcpv4": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"disabled",
+							"server",
+							"relay",
+							"hybrid",
+							null
+						],
+						"description": "DHCPv4 service on this interface. LuCI offers `disabled` and `server`. dnsmasq serves on every value but `disabled`. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes null as `disabled`."
+					},
+					"ra_flags": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"enum": [
+								"managed-config",
+								"other-config",
+								"home-agent",
+								"none"
+							]
+						},
+						"description": "Flags that odhcpd sets in the router advertisements of this interface. Without the option, odhcpd sets only `other-config` (O). `managed-config` (M) tells clients to ask DHCPv6 for an address. `none` sets no flag, and LuCI writes it when no flag is selected. A read gives the flags that odhcpd sets: uci passes it the words of an option split at spaces and tabs, or each list entry whole, and odhcpd stops at the first word that is no flag name and keeps the flags before it. When it sets none, such as for an option of spaces, the read gives `none`. null or `[]` removes the option, which gives `other-config`. odhcpd also sets `managed-config` when `dhcpv6_pd_preferred`, which uapi does not model, is set with DHCPv6 prefix delegation."
+					},
+					"ra_slaac": {
+						"type": "boolean",
+						"default": true,
+						"description": "Whether odhcpd sets the autonomous flag on the prefixes of its router advertisements, so that clients configure their addresses with SLAAC. odhcpd reads only `1`, `true`, `0` and `false`, and takes true for any other value."
 					},
 					"domain": {
 						"type": [
@@ -31599,7 +32403,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "DHCP options that dnsmasq sends on this interface, one option per entry, in the form of a dnsmasq `dhcp-option` without its tag, such as `3,192.168.1.1`, `option:dns-server,192.168.1.1,192.168.1.2` or `15,\"my domain\"`. dnsmasq.init passes each entry to dnsmasq whole, so dnsmasq reads it as one option. An entry answers 422 `invalid_format` when, outside a quoted string, a field that reads as an address, such as `10.0.0.1`, `10.0.0.0/8` or `[::]`, is followed by whitespace and then by what starts a `dhcp-option` value: a number and a comma, `option:`, `option6:`, `tag:`, `net:`, `set:`, `vendor:`, `encap:` or `vi-encap:`, as in `3,10.0.0.1 6,10.0.0.1`. After the reload, uapi runs `dnsmasq --test` on the config that dnsmasq.init wrote for each instance, and a write whose config dnsmasq refuses to parse answers 500 `reload_failed_restored` and restores the previous list, or 500 `reload_failed_unrecovered` when dnsmasq refused the previous config too. dnsmasq refuses a value such as `3,not-an-address` in a section that it reads, which is one that is not ignored, on an interface that is up and static."
+						"description": "DHCP options that dnsmasq sends on this interface, one option per entry, in the form of a dnsmasq `dhcp-option` without its tag, such as `3,192.168.1.1`, `option:dns-server,192.168.1.1,192.168.1.2` or `15,\"my domain\"`. dnsmasq.init passes each entry to dnsmasq whole, so dnsmasq reads it as one option. An entry answers 422 `invalid_format` when, outside a quoted string, a field that reads as an address, such as `10.0.0.1`, `10.0.0.0/8` or `[::]`, is followed by whitespace and then by what starts a `dhcp-option` value: a number and a comma, `option:`, `option6:`, `tag:`, `net:`, `set:`, `vendor:`, `encap:` or `vi-encap:`, as in `3,10.0.0.1 6,10.0.0.1`. While procd runs dnsmasq, uapi reloads it and then runs `dnsmasq --test` on the config that dnsmasq.init wrote for each instance, and a write whose config dnsmasq refuses to parse answers 500 `reload_failed_restored` and restores the previous list, or 500 `reload_failed_unrecovered` when dnsmasq refused the previous config too. A `--test` that does not finish within 10 s is killed, and the write keeps the list and answers `X-Reload-Status: unverified`. dnsmasq refuses a value such as `3,not-an-address` in a section that it reads, which is one that is not ignored, on an interface that is up and static."
 					},
 					"runtime": {
 						"type": "object",
@@ -31706,7 +32510,42 @@
 						],
 						"minimum": 0,
 						"maximum": 2,
-						"description": "0 default, 1 deprecate prefix, 2 advertise as router"
+						"description": "When odhcpd announces this device as default router in its router advertisements. 0 or null, when the router has an IPv6 default route and the interface a global prefix. 1, when the interface has a prefix, a ULA one included. 2, always."
+					},
+					"dhcpv4": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"disabled",
+							"server",
+							"relay",
+							"hybrid",
+							null
+						],
+						"description": "DHCPv4 service on this interface. LuCI offers `disabled` and `server`. dnsmasq serves on every value but `disabled`. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes null as `disabled`."
+					},
+					"ra_flags": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"enum": [
+								"managed-config",
+								"other-config",
+								"home-agent",
+								"none"
+							]
+						},
+						"description": "Flags that odhcpd sets in the router advertisements of this interface. Without the option, odhcpd sets only `other-config` (O). `managed-config` (M) tells clients to ask DHCPv6 for an address. `none` sets no flag, and LuCI writes it when no flag is selected. A read gives the flags that odhcpd sets: uci passes it the words of an option split at spaces and tabs, or each list entry whole, and odhcpd stops at the first word that is no flag name and keeps the flags before it. When it sets none, such as for an option of spaces, the read gives `none`. null or `[]` removes the option, which gives `other-config`. odhcpd also sets `managed-config` when `dhcpv6_pd_preferred`, which uapi does not model, is set with DHCPv6 prefix delegation."
+					},
+					"ra_slaac": {
+						"type": "boolean",
+						"default": true,
+						"description": "Whether odhcpd sets the autonomous flag on the prefixes of its router advertisements, so that clients configure their addresses with SLAAC. odhcpd reads only `1`, `true`, `0` and `false`, and takes true for any other value."
 					},
 					"domain": {
 						"type": [
@@ -31725,7 +32564,7 @@
 							"type": "string",
 							"pattern": "^#*((\"([^\"\\\\\n\r]|\\\\[^\n\r])*\")?([^\"\n\r \t#]#*|[ \t]))*(\"([^\"\\\\\n\r]|\\\\[^\n\r])*\")?$"
 						},
-						"description": "DHCP options that dnsmasq sends on this interface, one option per entry, in the form of a dnsmasq `dhcp-option` without its tag, such as `3,192.168.1.1`, `option:dns-server,192.168.1.1,192.168.1.2` or `15,\"my domain\"`. dnsmasq.init passes each entry to dnsmasq whole, so dnsmasq reads it as one option. An entry answers 422 `invalid_format` when, outside a quoted string, a field that reads as an address, such as `10.0.0.1`, `10.0.0.0/8` or `[::]`, is followed by whitespace and then by what starts a `dhcp-option` value: a number and a comma, `option:`, `option6:`, `tag:`, `net:`, `set:`, `vendor:`, `encap:` or `vi-encap:`, as in `3,10.0.0.1 6,10.0.0.1`. After the reload, uapi runs `dnsmasq --test` on the config that dnsmasq.init wrote for each instance, and a write whose config dnsmasq refuses to parse answers 500 `reload_failed_restored` and restores the previous list, or 500 `reload_failed_unrecovered` when dnsmasq refused the previous config too. dnsmasq refuses a value such as `3,not-an-address` in a section that it reads, which is one that is not ignored, on an interface that is up and static."
+						"description": "DHCP options that dnsmasq sends on this interface, one option per entry, in the form of a dnsmasq `dhcp-option` without its tag, such as `3,192.168.1.1`, `option:dns-server,192.168.1.1,192.168.1.2` or `15,\"my domain\"`. dnsmasq.init passes each entry to dnsmasq whole, so dnsmasq reads it as one option. An entry answers 422 `invalid_format` when, outside a quoted string, a field that reads as an address, such as `10.0.0.1`, `10.0.0.0/8` or `[::]`, is followed by whitespace and then by what starts a `dhcp-option` value: a number and a comma, `option:`, `option6:`, `tag:`, `net:`, `set:`, `vendor:`, `encap:` or `vi-encap:`, as in `3,10.0.0.1 6,10.0.0.1`. While procd runs dnsmasq, uapi reloads it and then runs `dnsmasq --test` on the config that dnsmasq.init wrote for each instance, and a write whose config dnsmasq refuses to parse answers 500 `reload_failed_restored` and restores the previous list, or 500 `reload_failed_unrecovered` when dnsmasq refused the previous config too. A `--test` that does not finish within 10 s is killed, and the write keeps the list and answers `X-Reload-Status: unverified`. dnsmasq refuses a value such as `3,not-an-address` in a section that it reads, which is one that is not ignored, on an interface that is up and static."
 					}
 				},
 				"required": [
@@ -31820,6 +32659,40 @@
 						],
 						"minimum": 0,
 						"maximum": 2
+					},
+					"dhcpv4": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"disabled",
+							"server",
+							"relay",
+							"hybrid",
+							null
+						]
+					},
+					"ra_flags": {
+						"type": [
+							"array",
+							"null"
+						],
+						"items": {
+							"type": "string",
+							"enum": [
+								"managed-config",
+								"other-config",
+								"home-agent",
+								"none"
+							]
+						}
+					},
+					"ra_slaac": {
+						"type": [
+							"boolean",
+							"null"
+						]
 					},
 					"domain": {
 						"type": [
@@ -31934,7 +32807,8 @@
 						],
 						"items": {
 							"type": "string"
-						}
+						},
+						"description": "Upstream DNS servers, each a dnsmasq `server`, the uci `list server`. dnsmasq.init passes only the entries of a list, so a stored `option server`, which dnsmasq ignores, reads as null. A write that sends a list stores the list in its place."
 					},
 					"address": {
 						"type": [
@@ -31943,7 +32817,8 @@
 						],
 						"items": {
 							"type": "string"
-						}
+						},
+						"description": "Fixed answers, each a dnsmasq `address`, such as `/example.lan/192.0.2.1`, the uci `list address`. dnsmasq.init passes only the entries of a list, so a stored `option address`, which dnsmasq ignores, reads as null. A write that sends a list stores the list in its place."
 					},
 					"nonwildcard": {
 						"type": "boolean",
@@ -32050,7 +32925,8 @@
 						"items": {
 							"type": "string",
 							"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
-						}
+						},
+						"description": "Upstream DNS servers, each a dnsmasq `server`, the uci `list server`. dnsmasq.init passes only the entries of a list, so a stored `option server`, which dnsmasq ignores, reads as null. A write that sends a list stores the list in its place."
 					},
 					"address": {
 						"type": [
@@ -32060,7 +32936,8 @@
 						"items": {
 							"type": "string",
 							"pattern": "^#*([^\"\n\r \t#]#*|[ \t])*$"
-						}
+						},
+						"description": "Fixed answers, each a dnsmasq `address`, such as `/example.lan/192.0.2.1`, the uci `list address`. dnsmasq.init passes only the entries of a list, so a stored `option address`, which dnsmasq ignores, reads as null. A write that sends a list stores the list in its place."
 					},
 					"nonwildcard": {
 						"type": "boolean",
@@ -32215,7 +33092,7 @@
 					"maindhcp": {
 						"type": "boolean",
 						"default": false,
-						"description": "Use odhcpd as the IPv4 DHCP server too"
+						"description": "Use odhcpd as the DHCPv4 server in place of dnsmasq. A read gives true only for `1` in the section named `odhcpd`, as dnsmasq.init reads it: dnsmasq stops serving DHCPv4 for a number above 0 there, while odhcpd is installed, unless odhcpd is disabled and dnsmasq has DHCPv6 support. odhcpd takes `1` and `true` from any `config odhcpd` section, and for any other value or no option keeps the value that it has, which is false after a start, because a reload does not reset it. So a stored `true` reads false while odhcpd and dnsmasq both serve DHCPv4, and a stored `2` reads false while dnsmasq stops and odhcpd serves only if it did before. A write of true stores `1` and a write of false stores `0`, also when the read already gives that value, so a write that sends the field makes both daemons agree. null removes the option, and odhcpd then keeps its value until it restarts. In a section that is not named `odhcpd`, a read gives false, and a write of true stores `1` and still reads false. LuCI shows any value other than `1` unchecked, and removes the option when it saves the form."
 					},
 					"leasefile": {
 						"type": [
@@ -32259,7 +33136,7 @@
 					"maindhcp": {
 						"type": "boolean",
 						"default": false,
-						"description": "Use odhcpd as the IPv4 DHCP server too"
+						"description": "Use odhcpd as the DHCPv4 server in place of dnsmasq. A read gives true only for `1` in the section named `odhcpd`, as dnsmasq.init reads it: dnsmasq stops serving DHCPv4 for a number above 0 there, while odhcpd is installed, unless odhcpd is disabled and dnsmasq has DHCPv6 support. odhcpd takes `1` and `true` from any `config odhcpd` section, and for any other value or no option keeps the value that it has, which is false after a start, because a reload does not reset it. So a stored `true` reads false while odhcpd and dnsmasq both serve DHCPv4, and a stored `2` reads false while dnsmasq stops and odhcpd serves only if it did before. A write of true stores `1` and a write of false stores `0`, also when the read already gives that value, so a write that sends the field makes both daemons agree. null removes the option, and odhcpd then keeps its value until it restarts. In a section that is not named `odhcpd`, a read gives false, and a write of true stores `1` and still reads false. LuCI shows any value other than `1` unchecked, and removes the option when it saves the form."
 					},
 					"leasefile": {
 						"type": [
@@ -38931,17 +39808,18 @@
 				}
 			},
 			"XReloadStatus": {
-				"description": "Outcome of the post-commit daemon reload. `ok` = init script exited 0 (NOT a runtime-convergence promise, see docs/operations.md). `no_reload` = no init script ran, because the write changed nothing in uci, such as a PATCH that names no field or sends the values that uci holds, or because the resource has no reload services, which no shipped resource is. Present on curated-resource writes and the `POST /batch` 207, where it covers the services of the packages that the batch changed. Raw passthrough and the non-uci writes return no reload headers.",
+				"description": "Outcome of the post-commit daemon reload. `ok` = init script exited 0 (NOT a runtime-convergence promise, see docs/operations.md). `no_reload` = no init script ran, because the write changed nothing in uci, such as a PATCH that names no field, or a PUT or a PATCH that sends the values that uci holds, or because procd runs none of the daemons that read the write. Only a `dhcp` write meets the second case: dnsmasq, odhcpd and unbound are each reloaded only while procd runs them. `unverified` = the write keeps its commit, and whether its daemons take the new config is unknown. Either an init script was still running when uapi stopped waiting for the reloads of the request, 20 s after the first started, and uapi did not kill it, so it and the reloads after it run on. Or every init script exited 0, but the `dnsmasq --test` check that follows a dhcp write did not finish: it was killed after 10 s, or by another SIGKILL. Present on curated-resource writes and the `POST /batch` 207, where it covers the services of the packages that the batch changed. A `system/cron_jobs` write answers it alone, as `unverified`, when its reload of cron was still running, and syslog then holds the note. Raw passthrough and the other non-uci writes return no reload headers.",
 				"schema": {
 					"type": "string",
 					"enum": [
 						"ok",
-						"no_reload"
+						"no_reload",
+						"unverified"
 					]
 				}
 			},
 			"XReloadServices": {
-				"description": "Comma-separated list of init scripts that were reloaded after the write committed. A daemon that reads the config but that the router can lack, or that the operator stopped, is reloaded and listed only while procd runs it: a `dhcp/servers` or `dhcp/hosts` write answers `dnsmasq,odhcpd`, or `dnsmasq` when odhcpd does not run. The `POST /batch` 207 lists its services sorted. Absent when X-Reload-Status: no_reload, and absent wherever X-Reload-Status itself is.",
+				"description": "Comma-separated list of init scripts that were reloaded after the write committed, in the order in which they ran. With `unverified`, one of them can still be running, and those after it run when it ends, unless it fails. A daemon that reads the config but that the router can lack, or that the operator stopped, is reloaded and listed only while procd runs it: a `dhcp/servers` or `dhcp/hosts` write answers `dnsmasq,odhcpd,unbound`, and leaves out each of them that does not run. A `system` write answers `system,log,dnsmasq,odhcpd,unbound`, and a `network` write `network,odhcpd`, in the same way. The `POST /batch` 207 lists its services sorted. Present when X-Reload-Status is `ok` or `unverified`, absent when it is `no_reload`, and absent wherever X-Reload-Status itself is.",
 				"schema": {
 					"type": "string",
 					"example": "firewall,dnsmasq"
@@ -39037,6 +39915,16 @@
 			},
 			"PreconditionFailed": {
 				"description": "A precondition failed: If-Match did not match the current ETag, If-None-Match matched it (or was `*` against an existing resource), or a JSON-Patch test op failed. Preconditions are evaluated before the transaction runs, so a 412 means nothing was written",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/ErrorEnvelope"
+						}
+					}
+				}
+			},
+			"PayloadTooLarge": {
+				"description": "The request body is over 262144 bytes (256 KiB), its Content-Length is not a whole number from 0 to 262144, or it holds more than 2000 `{` and `[` characters. Checked before the bearer check (code: payload_too_large)",
 				"content": {
 					"application/json": {
 						"schema": {

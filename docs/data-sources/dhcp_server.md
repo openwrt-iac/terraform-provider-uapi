@@ -28,6 +28,7 @@ data "uapi_dhcp_server" "example" {
 ### Read-Only
 
 - `dhcp_option` (List of String) DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole, and dnsmasq reads it as one option. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it. uapi 3.2.0 also refuses an entry in which an address is followed by whitespace and another option, such as `3,10.0.0.1 6,10.0.0.1`. A space in a text option, such as `15,my domain`, is valid.
+- `dhcpv4` (String) Whether odhcpd serves DHCPv4: `server`, `disabled`, `relay` or `hybrid`, as odhcpd parses it. LuCI offers only `server` and `disabled`. odhcpd.defaults writes it into the stock `lan`, and it matters only when `maindhcp` sets odhcpd to serve DHCPv4. Reads null when unset. Needs uapi 3.3.0 or later.
 - `dhcpv6` (String) uci option dhcpv6.
 - `domain` (String) uci option domain.
 - `dynamicdhcp` (Boolean) uci option dynamicdhcp.
@@ -40,4 +41,6 @@ data "uapi_dhcp_server" "example" {
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `ra` (String) uci option ra.
 - `ra_default` (Number) uci option ra_default.
+- `ra_flags` (List of String) Flags of the router advertisements: `managed-config` (clients ask for a DHCPv6 address), `other-config`, `home-agent`, or `none`. The stock `lan` carries `managed-config` and `other-config`, and a PUT that left the field out removed them, so clients that follow the managed flag stopped asking DHCPv6. Unset reads null, which odhcpd takes as `other-config` only, and `none` sets no flag. Needs uapi 3.3.0 or later.
+- `ra_slaac` (Boolean) Whether the router advertisements offer SLAAC addressing. odhcpd.defaults writes it into the stock `lan`, and a PUT that left the field out removed it. Reads true when unset, as odhcpd takes unset. Needs uapi 3.3.0 or later.
 - `start` (Number) uci option start.
