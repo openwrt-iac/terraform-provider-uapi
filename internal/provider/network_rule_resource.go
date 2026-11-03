@@ -74,7 +74,7 @@ func (r *networkRuleResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"priority":              optionalComputedInt64("uci option priority."),
 			"sport":                 optionalComputedString("Match this source port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later."),
 			"src":                   optionalComputedString("uci option src."),
-			"suppress_prefixlength": optionalComputedInt64("Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores every connected route. A rule that looks up `main` with 0, placed ahead of a rule that sends a source subnet to a VPN table, keeps the LAN reachable in one section, which otherwise needs one rule per destination. 0 to 32. Needs uapi 3.3.0 or later."),
+			"suppress_prefixlength": optionalComputedInt64("Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores only a default route. A rule that looks up `main` with 0, placed ahead of a rule that sends a source subnet to a VPN table, keeps the LAN reachable in one section, which otherwise needs one rule per destination. 0 to 32. Needs uapi 3.3.0 or later."),
 			"tos":                   optionalComputedInt64("Match this TOS value: 0, 4, 8, 12, 16, 20, 24 or 28, as netifd reads an integer. Needs uapi 3.3.0 or later."),
 			"uidrange":              optionalComputedString("Match traffic of local sockets owned by this uid, or by a range such as `1000-1005`, each from 0 to 4294967294. Needs uapi 3.3.0 or later."),
 		},
