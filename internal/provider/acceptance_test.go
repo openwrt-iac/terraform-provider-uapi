@@ -248,6 +248,9 @@ data "uapi_diagnostics" "swept" {
 				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "invalid_sections.0.errors.0.field", "match.dest_port"),
 				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "swept_resources.0", "firewall:rules"),
 				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "skipped_for_scope.0", "dhcp:hosts"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "state_dirs./var/run/uapi", "true"),
+				resource.TestCheckResourceAttr("data.uapi_diagnostics.swept", "state_dirs./var/run/uapi/locks", "false"),
+				resource.TestCheckNoResourceAttr("data.uapi_diagnostics.swept", "state_dirs./var/run/uapi/queue"),
 			),
 		}},
 	})

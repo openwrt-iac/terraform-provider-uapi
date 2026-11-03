@@ -36,6 +36,7 @@ output "uapi_uptime" {
 - `request_id` (String) Request id assigned to this diagnostics call.
 - `resources_loaded` (List of String) Curated resource keys the server has loaded.
 - `skipped_for_scope` (List of String) Resources left out because the token lacks `:ro` on them. Populated only when `validate` is set.
+- `state_dirs` (Map of Boolean) State directories under /var/run, keyed by path, as uapi finds them; the read creates and changes nothing. `true`: a directory owned by uapi's request uid, mode 0700, which uapi uses. `false`: the path holds anything else, and uapi does not use it as it stands. `null`: the path does not exist yet, and uapi creates it at its first write there. Needs uapi 3.3.0 or later; reads as null against an older server.
 - `swept_resources` (List of String) Resources the sweep checked, in colon form. Populated only when `validate` is set.
 - `uptime_seconds` (Number) Seconds since the router booted.
 - `version` (String) uapi version string.

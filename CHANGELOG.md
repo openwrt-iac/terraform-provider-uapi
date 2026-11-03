@@ -30,6 +30,11 @@ line). Format follows Keep a Changelog.
 - **`data.uapi_wireguard_kernel_peers`**: the peers the kernel holds that no uci section
   claims, so a client lists the drift without walking every peer (#46). Both need
   uapi 3.3.0 or later.
+- **`data.uapi_diagnostics.state_dirs`**: each state directory under /var/run, keyed by
+  path — `true` when uapi uses it, `false` when the path holds something else, `null`
+  when it does not exist yet (uapi creates it at its first write there). The read
+  creates and changes nothing. Needs uapi 3.3.0 or later; reads as null against an
+  older server (uapi #287).
 
 ### Fixed
 - Descriptions corrected against the uapi 3.3.0 spec, found by re-reading it after the

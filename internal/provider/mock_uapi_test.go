@@ -327,6 +327,12 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 			"uptime_seconds":   12345,
 			"resources_loaded": []any{"network:interface", "firewall:rule"},
 			"lock_state":       map[string]any{"global_held": false, "per_package": map[string]any{}},
+			// The three value shapes uapi reports: used, present but unusable,
+			// and not created yet. Keys without dots, so the acc test can
+			// address them through the attribute path.
+			"state_dirs": map[string]any{
+				"/var/run/uapi": true, "/var/run/uapi/locks": false, "/var/run/uapi/queue": nil,
+			},
 			"recent_errors": []any{map[string]any{
 				"ts": 1893456000, "request_id": "req-err-1", "code": "validation_failed",
 				"status": 422, "method": "POST", "path": "/api/v3/firewall/rules", "message": "bad",
