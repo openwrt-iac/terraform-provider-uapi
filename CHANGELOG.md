@@ -6,6 +6,23 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Added
+- `uapi_network_rule.suppress_prefixlength`, `tos`, `uidrange`, `ipproto`, `sport` and
+  `dport`, the match options that netifd reads and LuCI writes, so a PUT of a rule that
+  LuCI configured no longer changes the routing behind a 200 (#42). `suppress_prefixlength`
+  with `lookup = 254` sends a source subnet to a VPN table while one rule keeps the LAN
+  reachable. `ipproto` takes a number or the spelling that uci holds, as the wireless
+  channel does. The new attributes need uapi 3.3.0 or later, and are also on the data
+  source.
+- `uapi_dhcp_server.dhcpv4`, `ra_flags` and `ra_slaac`, the options that odhcpd.defaults
+  writes into the stock `lan`, so an apply on an imported `lan` no longer removes them and
+  the router advertisements keep their managed flag (#43). Unset `ra_flags` reads null,
+  which odhcpd takes as `other-config` only, and `none` sets no flag; `ra_flags = []`
+  clears the option, which reads back null. The new attributes need uapi 3.3.0 or later,
+  and are also on the data source.
+- `uapi_network_wireguard_peer.allowed_ips` is optional: a peer without allowed IPs is
+  valid, and wg sets it with none (#44). This needs uapi 3.3.0 or later.
+
 ### Fixed
 - **`uapi_wireless_device.channel` keeps `auto`.** The attribute is now a number-or-keyword
   string: `channel = 36`, `channel = "36"` and `channel = "auto"` all work, a bare number keeps

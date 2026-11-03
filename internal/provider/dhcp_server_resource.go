@@ -27,6 +27,7 @@ type dhcpServerModel struct {
 	Managed     types.Bool   `tfsdk:"managed"`
 	ETag        types.String `tfsdk:"etag"`
 	DhcpOption  types.List   `tfsdk:"dhcp_option"`
+	Dhcpv4      types.String `tfsdk:"dhcpv4"`
 	Dhcpv6      types.String `tfsdk:"dhcpv6"`
 	Domain      types.String `tfsdk:"domain"`
 	Dynamicdhcp types.Bool   `tfsdk:"dynamicdhcp"`
@@ -37,6 +38,8 @@ type dhcpServerModel struct {
 	Limit       types.Int64  `tfsdk:"limit"`
 	Ra          types.String `tfsdk:"ra"`
 	RaDefault   types.Int64  `tfsdk:"ra_default"`
+	RaFlags     types.List   `tfsdk:"ra_flags"`
+	RaSlaac     types.Bool   `tfsdk:"ra_slaac"`
 	Start       types.Int64  `tfsdk:"start"`
 }
 
@@ -56,6 +59,7 @@ func (r *dhcpServerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"managed":     managedAttribute(),
 			"etag":        etagAttribute(),
 			"dhcp_option": optionalComputedStringList("DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole, and dnsmasq reads it as one option. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it. uapi 3.2.0 also refuses an entry in which an address is followed by whitespace and another option, such as `3,10.0.0.1 6,10.0.0.1`. A space in a text option, such as `15,my domain`, is valid."),
+			"dhcpv4":      optionalComputedString("Whether odhcpd serves DHCPv4: `server`, `disabled`, `relay` or `hybrid`, as odhcpd parses it. LuCI offers only `server` and `disabled`. odhcpd.defaults writes it into the stock `lan`, and it matters only when `maindhcp` sets odhcpd to serve DHCPv4. Reads null when unset. Needs uapi 3.3.0 or later."),
 			"dhcpv6":      optionalComputedString("uci option dhcpv6."),
 			"domain":      optionalComputedString("uci option domain."),
 			"dynamicdhcp": optionalComputedBool("uci option dynamicdhcp."),
@@ -66,6 +70,8 @@ func (r *dhcpServerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"limit":       optionalComputedInt64("uci option limit."),
 			"ra":          optionalComputedString("uci option ra."),
 			"ra_default":  optionalComputedInt64("uci option ra_default."),
+			"ra_flags":    optionalComputedStringList("Flags of the router advertisements: `managed-config` (clients ask for a DHCPv6 address), `other-config`, `home-agent`, or `none`. The stock `lan` carries `managed-config` and `other-config`, and a PUT that left the field out removed them, so clients that follow the managed flag stopped asking DHCPv6. Unset reads null, which odhcpd takes as `other-config` only, and `none` sets no flag. Needs uapi 3.3.0 or later."),
+			"ra_slaac":    optionalComputedBool("Whether the router advertisements offer SLAAC addressing. odhcpd.defaults writes it into the stock `lan`, and a PUT that left the field out removed it. Reads true when unset, as odhcpd takes unset. Needs uapi 3.3.0 or later."),
 			"start":       optionalComputedInt64("uci option start."),
 		},
 	}
@@ -77,6 +83,7 @@ func (r *dhcpServerResource) body(ctx context.Context, m dhcpServerModel, diags 
 		putStr(out, "id", m.ID)
 	}
 	putList(ctx, out, "dhcp_option", m.DhcpOption, diags.d)
+	putStr(out, "dhcpv4", m.Dhcpv4)
 	putStr(out, "dhcpv6", m.Dhcpv6)
 	putStr(out, "domain", m.Domain)
 	putBool(out, "dynamicdhcp", m.Dynamicdhcp)
@@ -87,6 +94,8 @@ func (r *dhcpServerResource) body(ctx context.Context, m dhcpServerModel, diags 
 	putInt64(out, "limit", m.Limit)
 	putStr(out, "ra", m.Ra)
 	putInt64(out, "ra_default", m.RaDefault)
+	putList(ctx, out, "ra_flags", m.RaFlags, diags.d)
+	putBool(out, "ra_slaac", m.RaSlaac)
 	putInt64(out, "start", m.Start)
 	return out
 }
@@ -95,6 +104,7 @@ func (r *dhcpServerResource) read(ctx context.Context, obj map[string]any, m *dh
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
 	m.DhcpOption = diags.list(listValKeepEmpty(ctx, obj, "dhcp_option", m.DhcpOption))
+	m.Dhcpv4 = strVal(obj, "dhcpv4")
 	m.Dhcpv6 = strVal(obj, "dhcpv6")
 	m.Domain = strVal(obj, "domain")
 	m.Dynamicdhcp = boolVal(obj, "dynamicdhcp")
@@ -105,6 +115,8 @@ func (r *dhcpServerResource) read(ctx context.Context, obj map[string]any, m *dh
 	m.Limit = int64Val(obj, "limit")
 	m.Ra = strVal(obj, "ra")
 	m.RaDefault = int64Val(obj, "ra_default")
+	m.RaFlags = diags.list(listValKeepEmpty(ctx, obj, "ra_flags", m.RaFlags))
+	m.RaSlaac = boolVal(obj, "ra_slaac")
 	m.Start = int64Val(obj, "start")
 }
 

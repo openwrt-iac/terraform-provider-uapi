@@ -54,7 +54,7 @@ func (r *networkWireguardPeerResource) Schema(_ context.Context, _ resource.Sche
 			"id":                   optionalComputedIDAttribute(),
 			"managed":              managedAttribute(),
 			"etag":                 etagAttribute(),
-			"allowed_ips":          schema.ListAttribute{ElementType: types.StringType, Required: true, Description: "uci option allowed_ips."},
+			"allowed_ips":          optionalComputedStringList("Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional."),
 			"description":          optionalComputedString("uci option description."),
 			"disabled":             optionalComputedBool("Whether the entry is disabled."),
 			"endpoint_host":        optionalComputedString("uci option endpoint_host."),

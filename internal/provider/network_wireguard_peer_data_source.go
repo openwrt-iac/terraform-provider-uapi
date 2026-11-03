@@ -36,7 +36,7 @@ func (d *networkWireguardPeerDataSource) Schema(_ context.Context, _ datasource.
 			"id":                   dsIDAttribute(),
 			"managed":              dsManagedAttribute(),
 			"etag":                 dsComputedString("Opaque ETag of the resource's current state."),
-			"allowed_ips":          dsComputedStringList("uci option allowed_ips."),
+			"allowed_ips":          dsComputedStringList("Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional."),
 			"description":          dsComputedString("uci option description."),
 			"disabled":             dsComputedBool("Whether the entry is disabled."),
 			"endpoint_host":        dsComputedString("uci option endpoint_host."),

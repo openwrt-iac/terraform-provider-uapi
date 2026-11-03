@@ -27,7 +27,7 @@ data "uapi_network_wireguard_peer" "example" {
 
 ### Read-Only
 
-- `allowed_ips` (List of String) uci option allowed_ips.
+- `allowed_ips` (List of String) Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional.
 - `description` (String) uci option description.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `endpoint_host` (String) uci option endpoint_host.

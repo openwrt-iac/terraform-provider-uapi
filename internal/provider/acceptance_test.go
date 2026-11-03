@@ -555,6 +555,119 @@ resource "uapi_wireless_device" "radio0" {
 	})
 }
 
+// A network rule that falls back to main ahead of a VPN table is one section
+// once suppress_prefixlength exists (#42): 0 ignores every connected route the
+// lookup finds. LuCI's other match options ride along (tos, uidrange, ipproto,
+// sport, dport).
+func TestAccNetworkRule_suppressPrefixlength(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	cfg := providerHCL(m.URL) + `
+resource "uapi_network_rule" "vpn_fallback" {
+  id                   = "vpn_fallback"
+  src                  = "192.168.9.0/24"
+  lookup               = 254
+  suppress_prefixlength = 0
+}`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_rule.vpn_fallback", "suppress_prefixlength", "0"),
+					m.checkStored("/network/rules", "vpn_fallback", "suppress_prefixlength", float64(0)),
+				),
+			},
+			{
+				Config: cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+}
+
+// The three odhcpd options that odhcpd.defaults writes into the stock lan must
+// survive an apply on an imported section (#43): before uapi modelled them, the
+// PUT removed them, and the router advertisements lost their managed flag.
+func TestAccDhcpServer_importKeepsRaOptions(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/dhcp/servers", "lan", map[string]any{
+		"interface": "lan", "leasetime": "12h", "dhcpv4": "server",
+		"ra_slaac": true, "ra_flags": []any{"managed-config", "other-config"},
+	})
+	cfg := func(leasetime string) string {
+		return providerHCL(m.URL) + `
+resource "uapi_dhcp_server" "lan" {
+  id        = "lan"
+  interface = "lan"
+  leasetime = "` + leasetime + `"
+}`
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg("12h"),
+				ResourceName:       "uapi_dhcp_server.lan",
+				ImportState:        true,
+				ImportStateId:      "lan",
+				ImportStatePersist: true,
+			},
+			{
+				// Only the leasetime changes; the three options are not in the
+				// config, so they ride on the state into the PUT.
+				Config: cfg("24h"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					m.checkStored("/dhcp/servers", "lan", "leasetime", "24h"),
+					m.checkStored("/dhcp/servers", "lan", "dhcpv4", "server"),
+					m.checkStored("/dhcp/servers", "lan", "ra_slaac", true),
+					m.checkStored("/dhcp/servers", "lan", "ra_flags", []any{"managed-config", "other-config"}),
+				),
+			},
+			{
+				Config: cfg("24h"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+}
+
+// A peer without allowed_ips is valid since uapi made the field optional (#44):
+// wg sets such a peer with none.
+func TestAccWireguardPeer_noAllowedIps(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	cfg := providerHCL(m.URL) + `
+resource "uapi_network_wireguard_peer" "p" {
+  interface  = "wg0"
+  public_key = "xS2is7dJlXKtWgCEUoKZwqVfhSSyMtdBNk+SxCdEK2k="
+}`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("uapi_network_wireguard_peer.p", "allowed_ips.#", "0"),
+					resource.TestCheckNoResourceAttr("uapi_network_wireguard_peer.p", "allowed_ips.0"),
+				),
+			},
+			{
+				Config: cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+}
+
 func TestAccSystem_singleton(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()
