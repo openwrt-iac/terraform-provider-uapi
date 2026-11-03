@@ -16,6 +16,7 @@ type descriptor struct {
 	CreateOnly    []string // fields that are create-time only and immutable (Optional + RequiresReplace, sent only on create, never returned), e.g. an interface `name`
 	IntStr        []string // integer-or-string union fields (a number or a keyword on the wire), emitted as String; the body sends a numeric value as a number
 	PatchUpdates  bool     // the generated Update sends a merge PATCH instead of a PUT: Terraform owns the modelled footprint, and unmodelled uci options that another tool wrote survive the update
+	PostReadWarn  string   // hand-written func(obj map[string]any, diags *diag.Diagnostics) called by the generated resource Read after the model fill, for a refresh-time warning
 	Descs         map[string]string
 	// SchemaVersion is emitted as the schema's Version. Bump it when an
 	// attribute's Terraform type changes shape (list <-> string), which makes
@@ -210,7 +211,7 @@ var descriptors = []descriptor{
 		"dport":                 "Match this destination port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later.",
 	}},
 	{Type: "network_bridge_vlan", Schema: "NetworkBridgeVlans", Collection: "network/bridge_vlans", Kind: "collection", Label: "network bridge VLAN", GenDataSource: true},
-	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true, Runtime: "wireguard", Descs: map[string]string{
+	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true, Runtime: "wireguard", PostReadWarn: "warnWireguardPeerNotInKernel", Descs: map[string]string{
 		"allowed_ips":          "Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional.",
 		"endpoint_port":        "UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0, and wg then cannot bring the interface up. uapi refuses a write of 0, so an update of such a peer fails until a port is set.",
 		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1, and wg then cannot bring the interface up. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.",

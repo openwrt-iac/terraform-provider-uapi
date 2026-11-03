@@ -95,7 +95,7 @@ func goldenCases() map[string]string {
 	// A PatchUpdates resource: the Update is an unconditional merge PATCH.
 	withPatch := descriptor{
 		Type: "lab_patch", Schema: "LabPatches", Collection: "lab/patches",
-		Kind: "collection", Label: "lab patch", GenDataSource: true, PatchUpdates: true,
+		Kind: "collection", Label: "lab patch", GenDataSource: true, PatchUpdates: true, PostReadWarn: "labWarn",
 		CreateOnly: []string{"wgname", "lockedname"}, IntStr: []string{"tuner"},
 	}
 	pr := buildResource(withPatch, fixtureProps(), fixtureProps(), []string{"name"})
