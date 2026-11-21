@@ -34,7 +34,7 @@ provider "uapi" {
 ### Required
 
 - `name` (String) Token name: letters, digits and underscores, 1 to 63 characters; the server refuses a hyphen with 422. Doubles as the token id.
-- `scopes` (List of String) Scopes for the new token (must be a subset of the caller's scopes).
+- `scopes` (List of String) Scopes for the new token, in the form `<segment>[:<segment>...]:(rw|ro)`, such as `firewall:rules:rw`. The caller's own scopes must cover each one, equal or narrower: a `*:rw` caller can mint `firewall:ro`. A scope that they do not cover answers 403 `scope_escalation_blocked`. uapi 3.x also mints a scope that it does not know, and such a scope grants nothing.
 
 ### Optional
 
