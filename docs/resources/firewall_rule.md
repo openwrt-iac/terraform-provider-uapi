@@ -26,7 +26,7 @@ resource "uapi_firewall_rule" "example" {
 ### Required
 
 - `match` (Attributes) Match conditions. (see [below for nested schema](#nestedatt--match))
-- `target` (String) Target / action.
+- `target` (String) What to do with matched traffic: `ACCEPT`, `REJECT`, `DROP`, `NOTRACK`, `MARK` or `DSCP`. A read also gives `HELPER`, which LuCI writes for a conntrack helper rule. uapi does not model the helper and refuses `HELPER` in a create and in a PUT, because a PUT removes the `set_helper` option and firewall4 skips a HELPER rule without it. The provider updates a rule with a PUT, so it can read such a rule but not update it.
 
 ### Optional
 

@@ -39,7 +39,7 @@ func (d *firewallRuleDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"set_dscp":  dsComputedString("DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or value 0-63 to set. Required by target DSCP."),
 			"set_mark":  dsComputedString("fwmark to set, as a value or value/mask (decimal or `0x` hex). Target MARK requires this or `set_xmark`."),
 			"set_xmark": dsComputedString("fwmark to set with XOR semantics, as a value or value/mask. The alternative to `set_mark` for target MARK."),
-			"target":    dsComputedString("Target / action."),
+			"target":    dsComputedString("What to do with matched traffic: `ACCEPT`, `REJECT`, `DROP`, `NOTRACK`, `MARK` or `DSCP`. A read also gives `HELPER`, which LuCI writes for a conntrack helper rule. uapi does not model the helper and refuses `HELPER` in a create and in a PUT, because a PUT removes the `set_helper` option and firewall4 skips a HELPER rule without it. The provider updates a rule with a PUT, so it can read such a rule but not update it."),
 			"match": dsschema.SingleNestedAttribute{
 				Computed:    true,
 				Description: "Match conditions.",

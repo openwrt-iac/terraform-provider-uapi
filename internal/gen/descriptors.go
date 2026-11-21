@@ -158,12 +158,15 @@ var descriptors = []descriptor{
 	{Type: "firewall_zone", Schema: "FirewallZones", Collection: "firewall/zones", Kind: "collection", Label: "firewall zone", GenDataSource: true, Descs: map[string]string{
 		"name": "Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores.",
 	}},
-	{Type: "firewall_rule", Schema: "FirewallRules", Collection: "firewall/rules", Kind: "collection", Label: "firewall rule", GenDataSource: true, Nested: matchFields(false)},
+	{Type: "firewall_rule", Schema: "FirewallRules", Collection: "firewall/rules", Kind: "collection", Label: "firewall rule", GenDataSource: true, Nested: matchFields(false), Descs: map[string]string{
+		"target": "What to do with matched traffic: `ACCEPT`, `REJECT`, `DROP`, `NOTRACK`, `MARK` or `DSCP`. A read also gives `HELPER`, which LuCI writes for a conntrack helper rule. uapi does not model the helper and refuses `HELPER` in a create and in a PUT, because a PUT removes the `set_helper` option and firewall4 skips a HELPER rule without it. The provider updates a rule with a PUT, so it can read such a rule but not update it.",
+	}},
 	{Type: "firewall_redirect", Schema: "FirewallRedirects", Collection: "firewall/redirects", Kind: "collection", Label: "firewall redirect", GenDataSource: true, Nested: matchFields(true), SchemaVersion: 1},
 	{Type: "firewall_forwarding", Schema: "FirewallForwardings", Collection: "firewall/forwardings", Kind: "collection", Label: "firewall forwarding", GenDataSource: true},
 	{Type: "firewall_nat", Schema: "FirewallNat", Collection: "firewall/nat", Kind: "collection", Label: "firewall NAT rule", GenDataSource: true, Nested: natMatchFields(), Descs: map[string]string{
-		"target": "What to do with matched traffic: `SNAT` rewrites the source to `snat_ip`/`snat_port`, `MASQUERADE` rewrites it to the outbound interface address, `ACCEPT` exempts it from source NAT. Defaults to `MASQUERADE`.",
-		"name":   "Human-readable label for this NAT rule.",
+		"target":  "What to do with matched traffic: `SNAT` rewrites the source to `snat_ip`/`snat_port`, `MASQUERADE` rewrites it to the outbound interface address, `ACCEPT` exempts it from source NAT. Defaults to `MASQUERADE`. A read also gives `NPT`, which the firewall4 of OpenWrt main takes. uapi refuses a change of `target` to `NPT`, and from uapi 3.5.0 an update that keeps a stored `NPT` passes.",
+		"snat_ip": "IPv4 address to rewrite the source to. Requires target `SNAT`. On a stored `NPT` rule, the prefix that firewall4 maps `match.src_ip` to.",
+		"name":    "Human-readable label for this NAT rule.",
 	}},
 	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
@@ -180,7 +183,7 @@ var descriptors = []descriptor{
 			"broadcast":      "IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`.",
 			"broadcast_flag": "Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's \"Use broadcast flag\". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later.",
 			"clientid":       "Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`.",
-			"reqprefix":      "Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`.",
+			"reqprefix":      "Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. From uapi 3.5.0, a prefix length or a prefix can carry a `:IAID` suffix of up to 8 hex digits, as odhcp6c reads it.",
 			"sourcefilter":   "Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later.",
 			"listen_port":    "UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port.",
 			"ip6prefix":      "IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later.",
@@ -213,8 +216,8 @@ var descriptors = []descriptor{
 	{Type: "network_bridge_vlan", Schema: "NetworkBridgeVlans", Collection: "network/bridge_vlans", Kind: "collection", Label: "network bridge VLAN", GenDataSource: true},
 	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true, Runtime: "wireguard", PostReadWarn: "warnWireguardPeerNotInKernel", Descs: map[string]string{
 		"allowed_ips":          "Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional.",
-		"endpoint_port":        "UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0, and wg then cannot bring the interface up. uapi refuses a write of 0, so an update of such a peer fails until a port is set.",
-		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1, and wg then cannot bring the interface up. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.",
+		"endpoint_port":        "UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0: wireguard.sh then cannot bring the interface up, and the proto handler of OpenWrt main leaves the endpoint out. uapi refuses a write of 0, so an update of such a peer fails until a port is set.",
+		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1: wireguard.sh then cannot bring the interface up, and the proto handler of OpenWrt main leaves the keepalive out. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.",
 	}},
 	// wireless
 	{Type: "wireless_device", Schema: "WirelessDevices", Collection: "wireless/devices", Kind: "collection", Label: "wireless device", GenDataSource: true, IntStr: []string{"channel"}, PatchUpdates: true, Descs: map[string]string{
@@ -227,7 +230,7 @@ var descriptors = []descriptor{
 		"legacy_rates": "Whether the legacy 802.11b rates are allowed. Defaults to false. Needs uapi 3.2.0 or later.",
 	}},
 	{Type: "wireless_interface", Schema: "WirelessInterfaces", Collection: "wireless/interfaces", Kind: "collection", Label: "wireless interface", GenDataSource: true, Runtime: "wireless", PatchUpdates: true, Descs: map[string]string{
-		"encryption":             "Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`.",
+		"encryption":             "Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`. From uapi 3.5.0, a write of a WEP value (`wep`, `wep-open`, `wep-shared`) answers 422 unless the router sets WEP up, which needs the shell wifi-scripts. A stock image builds the ucode wifi-scripts, which give the daemon no WEP key, so the SSID would run without encryption.",
 		"ieee80211r":             "Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later.",
 		"ft_over_ds":             "Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later.",
 		"ft_psk_generate_local":  "Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. 802.11r needs WPA2 or later, so plain psk gets no fast transition. Needs uapi 3.2.0 or later.",
@@ -250,7 +253,7 @@ var descriptors = []descriptor{
 		"match_tag": "dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it. Only a tag that dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does. A comma, a double quote, a `#`, a control character or a blank value is refused.",
 	}, SchemaVersion: 1},
 	{Type: "dhcp_server", Schema: "DhcpServers", Collection: "dhcp/servers", Kind: "collection", Label: "dhcp server", GenDataSource: true, Descs: map[string]string{
-		"dhcpv4":      "DHCPv4 service on this interface: `server`, `disabled`, `relay` or `hybrid`. dnsmasq serves on every value but `disabled`. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes an unset option as `disabled`. LuCI offers only `server` and `disabled`. odhcpd.defaults writes it into the stock `lan`. Reads null when unset. Needs uapi 3.3.0 or later.",
+		"dhcpv4":      "DHCPv4 service on this interface: `server`, `disabled`, `relay` or `hybrid`. dnsmasq serves on every value but `disabled`. Unset differs by platform: the dnsmasq of OpenWrt 25.12 serves, and the dnsmasq of OpenWrt main takes it as `disabled`, so set `server` to serve on both. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes an unset option as `disabled`. LuCI offers only `server` and `disabled`, and its DHCP setup writes `server`. odhcpd.defaults writes it into the stock `lan`. Reads null when unset. Needs uapi 3.3.0 or later.",
 		"ra_flags":    "Flags of the router advertisements: `managed-config` (clients ask for a DHCPv6 address), `other-config`, `home-agent`, or `none`, which LuCI writes when no flag is selected. The stock `lan` carries `managed-config` and `other-config`, and a PUT that left the field out removed them, so clients that follow the managed flag stopped asking DHCPv6. Unset reads null, which odhcpd takes as `other-config` only, and `none` sets no flag. Needs uapi 3.3.0 or later.",
 		"ra_slaac":    "Whether the router advertisements offer SLAAC addressing. odhcpd.defaults writes it into the stock `lan`, and a PUT that left the field out removed it. Reads true when unset, as odhcpd takes unset. odhcpd reads only `1`, `true`, `0` and `false`, and takes true for any other stored value. Needs uapi 3.3.0 or later.",
 		"dhcp_option": "DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole, and dnsmasq reads it as one option. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it. uapi 3.2.0 also refuses an entry in which an address is followed by whitespace and another option, such as `3,10.0.0.1 6,10.0.0.1`. A space in a text option, such as `15,my domain`, is valid.",
@@ -301,7 +304,8 @@ var descriptors = []descriptor{
 	}},
 	{Type: "mwan3_policy", Schema: "Mwan3Policies", Collection: "mwan3/policies", Kind: "collection", Label: "mwan3 policy", GenDataSource: true},
 	{Type: "mwan3_rule", Schema: "Mwan3Rules", Collection: "mwan3/rules", Kind: "collection", Label: "mwan3 rule", GenDataSource: true, Descs: map[string]string{
-		"family": "Address family of the traffic that this rule matches: `ipv4` or `ipv6`. Unset, mwan3 applies the rule to both.",
+		"family": "Address family of the traffic that this rule matches: `ipv4`, `ipv6` or `any`. Unset or `any`, mwan3 applies the rule to both. A write of `any`, which LuCI writes, needs uapi 3.5.0 or later.",
+		"proto":  "IP protocol as iptables takes it: a number from 0 to 255, or a name that iptables resolves, such as `tcp`, `udp`, `icmp`, `esp` or `all`. uapi refuses another value, because iptables refuses the rules of the whole family for it. Before uapi 3.5.0, a write takes only `tcp`, `udp`, `icmp` and `all`.",
 	}},
 	{Type: "mwan3_globals", Schema: "Mwan3Globals", Collection: "mwan3/globals", Kind: "singleton", Label: "mwan3 globals", GenDataSource: true},
 	// usteer + openvpn (added in uapi 2.0.0-rc3; openvpn key/tls_auth/pkcs12 are write-only per the spec)

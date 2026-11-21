@@ -28,7 +28,7 @@ resource "uapi_wireless_interface" "example" {
 ### Optional
 
 - `disabled` (Boolean) Whether the entry is disabled.
-- `encryption` (String) Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`.
+- `encryption` (String) Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`. From uapi 3.5.0, a write of a WEP value (`wep`, `wep-open`, `wep-shared`) answers 422 unless the router sets WEP up, which needs the shell wifi-scripts. A stock image builds the ucode wifi-scripts, which give the daemon no WEP key, so the SSID would run without encryption.
 - `ft_over_ds` (Boolean) Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later.
 - `ft_psk_generate_local` (Boolean) Whether the 802.11r keys are generated locally instead of through the R0/R1 key holders. Unset means true when `encryption` is psk2 or psk-mixed, with or without a forced cipher, and false otherwise. 802.11r needs WPA2 or later, so plain psk gets no fast transition. Needs uapi 3.2.0 or later.
 - `hidden` (Boolean) uci option hidden.

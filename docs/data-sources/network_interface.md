@@ -63,7 +63,7 @@ data "uapi_network_interface" "example" {
 - `private_key` (String, Sensitive) Always null; never returned by the API.
 - `proto` (String) Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto.
 - `reqaddress` (String) uci option reqaddress. Applies only to proto `dhcpv6`.
-- `reqprefix` (String) Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
+- `reqprefix` (String) Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. From uapi 3.5.0, a prefix length or a prefix can carry a `:IAID` suffix of up to 8 hex digits, as odhcp6c reads it. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
 - `runtime` (Attributes) Live ubus-derived runtime state (read-only; reflects actual operation, not config). (see [below for nested schema](#nestedatt--runtime))
 - `sourcefilter` (Boolean) Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
 

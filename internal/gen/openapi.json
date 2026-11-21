@@ -2,8 +2,8 @@
 	"openapi": "3.1.0",
 	"info": {
 		"title": "uapi",
-		"version": "3.3.0",
-		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}`: it is read-only and never part of the desired state or of a plan diff. Where it shows what a daemon or the kernel holds beside what uci holds, a client can report the difference.\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.interfaces.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: validate, stage, snapshot, commit, reload, restore-on-failure. A write that leaves uci as it was commits and reloads nothing.  `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means that the reload action of each init script that ran **exited 0**, and `X-Reload-Status: no_reload` says that none ran, because the write changed nothing in uci, or because procd runs none of the daemons that read a `dhcp` write. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - no init script ran, because the write changed nothing in uci or no daemon that reads it runs\n- `X-Reload-Status: unverified` - the write kept its commit, and whether its daemons take the new config is unknown: an init script was still running when uapi stopped waiting for the reloads, 20 s after the first started, or the `dnsmasq --test` check after a dhcp write did not finish within 10 s\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/openwrt-iac/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major, apart from the carve-outs that docs/versioning.md lists. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nThis major accepts both forms for everything below, and v4 removes the old one. The canonical list with migration notes is `docs/deprecations.md`.\n\n- **`network/interfaces.ip6prefix` will stop accepting a space-separated string on write.** Responses are always an array, the list that netifd reads and that LuCI writes for wireguard and 6in4. The string remains valid in a request because the 3.1 spec declared one. v4 drops it and the field becomes array-only in both directions.\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/openwrt-iac/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/openwrt-iac/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/openwrt-iac/uapi/tree/main/docs)",
+		"version": "3.4.1",
+		"description": "Native HTTP REST API for OpenWrt. Translates standard REST verbs into ubus/uci operations so edge routers become first-class targets for Infrastructure-as-Code workflows.\n\n## Quickstart\n\nMint a token on the router (one-time):\n\n```sh\nuapi-token create --name terraform_prod --scope '*:rw' --expires-in 90d\n```\n\nThen call the API:\n\n```sh\ncurl -H \"Authorization: Bearer $TOKEN\" https://router/api/v3/firewall/rules\n```\n\n## Two surfaces\n\n- **Curated resources** under `/api/v3/<domain>/...` - hand-written schemas, stable across the major. Field names are `snake_case`; uci booleans normalize to JSON booleans; uci list options surface as JSON arrays.\n- **Raw passthrough** under `/api/v3/raw/<package>/<id>` - generic uci access for the long tail. Same atomic-transaction recipe and same auth model, but payloads follow uci's field names directly (and move when upstream OpenWrt does).\n\n## Resource shape\n\nEvery curated resource carries `id` (stable across uci rewrites) and `managed: bool` at the top level. Server-derived state lives under `runtime: {...}`: it is read-only and never part of the desired state or of a plan diff. Where it shows what a daemon or the kernel holds beside what uci holds, a client can report the difference.\n\n## Auth\n\nBearer tokens with hierarchical scopes (e.g. `firewall:rules:rw`, `*:ro`). See the **Auth / Tokens** group for mint/list/revoke and the `/auth/whoami` endpoint for introspection.\n\n## Optimistic concurrency\n\nEvery curated-resource GET and write returns an `ETag` header that is a stable hash of the resource's own body (the `runtime` block is excluded so live ubus state never trips a 412). Honor with `If-Match` on writes (or `?if_match=<etag>` query param for clients behind uhttpd's strict CGI env, which drops the header). `If-None-Match` is honoured on writes too, per RFC 9110 13.1.2: a match, or `*` against an existing resource, gives 412. Preconditions are evaluated before the transaction, so a 412 never leaves a partial write. Conditional GET via `If-None-Match` returns 304 when matching, and the 304 carries the same `ETag`. Raw passthrough, the non-uci endpoints and the read-only lease views carry no `ETag` and so support neither conditional GET nor `If-Match`. Sibling sections in the same package do not influence each other's ETags; If-Match fires only when *this* resource has actually changed.\n\n## Idempotency\n\n`Idempotency-Key` on POST caches the response for 24 h; a repeat with the same key replays. Same key with a different body returns `409 idempotency_key_conflict`.\n\nuhttpd's CGI env forwards a fixed allowlist of headers and `Idempotency-Key` is not on it, so a client reaching uapi directly through uhttpd must pass `?idempotency_key=` instead; the header only survives behind a reverse proxy that re-adds it. The same applies to `If-Match` and `If-None-Match`, hence `?if_match=` and `?if_none_match=`. All three are declared as query parameters on the operations that honour them.\n\n## Sensitive fields (write-only + `has_<field>` presence flag)\n\nFields holding secret material (passphrases, private keys, PSKs, PKCS#12 paths) are write-only on the wire: GET responses omit the value and surface a read-only `has_<field>: bool` companion indicating presence. Examples: `wireless.interfaces.key`/`has_key`, `network.interfaces.private_key`/`has_private_key`, `network.wireguard_peers.preshared_key`/`has_preshared_key`, `openvpn.instances.key`/`has_key`, `openvpn.instances.tls_auth`/`has_tls_auth`, `openvpn.instances.pkcs12`/`has_pkcs12`. PATCH that omits a sensitive field carries the existing value forward; rotation is explicit.\n\n## Atomicity\n\nEvery write is one transaction: validate, stage, snapshot, commit, reload, restore-on-failure. A write that leaves uci as it was commits and reloads nothing.  `POST /batch` extends this across N packages under one combined snapshot/restore.\n\n## IMPORTANT - Success != runtime convergence\n\nA 2xx response means that the reload action of each init script that ran **exited 0**, and `X-Reload-Status: no_reload` says that none ran, because the write changed nothing in uci, or because procd runs none of the daemons that read a `dhcp` write. It does NOT mean the daemon has finished re-converging (`network/interfaces` is the dangerous one: a bad change can drop the management link, and the API has already reported success). The `X-Reload-Status` response header surfaces the reload outcome explicitly:\n\n- `X-Reload-Status: ok` - init script ran and exited 0 (not a convergence promise)\n- `X-Reload-Status: no_reload` - no init script ran, because the write changed nothing in uci or no daemon that reads it runs\n- `X-Reload-Status: unverified` - the write kept its commit, and whether its daemons take the new config is unknown: an init script was still running when uapi stopped waiting for the reloads, 20 s after the first started, or the `dnsmasq --test` check after a dhcp write did not finish within 10 s\n\nFor high-stakes writes (management interface, firewall defaults, uhttpd itself) verify convergence out-of-band. See [`docs/operations.md`](https://github.com/openwrt-iac/uapi/blob/main/docs/operations.md) `Success != converged` for the full contract.\n\n## Compatibility & versioning\n\nA given uapi installation serves exactly one API major. Within a major, additions are backwards-compatible: new endpoints, new optional fields, new error codes, new scopes. Breaking changes require the next major, apart from the carve-outs that docs/versioning.md lists. Operators who need an older major keep that package version installed.\n\n## Upcoming in v4\n\nThis major accepts both forms only for `ip6prefix`. Every other change below happens with v4, and this major keeps its current behavior until then. The canonical list with migration notes is `docs/deprecations.md`.\n\n- **`network/interfaces.ip6prefix` will stop accepting a space-separated string on write.** Responses are always an array, the list that netifd reads and that LuCI writes for wireguard and 6in4. The string remains valid in a request because the 3.1 spec declared one. v4 drops it and the field becomes array-only in both directions.\n- **`network/routes.table` and `network/rules.lookup` will accept a table name on write in v4** (the request type becomes a union, breaking). (#240)\n- **Curated string fields will refuse a newline and a carriage return by default in v4**, with an opt-out for `system.notes`. (#276)\n- **`mwan3/interfaces.family` will be required in v4, or an unset one will read as `ipv4`.** (#306)\n- **A `wireless/interfaces` section with no `mode` will read as null in v4** instead of `ap`, and a write that sends no `mode` will store none, so wifi-scripts sets up no interface for it. (#307)\n- **A write will be refused for any stored error the section holds in v4**, as LuCI does, a write that only disables the section included. (#308)\n- **Boolean fields will read each option as the daemon that consumes it reads it in v4**: `1`/`true` and `0`/`false` where netifd reads it through the uci blob converter, the ten spellings of libvalidate `:bool:` and `config_get_bool` where an init script reads it. An absent `system.log_remote` will read true and an absent `usteer/config.syslog` false, as logd and usteer read them, and `sqm/queues.enabled` will read true only for a value that sqm-scripts takes as 1, so an absent one reads false. (#310)\n- **The special endpoints move under `/uapi/...` in v4**: `/uapi/tokens`, `/uapi/metrics`, `/uapi/diagnostics`, `/uapi/batch`, `/uapi/whoami`; `/healthz`, `/openapi.json` and `/schema/*` stay public at the top level. The `path` label of the metrics follows the new paths. (#319)\n- **`dhcp/leases6` merges into `dhcp/leases?family=v6` in v4** and the old endpoint is removed, with its `dhcp:leases6` scope: a token that holds only that scope gets 403, and needs `dhcp:leases`. A v6 entry is addressed by its `ip`. A `family` other than `v4` or `v6` answers 400 `bad_request`, where this major ignores the parameter. (#320)\n- **`runtime` is always present on every resource in v4**, an object that the schema requires. Its fields stay documented on the resources that document them today. (#322)\n- **Dead error codes leave the ErrorEnvelope enum in v4** (`unsupported_media_type` among them). (#323)\n\n## Schema annotations\n\nProperty schemas under `components.schemas.*.properties` carry two annotations beyond the standard OpenAPI shape:\n\n- **`default`**: the value uapi's `fromUci` synthesizes when the underlying uci option is absent. Standard OpenAPI 3.1 / JSON Schema 2020-12 keyword. The framework does NOT apply this default to incoming requests; it is documentation of the server-side fallback so IaC clients can keep the field sticky (Optional+Computed) instead of mistakenly treating it as caller-owned.\n- **`x-uapi-clear-on-omit`** (vendor extension, boolean): when present and `true`, the field is caller-owned and an IaC client (e.g. the terraform-provider-uapi) can safely send an explicit JSON null on `PUT`/`PATCH` to clear the underlying uci option. Absence of this flag means the field should be treated as sticky. A field with `default:` MUST NOT carry this flag, and vice versa (the framework's `lint-defaults` enforces this).\n\n## More\n\n- **GitHub:** https://github.com/openwrt-iac/uapi\n- **Terraform provider:** https://registry.terraform.io/providers/openwrt-iac/uapi\n- **APK feed install:** [/install/](../install/)\n- **Architecture, security, migration, release-process docs:** [in repo](https://github.com/openwrt-iac/uapi/tree/main/docs)",
 		"contact": {
 			"name": "uapi",
 			"url": "https://github.com/openwrt-iac/uapi"
@@ -395,6 +395,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -1044,6 +1065,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -1693,6 +1735,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -2342,6 +2405,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -2991,6 +3075,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -3822,6 +3927,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -4483,6 +4609,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -5144,6 +5291,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -5793,6 +5961,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -6442,6 +6631,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -7103,6 +7313,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -7739,9 +7970,46 @@
 		"/network/wireguard_kernel_peers": {
 			"get": {
 				"summary": "List wireguard_kernel_peers (read-only)",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
+						"headers": {
+							"Link": {
+								"$ref": "#/components/headers/Link"
+							},
+							"X-Next-Cursor": {
+								"$ref": "#/components/headers/XNextCursor"
+							},
+							"X-Kernel-Unread": {
+								"$ref": "#/components/headers/XKernelUnread"
+							},
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						},
 						"content": {
 							"application/json": {
 								"schema": {
@@ -7750,11 +8018,6 @@
 										"$ref": "#/components/schemas/NetworkWireguardKernelPeersResponse"
 									}
 								}
-							}
-						},
-						"headers": {
-							"X-Request-Id": {
-								"$ref": "#/components/headers/XRequestId"
 							}
 						}
 					},
@@ -7809,6 +8072,9 @@
 							}
 						},
 						"headers": {
+							"X-Kernel-Unread": {
+								"$ref": "#/components/headers/XKernelUnread"
+							},
 							"X-Request-Id": {
 								"$ref": "#/components/headers/XRequestId"
 							}
@@ -7857,6 +8123,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -8506,6 +8793,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -9155,6 +9463,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -9791,9 +10120,43 @@
 		"/dhcp/leases": {
 			"get": {
 				"summary": "List leases (read-only)",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
+						"headers": {
+							"Link": {
+								"$ref": "#/components/headers/Link"
+							},
+							"X-Next-Cursor": {
+								"$ref": "#/components/headers/XNextCursor"
+							},
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						},
 						"content": {
 							"application/json": {
 								"schema": {
@@ -9802,11 +10165,6 @@
 										"$ref": "#/components/schemas/DhcpLeasesResponse"
 									}
 								}
-							}
-						},
-						"headers": {
-							"X-Request-Id": {
-								"$ref": "#/components/headers/XRequestId"
 							}
 						}
 					},
@@ -9896,9 +10254,43 @@
 		"/dhcp/leases6": {
 			"get": {
 				"summary": "List leases6 (read-only)",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
+						"headers": {
+							"Link": {
+								"$ref": "#/components/headers/Link"
+							},
+							"X-Next-Cursor": {
+								"$ref": "#/components/headers/XNextCursor"
+							},
+							"X-Request-Id": {
+								"$ref": "#/components/headers/XRequestId"
+							}
+						},
 						"content": {
 							"application/json": {
 								"schema": {
@@ -9907,11 +10299,6 @@
 										"$ref": "#/components/schemas/DhcpLeases6Response"
 									}
 								}
-							}
-						},
-						"headers": {
-							"X-Request-Id": {
-								"$ref": "#/components/headers/XRequestId"
 							}
 						}
 					},
@@ -10014,6 +10401,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -11209,6 +11617,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -11858,6 +12287,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -12507,6 +12957,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -13156,6 +13627,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -14351,6 +14843,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -15000,6 +15513,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -15649,6 +16183,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -16298,6 +16853,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -16947,6 +17523,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -18506,6 +19103,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -19155,6 +19773,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -19804,6 +20443,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -20453,6 +21113,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -21284,6 +21965,27 @@
 							]
 						},
 						"description": "Filter by managed flag"
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500
+						},
+						"description": "Items on a page, 100 by default."
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^c_[A-Za-z0-9_.:-]+$"
+						},
+						"description": "The `X-Next-Cursor` of the page before. A cursor that names no current item answers 400 `invalid_cursor`."
 					}
 				],
 				"responses": {
@@ -24817,6 +25519,8 @@
 					"resources_loaded",
 					"lock_state",
 					"state_dirs",
+					"limits",
+					"interrupted_writes",
 					"request_id"
 				],
 				"properties": {
@@ -24830,6 +25534,30 @@
 						"type": "array",
 						"items": {
 							"type": "string"
+						}
+					},
+					"limits": {
+						"type": "object",
+						"description": "The effective request bounds, from `config limits` in /etc/config/uapi with the compiled defaults where the option is absent or out of bounds.",
+						"required": [
+							"max_body_bytes",
+							"max_body_containers",
+							"body_read_s",
+							"reload_budget_s"
+						],
+						"properties": {
+							"max_body_bytes": {
+								"type": "integer"
+							},
+							"max_body_containers": {
+								"type": "integer"
+							},
+							"body_read_s": {
+								"type": "integer"
+							},
+							"reload_budget_s": {
+								"type": "integer"
+							}
 						}
 					},
 					"lock_state": {
@@ -24859,6 +25587,52 @@
 							]
 						},
 						"description": "Each state directory under /var/run, keyed by its path, as uapi finds it. The read creates and changes nothing. true: a directory owned by the effective uid of the request process, with mode 0700, which uapi uses. false: the path holds anything else, and uapi does not use it as it stands. null: the path does not exist yet, and uapi creates it at its first write there."
+					},
+					"interrupted_writes": {
+						"type": "array",
+						"description": "Write journal records whose request process no longer exists: uhttpd killed it (client disconnect or script_timeout) after the commit, so the write landed in uci with no check, no restore and no answer. Read-only report; uapi corrects nothing. Empty when no write was interrupted.",
+						"items": {
+							"type": "object",
+							"required": [
+								"pid",
+								"request_id",
+								"packages",
+								"started_at",
+								"reload_started"
+							],
+							"properties": {
+								"pid": {
+									"type": "integer"
+								},
+								"request_id": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"packages": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"staged": {
+									"type": [
+										"array",
+										"null"
+									],
+									"items": {
+										"type": "string"
+									}
+								},
+								"started_at": {
+									"type": "integer"
+								},
+								"reload_started": {
+									"type": "boolean"
+								}
+							}
+						}
 					},
 					"management_path": {
 						"type": "object",
@@ -25077,11 +25851,16 @@
 						"items": {
 							"type": "object",
 							"required": [
-								"status"
+								"status",
+								"headers"
 							],
 							"properties": {
 								"status": {
 									"type": "integer"
+								},
+								"headers": {
+									"type": "object",
+									"description": "The headers of the sub-request's own response: always its X-Request-Id, `<request_id>.<index>`, and on a 200 also Content-Type, the security headers and the ETag of the body. Never the transaction headers (X-Reload-Status, X-Reload-Services, X-Kernel-Status, X-Kernel-Applied), which the 207 itself carries for the whole batch, and never X-Mgmt-Path-Warning, because a sub-request has no caller address."
 								},
 								"body": {
 								}
@@ -25159,8 +25938,10 @@
 							"NOTRACK",
 							"MARK",
 							"DSCP",
+							"HELPER",
 							null
-						]
+						],
+						"description": "A read also gives HELPER, which LuCI writes for a conntrack helper rule. uapi does not model the helper, so a write refuses a change to it. A PATCH that sends a stored HELPER back passes, and a PUT answers 422 for it, because a PUT removes the set_helper option, and firewall4 skips a HELPER rule without it"
 					},
 					"enabled": {
 						"type": "boolean",
@@ -25382,7 +26163,8 @@
 							"MARK",
 							"DSCP",
 							null
-						]
+						],
+						"description": "A read also gives HELPER, which LuCI writes for a conntrack helper rule. uapi does not model the helper, so a write refuses a change to it. A PATCH that sends a stored HELPER back passes, and a PUT answers 422 for it, because a PUT removes the set_helper option, and firewall4 skips a HELPER rule without it"
 					},
 					"enabled": {
 						"type": "boolean",
@@ -25452,7 +26234,7 @@
 								],
 								"items": {
 									"type": "string",
-									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+									"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 								}
 							},
 							"dest_port": {
@@ -25462,7 +26244,7 @@
 								],
 								"items": {
 									"type": "string",
-									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+									"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 								}
 							},
 							"proto": {
@@ -25490,7 +26272,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+								"pattern": "^(![ \t]*)?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
 							},
 							"dscp": {
@@ -25498,7 +26280,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$",
+								"pattern": "^(![ \t]*)?([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$",
 								"description": "Match DSCP class or value, optionally negated with a leading '!'"
 							}
 						}
@@ -25678,7 +26460,7 @@
 								],
 								"items": {
 									"type": "string",
-									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+									"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 								}
 							},
 							"dest_port": {
@@ -25688,7 +26470,7 @@
 								],
 								"items": {
 									"type": "string",
-									"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+									"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 								}
 							},
 							"proto": {
@@ -25718,14 +26500,14 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+								"pattern": "^(![ \t]*)?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
 							},
 							"dscp": {
 								"type": [
 									"string",
 									"null"
 								],
-								"pattern": "^!?([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$"
+								"pattern": "^(![ \t]*)?([Cc][Ss][0-7]|[Bb][Ee]|[Ll][Ee]|[Aa][Ff][1-4][1-3]|[Ee][Ff]|0[xX][0-9a-fA-F]{1,2}|[0-9]{1,2})$"
 							}
 						}
 					}
@@ -26243,7 +27025,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Match source port or range, one value per redirect"
 							},
 							"src_dport": {
@@ -26251,7 +27033,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "With target DNAT, the incoming destination port or range to match. With target SNAT, the source port to rewrite to. One value per redirect"
 							},
 							"src_dip": {
@@ -26273,7 +27055,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Rewrite destination port or range, one value per redirect"
 							},
 							"proto": {
@@ -26301,7 +27083,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+								"pattern": "^(![ \t]*)?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
 							}
 						}
@@ -26444,14 +27226,14 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 							},
 							"src_dport": {
 								"type": [
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 							},
 							"src_dip": {
 								"type": [
@@ -26470,7 +27252,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 							},
 							"proto": {
 								"type": [
@@ -26499,7 +27281,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+								"pattern": "^(![ \t]*)?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
 							}
 						}
 					},
@@ -26555,10 +27337,11 @@
 						"enum": [
 							"SNAT",
 							"MASQUERADE",
-							"ACCEPT"
+							"ACCEPT",
+							"NPT"
 						],
 						"default": "MASQUERADE",
-						"description": "SNAT rewrites to snat_ip/snat_port, MASQUERADE rewrites to the outbound interface address, ACCEPT exempts matched traffic from source NAT"
+						"description": "SNAT rewrites to snat_ip/snat_port, MASQUERADE rewrites to the outbound interface address, ACCEPT exempts matched traffic from source NAT. A read also gives NPT, which firewall4 of OpenWrt main takes, and a write refuses a change to it. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"enabled": {
 						"type": "boolean",
@@ -26569,7 +27352,7 @@
 							"string",
 							"null"
 						],
-						"description": "IPv4 address to rewrite the source to. Requires target SNAT"
+						"description": "IPv4 address to rewrite the source to. Requires target SNAT. On the NPT target that only a read gives, the prefix that firewall4 maps match.src_ip to"
 					},
 					"snat_port": {
 						"type": [
@@ -26714,7 +27497,7 @@
 							"ACCEPT"
 						],
 						"default": "MASQUERADE",
-						"description": "SNAT rewrites to snat_ip/snat_port, MASQUERADE rewrites to the outbound interface address, ACCEPT exempts matched traffic from source NAT"
+						"description": "SNAT rewrites to snat_ip/snat_port, MASQUERADE rewrites to the outbound interface address, ACCEPT exempts matched traffic from source NAT. A read also gives NPT, which firewall4 of OpenWrt main takes, and a write refuses a change to it. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"enabled": {
 						"type": "boolean",
@@ -26725,7 +27508,7 @@
 							"string",
 							"null"
 						],
-						"description": "IPv4 address to rewrite the source to. Requires target SNAT"
+						"description": "IPv4 address to rewrite the source to. Requires target SNAT. On the NPT target that only a read gives, the prefix that firewall4 maps match.src_ip to"
 					},
 					"snat_port": {
 						"type": [
@@ -26764,7 +27547,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Match source port or range, optionally negated with a leading '!'"
 							},
 							"dest_ip": {
@@ -26779,7 +27562,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$",
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$",
 								"description": "Match destination port or range, optionally negated with a leading '!'"
 							},
 							"proto": {
@@ -26798,7 +27581,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
+								"pattern": "^(![ \t]*)?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$",
 								"description": "Match fwmark as value or value/mask, optionally negated with a leading '!'"
 							},
 							"family": {
@@ -26921,7 +27704,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 							},
 							"dest_ip": {
 								"type": [
@@ -26934,7 +27717,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?[0-9]{1,5}([-:][0-9]{1,5})?$"
+								"pattern": "^([ \t]*![ \t]*)?[0-9]{1,5}([-:][0-9]{1,5})?$"
 							},
 							"proto": {
 								"type": [
@@ -26951,7 +27734,7 @@
 									"string",
 									"null"
 								],
-								"pattern": "^!?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
+								"pattern": "^(![ \t]*)?(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10})(/(0[xX][0-9a-fA-F]{1,8}|[0-9]{1,10}))?$"
 							},
 							"family": {
 								"type": [
@@ -27166,16 +27949,16 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 1000000
+						"minimum": 0,
+						"maximum": 4294967295,
+						"description": "SYN flood burst, as firewall4 reads it: 0 leaves the burst out of the limit"
 					},
 					"synflood_rate": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 1000000
+						"minimum": 1
 					},
 					"tcp_syncookies": {
 						"type": "boolean",
@@ -27260,16 +28043,16 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 1000000
+						"minimum": 0,
+						"maximum": 4294967295,
+						"description": "SYN flood burst, as firewall4 reads it: 0 leaves the burst out of the limit"
 					},
 					"synflood_rate": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 1000000
+						"minimum": 1
 					},
 					"tcp_syncookies": {
 						"type": "boolean",
@@ -27351,16 +28134,15 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 1000000
+						"minimum": 0,
+						"maximum": 4294967295
 					},
 					"synflood_rate": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 1000000
+						"minimum": 1
 					},
 					"tcp_syncookies": {
 						"type": [
@@ -27453,9 +28235,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
+						"minimum": -2147483648,
 						"maximum": 2147483647,
-						"description": "Assignment preference: when several interfaces share a prefix, the ones with a higher weight get their subnet first."
+						"description": "Assignment preference: when several interfaces share a prefix, the ones with a higher weight get their subnet first. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"mtu": {
 						"type": [
@@ -27495,8 +28277,8 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"description": "Metric of the routes this interface installs without one of their own"
+						"minimum": -2147483648,
+						"description": "Metric of the routes this interface installs without one of their own. A write takes 0 or more, as LuCI does, and a read gives a stored negative value, which netifd takes. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"defaultroute": {
 						"type": [
@@ -27588,7 +28370,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "Full IPv4 address list for static proto (uci `list ipaddr`). The only write name for this option; `ipaddr` is the read-only first entry."
+						"description": "Full IPv4 address list for static proto (uci `list ipaddr`). The only write name for this option; `ipaddr` is the read-only first entry. On a proto that uapi does not model, such as 6in4, one value is stored as an option, as LuCI writes it, and a write refuses several when the handler reads the option as one value, as netifd publishes it in `get_proto_handlers`: netifd hands such a handler no uci list."
 					},
 					"ip6addrs": {
 						"type": [
@@ -27598,7 +28380,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv6 address list for static proto (uci `list ip6addr`). A static interface needs either this or `ipaddrs`, not both."
+						"description": "IPv6 address list for static proto (uci `list ip6addr`). A static interface needs either this or `ipaddrs`, not both. On a proto that uapi does not model, such as 6in4, one value is stored as an option, as LuCI writes it, and a write refuses several when the handler reads the option as one value, as netifd publishes it in `get_proto_handlers`: netifd hands such a handler no uci list."
 					},
 					"netmask": {
 						"type": [
@@ -27633,7 +28415,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write, and v4 removes that (see docs/deprecations.md)."
+						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write, and v4 removes that (see docs/deprecations.md). On a proto that uapi does not model, such as 6in4, one value is stored as an option, as LuCI writes it, and a write refuses several when the handler reads the option as one value, as netifd publishes it in `get_proto_handlers`: netifd hands such a handler no uci list."
 					},
 					"gateway": {
 						"type": [
@@ -27707,7 +28489,7 @@
 							"string",
 							"null"
 						],
-						"description": "Prefix delegation request (dhcpv6, pppoe, ppp): auto, no, a prefix length, or a prefix such as 2001:db8::/56"
+						"description": "Prefix delegation request (dhcpv6, pppoe, ppp): auto, no, a prefix length, or a prefix such as 2001:db8::/56, each with an optional :IAID of up to 8 hex digits, as odhcp6c reads it"
 					},
 					"reqaddress": {
 						"type": [
@@ -28107,7 +28889,7 @@
 						],
 						"minimum": 0,
 						"maximum": 2147483647,
-						"description": "Assignment preference: when several interfaces share a prefix, the ones with a higher weight get their subnet first."
+						"description": "Assignment preference: when several interfaces share a prefix, the ones with a higher weight get their subnet first. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"mtu": {
 						"type": [
@@ -28148,7 +28930,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"description": "Metric of the routes this interface installs without one of their own"
+						"description": "Metric of the routes this interface installs without one of their own. A write takes 0 or more, as LuCI does, and a read gives a stored negative value, which netifd takes. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"defaultroute": {
 						"type": [
@@ -28172,7 +28954,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "Full IPv4 address list for static proto (uci `list ipaddr`). The only write name for this option; `ipaddr` is the read-only first entry."
+						"description": "Full IPv4 address list for static proto (uci `list ipaddr`). The only write name for this option; `ipaddr` is the read-only first entry. On a proto that uapi does not model, such as 6in4, one value is stored as an option, as LuCI writes it, and a write refuses several when the handler reads the option as one value, as netifd publishes it in `get_proto_handlers`: netifd hands such a handler no uci list."
 					},
 					"ip6addrs": {
 						"type": [
@@ -28182,7 +28964,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv6 address list for static proto (uci `list ip6addr`). A static interface needs either this or `ipaddrs`, not both."
+						"description": "IPv6 address list for static proto (uci `list ip6addr`). A static interface needs either this or `ipaddrs`, not both. On a proto that uapi does not model, such as 6in4, one value is stored as an option, as LuCI writes it, and a write refuses several when the handler reads the option as one value, as netifd publishes it in `get_proto_handlers`: netifd hands such a handler no uci list."
 					},
 					"netmask": {
 						"type": [
@@ -28218,7 +29000,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write, and v4 removes that (see docs/deprecations.md)."
+						"description": "IPv6 prefixes routed to this device for delegation to clients (static, dhcpv6, wireguard). Responses are always an array. A space-separated string is still accepted on write, and v4 removes that (see docs/deprecations.md). On a proto that uapi does not model, such as 6in4, one value is stored as an option, as LuCI writes it, and a write refuses several when the handler reads the option as one value, as netifd publishes it in `get_proto_handlers`: netifd hands such a handler no uci list."
 					},
 					"gateway": {
 						"type": [
@@ -28289,8 +29071,8 @@
 							"string",
 							"null"
 						],
-						"pattern": "^(auto|no|[0-9]+|[0-9A-Fa-f:]+/[0-9]+)$",
-						"description": "Prefix delegation request (dhcpv6, pppoe, ppp): auto, no, a prefix length, or a prefix such as 2001:db8::/56"
+						"pattern": "^(auto|no|([0-9]+|[0-9A-Fa-f:.]+/[0-9]+)(:[0-9A-Fa-f]{1,8})?)$",
+						"description": "Prefix delegation request (dhcpv6, pppoe, ppp): auto, no, a prefix length, or a prefix such as 2001:db8::/56, each with an optional :IAID of up to 8 hex digits, as odhcp6c reads it"
 					},
 					"reqaddress": {
 						"type": [
@@ -28860,7 +29642,7 @@
 							"string",
 							"null"
 						],
-						"pattern": "^(auto|no|[0-9]+|[0-9A-Fa-f:]+/[0-9]+)$"
+						"pattern": "^(auto|no|([0-9]+|[0-9A-Fa-f:.]+/[0-9]+)(:[0-9A-Fa-f]{1,8})?)$"
 					},
 					"reqaddress": {
 						"type": [
@@ -28906,16 +29688,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"bridge",
-							"8021q",
-							"8021ad",
-							"macvlan",
-							"veth",
-							"tun",
-							"tap",
-							null
-						]
+						"description": "Device type that a write sets. A read also gives a type that uapi does not write, such as the bonding or vrf that LuCI writes, and netifd sets up a type that it does not know as a plain device. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ports": {
 						"type": [
@@ -28931,9 +29704,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
+						"minimum": 0,
 						"maximum": 4094,
-						"description": "VLAN id for 8021q / 8021ad devices"
+						"description": "VLAN id for 8021q / 8021ad devices. A write takes 1 to 4094, and a read gives a stored 0, which the netifd of OpenWrt main takes. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ifname": {
 						"type": [
@@ -29012,6 +29785,7 @@
 							"string",
 							"null"
 						],
+						"description": "Device type that a write sets. A read also gives a type that uapi does not write, such as the bonding or vrf that LuCI writes, and netifd sets up a type that it does not know as a plain device. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"bridge",
 							"8021q",
@@ -29039,7 +29813,7 @@
 						],
 						"minimum": 1,
 						"maximum": 4094,
-						"description": "VLAN id for 8021q / 8021ad devices"
+						"description": "VLAN id for 8021q / 8021ad devices. A write takes 1 to 4094, and a read gives a stored 0, which the netifd of OpenWrt main takes. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ifname": {
 						"type": [
@@ -29224,14 +29998,16 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0
+						"minimum": -2147483648,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"mtu": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0
+						"minimum": -2147483648,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"source": {
 						"type": [
@@ -29320,14 +30096,16 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0
+						"minimum": 0,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"mtu": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0
+						"minimum": 0,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"source": {
 						"type": [
@@ -29492,9 +30270,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 32766,
-						"description": "Position of the rule: a lower one runs first. Without one, netifd numbers the rule by its place among the rules, from 1 up, which puts it ahead of `main` at 32766. A rule without a selector matches every packet, so with a table that holds a default route it routes all traffic, the management session included. LuCI allows the same."
+						"minimum": -2147483648,
+						"maximum": 2147483647,
+						"description": "Position of the rule: a lower one runs first. Without one, netifd numbers the rule by its place among the rules, from 1 up, which puts it ahead of `main` at 32766. A rule without a selector matches every packet, so with a table that holds a default route it routes all traffic, the management session included. LuCI allows the same. A write takes 0 or more, as LuCI does, and a read gives the number that netifd reads. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"lookup": {
 						"type": [
@@ -29676,8 +30454,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 32766,
-						"description": "Position of the rule: a lower one runs first. Without one, netifd numbers the rule by its place among the rules, from 1 up, which puts it ahead of `main` at 32766. A rule without a selector matches every packet, so with a table that holds a default route it routes all traffic, the management session included. LuCI allows the same."
+						"maximum": 2147483647,
+						"description": "Position of the rule: a lower one runs first. Without one, netifd numbers the rule by its place among the rules, from 1 up, which puts it ahead of `main` at 32766. A rule without a selector matches every packet, so with a table that holds a default route it routes all traffic, the management session included. LuCI allows the same. A write takes 0 or more, as LuCI does, and a read gives the number that netifd reads. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"lookup": {
 						"type": [
@@ -29865,7 +30643,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 32766
+						"maximum": 2147483647
 					},
 					"lookup": {
 						"type": [
@@ -30053,7 +30831,7 @@
 						],
 						"items": {
 							"type": "string",
-							"pattern": "^[A-Za-z0-9._-]+(:[tu*]+)?$"
+							"pattern": "^[^:/ \t\n]+(:[tu*]*)?$"
 						},
 						"description": "Bridge ports with optional :t (tagged), :u (untagged), :* (pvid) suffix"
 					}
@@ -30092,7 +30870,7 @@
 						],
 						"items": {
 							"type": "string",
-							"pattern": "^[A-Za-z0-9._-]+(:[tu*]+)?$"
+							"pattern": "^[^:/ \t\n]+(:[tu*]*)?$"
 						}
 					}
 				}
@@ -30139,7 +30917,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host. A read gives the entries as wg gets them: wireguard.sh joins a list with spaces, leaving out an empty entry, makes each space a comma, and expands the backslash escapes of printf %b, and wg cuts the line at a NUL byte and at `#` and splits it at commas. So `10.0.0.0/8\\054192.168.0.0/16` reads as two entries, and so does a comma, while two prefixes that a tab separates read as one entry, and a space at either end or next to another adds an empty entry, and wg refuses the config for either, so the interface does not come up. A value that the escapes would give a second line, the end of the config or a byte that is not printable ASCII, or that holds a backslash and is longer than 512 bytes, reads unexpanded. A value that wg reads as an empty line, such as one that starts with `#`, reads as one empty entry, because wireguard.sh still writes the line and wg refuses it. The routes of `route_allowed_ips` go to each word of the value as stored, before the escapes, with the address before the first `/` of the word and the length after its last, read as netifd reads it. Each entry that a write leaves on an enabled peer must be an address or CIDR, and a write that leaves the peer disabled checks only the entries that it sends. A stored entry that starts with `+` or `-` marks an incremental update to wg, which adds the prefixes of the whole list to what the peer already holds instead of replacing them, and refuses the command for one marked `-`, in `wg set` as in the `wg syncconf` of an ifup. A write refuses such an entry wherever it leaves the peer enabled, because it is not an address or CIDR, and the kernel apply and the restore refuse a peer that stores one."
+						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host. A read gives the entries as wg gets them: wireguard.sh joins a list with spaces, leaving out an empty entry, makes each space a comma, and expands the backslash escapes of printf %b, and wg cuts the line at a NUL byte and at `#` and splits it at commas. So `10.0.0.0/8\\054192.168.0.0/16` reads as two entries, and so does a comma, while two prefixes that a tab separates read as one entry, and a space at either end or next to another adds an empty entry, and wg refuses the config for either, so the interface does not come up. A value that the escapes would give a second line, the end of the config or a byte that is not printable ASCII, or that holds a backslash and is longer than 512 bytes, reads unexpanded. A value that wg reads as an empty line, such as one that starts with `#`, reads as one empty entry, because wireguard.sh still writes the line and wg refuses it. The routes of `route_allowed_ips` go to each word of the value as stored, before the escapes, with the address before the first `/` of the word and the length after its last, read as netifd reads it. The ucode proto handler of OpenWrt main takes a list as its entries and an option as its words, joins them with commas and expands no escape, so a list entry that holds a space or a backslash reads as one entry, which wg refuses, and it routes each entry with the length that ucode's int() reads, its leading decimal digits, so `10.0.0.0/0x10` routes 0.0.0.0/0. Each entry that a write leaves on an enabled peer must be an address or CIDR, and a write that leaves the peer disabled checks only the entries that it sends. A stored entry that starts with `+` or `-` marks an incremental update to wg, which adds the prefixes of the whole list to what the peer already holds instead of replacing them, and refuses the command for one marked `-`, in `wg set` as in the `wg syncconf` of an ifup. A write refuses such an entry wherever it leaves the peer enabled, because it is not an address or CIDR, and the kernel apply and the restore refuse a peer that stores one."
 					},
 					"endpoint_host": {
 						"type": [
@@ -30155,7 +30933,7 @@
 						],
 						"minimum": 0,
 						"maximum": 65535,
-						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as wg resolves it. 0 reads when the name does not resolve, and then wg cannot bring the interface up. A write that changes the port to 0 answers 422, and so does a write that sends back the 0 of a name that does not resolve, because it would store port 0 in its place. A write that leaves a stored port as it is passes, unless it enables the peer, or changes the host or the key of an enabled peer, while the port reads 0."
+						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as the platform resolves it. 0 reads when the name does not resolve: wireguard.sh then cannot bring the interface up, and the ucode handler of OpenWrt main leaves the endpoint out, as it does for a peer with a host and no port. A write that changes the port to 0 answers 422, and so does a write that sends back the 0 of a name that does not resolve, because it would store port 0 in its place. A write that leaves a stored port as it is passes, unless it enables the peer, or changes the host or the key of an enabled peer, while the port reads 0."
 					},
 					"persistent_keepalive": {
 						"type": [
@@ -30164,17 +30942,17 @@
 						],
 						"minimum": -1,
 						"maximum": 65535,
-						"description": "Seconds between keepalive packets. 0, a stored `off` or no value turns them off. -1 reads when wg cannot read the stored value, and then wg cannot bring the interface up. A write that changes the keepalive to -1 answers 422. A write that leaves such a stored value as it is passes, unless it enables the peer, and a PUT that sends the -1 back stores -1, which wg refuses as it refuses the stored value."
+						"description": "Seconds between keepalive packets. 0, a stored `off` or no value turns them off. -1 reads when wg cannot read the stored value: wireguard.sh then cannot bring the interface up, and the ucode handler of OpenWrt main leaves the keepalive out. A write that changes the keepalive to -1 answers 422. A write that leaves such a stored value as it is passes, unless it enables the peer, and a PUT that sends the -1 back stores -1, which wg refuses as it refuses the stored value."
 					},
 					"route_allowed_ips": {
 						"type": "boolean",
 						"default": false,
-						"description": "Auto-install routes for allowed_ips"
+						"description": "Auto-install routes for allowed_ips. A stored value other than `1` reads true only where netifd runs wireguard.sh, which also takes `on`, `true`, `yes` and `enabled`."
 					},
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Skip this peer when starting the tunnel"
+						"description": "Skip this peer when starting the tunnel. A stored value other than `1` reads true only where netifd runs wireguard.sh, which also takes `on`, `true`, `yes` and `enabled`."
 					},
 					"runtime": {
 						"type": "object",
@@ -30182,7 +30960,7 @@
 						"properties": {
 							"in_kernel": {
 								"type": "boolean",
-								"description": "The kernel holds a peer under the key that wg reads from the stored `public_key`, which wireguard.sh gives wg through printf %b. false for a stored value that is not a key. The other fields are null when this is false. Two peers of an interface that store the same key share the one peer of the kernel, and both report it, a disabled one included."
+								"description": "The kernel holds a peer under the key that wg reads from the stored `public_key`, which wireguard.sh gives wg through printf %b, and the ucode proto handler of OpenWrt main as it is. false for a stored value that is not a key. The other fields are null when this is false. Two peers of an interface that store the same key share the one peer of the kernel, and both report it, a disabled one included."
 							},
 							"endpoint": {
 								"type": [
@@ -30285,7 +31063,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host. A read gives the entries as wg gets them: wireguard.sh joins a list with spaces, leaving out an empty entry, makes each space a comma, and expands the backslash escapes of printf %b, and wg cuts the line at a NUL byte and at `#` and splits it at commas. So `10.0.0.0/8\\054192.168.0.0/16` reads as two entries, and so does a comma, while two prefixes that a tab separates read as one entry, and a space at either end or next to another adds an empty entry, and wg refuses the config for either, so the interface does not come up. A value that the escapes would give a second line, the end of the config or a byte that is not printable ASCII, or that holds a backslash and is longer than 512 bytes, reads unexpanded. A value that wg reads as an empty line, such as one that starts with `#`, reads as one empty entry, because wireguard.sh still writes the line and wg refuses it. The routes of `route_allowed_ips` go to each word of the value as stored, before the escapes, with the address before the first `/` of the word and the length after its last, read as netifd reads it. Each entry that a write leaves on an enabled peer must be an address or CIDR, and a write that leaves the peer disabled checks only the entries that it sends. A stored entry that starts with `+` or `-` marks an incremental update to wg, which adds the prefixes of the whole list to what the peer already holds instead of replacing them, and refuses the command for one marked `-`, in `wg set` as in the `wg syncconf` of an ifup. A write refuses such an entry wherever it leaves the peer enabled, because it is not an address or CIDR, and the kernel apply and the restore refuse a peer that stores one."
+						"description": "IPv4 or IPv6 addresses or CIDRs routed to this peer; a bare address means a single host. A read gives the entries as wg gets them: wireguard.sh joins a list with spaces, leaving out an empty entry, makes each space a comma, and expands the backslash escapes of printf %b, and wg cuts the line at a NUL byte and at `#` and splits it at commas. So `10.0.0.0/8\\054192.168.0.0/16` reads as two entries, and so does a comma, while two prefixes that a tab separates read as one entry, and a space at either end or next to another adds an empty entry, and wg refuses the config for either, so the interface does not come up. A value that the escapes would give a second line, the end of the config or a byte that is not printable ASCII, or that holds a backslash and is longer than 512 bytes, reads unexpanded. A value that wg reads as an empty line, such as one that starts with `#`, reads as one empty entry, because wireguard.sh still writes the line and wg refuses it. The routes of `route_allowed_ips` go to each word of the value as stored, before the escapes, with the address before the first `/` of the word and the length after its last, read as netifd reads it. The ucode proto handler of OpenWrt main takes a list as its entries and an option as its words, joins them with commas and expands no escape, so a list entry that holds a space or a backslash reads as one entry, which wg refuses, and it routes each entry with the length that ucode's int() reads, its leading decimal digits, so `10.0.0.0/0x10` routes 0.0.0.0/0. Each entry that a write leaves on an enabled peer must be an address or CIDR, and a write that leaves the peer disabled checks only the entries that it sends. A stored entry that starts with `+` or `-` marks an incremental update to wg, which adds the prefixes of the whole list to what the peer already holds instead of replacing them, and refuses the command for one marked `-`, in `wg set` as in the `wg syncconf` of an ifup. A write refuses such an entry wherever it leaves the peer enabled, because it is not an address or CIDR, and the kernel apply and the restore refuse a peer that stores one."
 					},
 					"endpoint_host": {
 						"type": [
@@ -30301,7 +31079,7 @@
 						],
 						"minimum": 1,
 						"maximum": 65535,
-						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as wg resolves it. 0 reads when the name does not resolve, and then wg cannot bring the interface up. A write that changes the port to 0 answers 422, and so does a write that sends back the 0 of a name that does not resolve, because it would store port 0 in its place. A write that leaves a stored port as it is passes, unless it enables the peer, or changes the host or the key of an enabled peer, while the port reads 0."
+						"description": "Endpoint UDP port. A service name that uci stores, such as `https`, reads as its port from /etc/services, as the platform resolves it. 0 reads when the name does not resolve: wireguard.sh then cannot bring the interface up, and the ucode handler of OpenWrt main leaves the endpoint out, as it does for a peer with a host and no port. A write that changes the port to 0 answers 422, and so does a write that sends back the 0 of a name that does not resolve, because it would store port 0 in its place. A write that leaves a stored port as it is passes, unless it enables the peer, or changes the host or the key of an enabled peer, while the port reads 0."
 					},
 					"persistent_keepalive": {
 						"type": [
@@ -30310,17 +31088,17 @@
 						],
 						"minimum": 0,
 						"maximum": 65535,
-						"description": "Seconds between keepalive packets. 0, a stored `off` or no value turns them off. -1 reads when wg cannot read the stored value, and then wg cannot bring the interface up. A write that changes the keepalive to -1 answers 422. A write that leaves such a stored value as it is passes, unless it enables the peer, and a PUT that sends the -1 back stores -1, which wg refuses as it refuses the stored value."
+						"description": "Seconds between keepalive packets. 0, a stored `off` or no value turns them off. -1 reads when wg cannot read the stored value: wireguard.sh then cannot bring the interface up, and the ucode handler of OpenWrt main leaves the keepalive out. A write that changes the keepalive to -1 answers 422. A write that leaves such a stored value as it is passes, unless it enables the peer, and a PUT that sends the -1 back stores -1, which wg refuses as it refuses the stored value."
 					},
 					"route_allowed_ips": {
 						"type": "boolean",
 						"default": false,
-						"description": "Auto-install routes for allowed_ips"
+						"description": "Auto-install routes for allowed_ips. A stored value other than `1` reads true only where netifd runs wireguard.sh, which also takes `on`, `true`, `yes` and `enabled`."
 					},
 					"disabled": {
 						"type": "boolean",
 						"default": false,
-						"description": "Skip this peer when starting the tunnel"
+						"description": "Skip this peer when starting the tunnel. A stored value other than `1` reads true only where netifd runs wireguard.sh, which also takes `on`, `true`, `yes` and `enabled`."
 					},
 					"preshared_key": {
 						"type": "string",
@@ -30478,11 +31256,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"mac80211",
-							"broadcom",
-							null
-						]
+						"description": "Driver type that a write sets. A read also gives the type of a vendor driver, whose radio netifd skips unless a handler for it is installed. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"path": {
 						"type": [
@@ -30592,6 +31366,7 @@
 							"string",
 							"null"
 						],
+						"description": "Driver type that a write sets. A read also gives the type of a vendor driver, whose radio netifd skips unless a handler for it is installed. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"mac80211",
 							"broadcom",
@@ -30841,10 +31616,11 @@
 							"adhoc",
 							"wds",
 							"monitor",
-							"mesh"
+							"mesh",
+							"ahdemo"
 						],
 						"default": "ap",
-						"description": "A write refuses mode wds, for which wifi-scripts sets up no interface. LuCI writes a WDS access point or station as mode ap or sta with option wds. A read reports a stored wds, and a write that leaves it as it is is refused for it only when it sets the SSID up. A create or a PUT that sends no mode stores ap, and a write that sends a null mode is refused. A PATCH that sends no mode leaves a section without one as it is, and the read of such a section reports ap"
+						"description": "A write refuses mode wds, for which wifi-scripts sets up no interface. LuCI writes a WDS access point or station as mode ap or sta with option wds. A read reports a stored wds, and a write that leaves it as it is is refused for it only when it sets the SSID up. A read also reports the ahdemo that LuCI writes, which wifi-scripts skips. A write refuses a change to it, and a write that sends a stored ahdemo back passes, such as a PUT of the read. A create or a PUT that sends no mode stores ap, and a write that sends a null mode is refused. A PATCH that sends no mode leaves a section without one as it is, and the read of such a section reports ap"
 					},
 					"ssid": {
 						"type": [
@@ -30868,6 +31644,13 @@
 							"wpa2",
 							"wpa3",
 							"wpa3-mixed",
+							"sae-compat",
+							"wpa3-192",
+							"wpa-mixed",
+							"psk3",
+							"psk3-mixed",
+							"wep-open",
+							"wep-shared",
 							"psk+ccmp",
 							"psk+ccmp256",
 							"psk+gcmp",
@@ -30947,9 +31730,30 @@
 							"wpa3-mixed+aes",
 							"wpa3-mixed+tkip+aes",
 							"wpa3-mixed+aes+tkip",
-							"wpa3-mixed+ccmp+tkip"
+							"wpa3-mixed+ccmp+tkip",
+							"wpa3-192+ccmp",
+							"wpa3-192+ccmp256",
+							"wpa3-192+gcmp",
+							"wpa3-192+gcmp256",
+							"wpa3-192+tkip",
+							"wpa3-192+tkip+ccmp",
+							"wpa3-192+aes",
+							"wpa3-192+tkip+aes",
+							"wpa3-192+aes+tkip",
+							"wpa3-192+ccmp+tkip",
+							"wpa-mixed+ccmp",
+							"wpa-mixed+ccmp256",
+							"wpa-mixed+gcmp",
+							"wpa-mixed+gcmp256",
+							"wpa-mixed+tkip",
+							"wpa-mixed+tkip+ccmp",
+							"wpa-mixed+aes",
+							"wpa-mixed+tkip+aes",
+							"wpa-mixed+aes+tkip",
+							"wpa-mixed+ccmp+tkip"
 						],
-						"default": "none"
+						"default": "none",
+						"description": "Encryption mode. A write refuses wep with `conflict` unless the router sets WEP up. That needs the shell wifi-scripts, which OpenWrt builds only without `CONFIG_WIFI_SCRIPTS_UCODE`, and the daemon of the mode built with WEP: hostapd in mode ap, and wpa_supplicant in mode sta or adhoc. uapi asks `hostapd -vwep` or `wpa_supplicant -vwep`, as LuCI does. It refuses wep in mode mesh, which takes none. The ucode wifi-scripts, which OpenWrt builds by default, give the daemon no WEP key, and the SSID runs without encryption. The rule covers the wep-open and wep-shared that LuCI writes, and any stored value that starts with wep. A write that leaves a stored WEP value as it is is refused for it only when it sets the SSID up or changes its mode"
 					},
 					"disabled": {
 						"type": "boolean",
@@ -31091,7 +31895,7 @@
 					"key": {
 						"type": "string",
 						"writeOnly": true,
-						"description": "Encryption passphrase; accepted on write, masked on read. Required for every encryption other than none, wep and owe when no key is stored yet, which validate() enforces. It is not a schema conditional, because a read-modify-write body cannot carry a masked field. A key with a newline is refused, because wifi-scripts writes it into the daemon's config as one line. With psk, psk2, psk-mixed, sae or sae-mixed, a write also refuses a key that the daemon refuses or misreads. In mode ap, the key must be 8 to 63 bytes, or 64 hex digits other than with plain sae. In mode sta or adhoc, other than with plain sae, the key must be 8 to 63 bytes with no control character, because wifi-scripts gives wpa_supplicant every key as a passphrase, a key of 64 hex digits too. In mode sta, adhoc or mesh, the key must not hold a `#` after an odd number of double quotes. uapi counts bytes. A write that leaves the key as it is is refused for a problem that it already had only when it sets the SSID up or changes its mode or encryption"
+						"description": "Encryption passphrase; accepted on write, masked on read. Required for every encryption other than none, wep and owe when no key is stored yet, which validate() enforces. LuCI writes an EAP SSID without a key, so such an SSID needs one only in a write that sends `encryption`. It is not a schema conditional, because a read-modify-write body cannot carry a masked field. A key with a newline is refused, because wifi-scripts writes it into the daemon's config as one line. With psk, psk2, psk-mixed, sae or sae-mixed, a write also refuses a key that the daemon refuses or misreads. In mode ap, the key must be 8 to 63 bytes, or 64 hex digits other than with plain sae. In mode sta or adhoc, other than with plain sae, the key must be 8 to 63 bytes with no control character, because wifi-scripts gives wpa_supplicant every key as a passphrase, a key of 64 hex digits too. In mode sta, adhoc or mesh, the key must not hold a `#` after an odd number of double quotes. uapi counts bytes. A write that leaves the key as it is is refused for a problem that it already had only when it sets the SSID up or changes its mode or encryption"
 					},
 					"r0kh": {
 						"type": "array",
@@ -31147,7 +31951,7 @@
 							"mesh"
 						],
 						"default": "ap",
-						"description": "A write refuses mode wds, for which wifi-scripts sets up no interface. LuCI writes a WDS access point or station as mode ap or sta with option wds. A read reports a stored wds, and a write that leaves it as it is is refused for it only when it sets the SSID up. A create or a PUT that sends no mode stores ap, and a write that sends a null mode is refused. A PATCH that sends no mode leaves a section without one as it is, and the read of such a section reports ap"
+						"description": "A write refuses mode wds, for which wifi-scripts sets up no interface. LuCI writes a WDS access point or station as mode ap or sta with option wds. A read reports a stored wds, and a write that leaves it as it is is refused for it only when it sets the SSID up. A read also reports the ahdemo that LuCI writes, which wifi-scripts skips. A write refuses a change to it, and a write that sends a stored ahdemo back passes, such as a PUT of the read. A create or a PUT that sends no mode stores ap, and a write that sends a null mode is refused. A PATCH that sends no mode leaves a section without one as it is, and the read of such a section reports ap"
 					},
 					"ssid": {
 						"type": [
@@ -31172,6 +31976,13 @@
 							"wpa2",
 							"wpa3",
 							"wpa3-mixed",
+							"sae-compat",
+							"wpa3-192",
+							"wpa-mixed",
+							"psk3",
+							"psk3-mixed",
+							"wep-open",
+							"wep-shared",
 							"psk+ccmp",
 							"psk+ccmp256",
 							"psk+gcmp",
@@ -31251,9 +32062,30 @@
 							"wpa3-mixed+aes",
 							"wpa3-mixed+tkip+aes",
 							"wpa3-mixed+aes+tkip",
-							"wpa3-mixed+ccmp+tkip"
+							"wpa3-mixed+ccmp+tkip",
+							"wpa3-192+ccmp",
+							"wpa3-192+ccmp256",
+							"wpa3-192+gcmp",
+							"wpa3-192+gcmp256",
+							"wpa3-192+tkip",
+							"wpa3-192+tkip+ccmp",
+							"wpa3-192+aes",
+							"wpa3-192+tkip+aes",
+							"wpa3-192+aes+tkip",
+							"wpa3-192+ccmp+tkip",
+							"wpa-mixed+ccmp",
+							"wpa-mixed+ccmp256",
+							"wpa-mixed+gcmp",
+							"wpa-mixed+gcmp256",
+							"wpa-mixed+tkip",
+							"wpa-mixed+tkip+ccmp",
+							"wpa-mixed+aes",
+							"wpa-mixed+tkip+aes",
+							"wpa-mixed+aes+tkip",
+							"wpa-mixed+ccmp+tkip"
 						],
-						"default": "none"
+						"default": "none",
+						"description": "Encryption mode. A write refuses wep with `conflict` unless the router sets WEP up. That needs the shell wifi-scripts, which OpenWrt builds only without `CONFIG_WIFI_SCRIPTS_UCODE`, and the daemon of the mode built with WEP: hostapd in mode ap, and wpa_supplicant in mode sta or adhoc. uapi asks `hostapd -vwep` or `wpa_supplicant -vwep`, as LuCI does. It refuses wep in mode mesh, which takes none. The ucode wifi-scripts, which OpenWrt builds by default, give the daemon no WEP key, and the SSID runs without encryption. The rule covers the wep-open and wep-shared that LuCI writes, and any stored value that starts with wep. A write that leaves a stored WEP value as it is is refused for it only when it sets the SSID up or changes its mode"
 					},
 					"disabled": {
 						"type": "boolean",
@@ -31336,7 +32168,7 @@
 					"key": {
 						"type": "string",
 						"writeOnly": true,
-						"description": "Encryption passphrase; accepted on write, masked on read. Required for every encryption other than none, wep and owe when no key is stored yet, which validate() enforces. It is not a schema conditional, because a read-modify-write body cannot carry a masked field. A key with a newline is refused, because wifi-scripts writes it into the daemon's config as one line. With psk, psk2, psk-mixed, sae or sae-mixed, a write also refuses a key that the daemon refuses or misreads. In mode ap, the key must be 8 to 63 bytes, or 64 hex digits other than with plain sae. In mode sta or adhoc, other than with plain sae, the key must be 8 to 63 bytes with no control character, because wifi-scripts gives wpa_supplicant every key as a passphrase, a key of 64 hex digits too. In mode sta, adhoc or mesh, the key must not hold a `#` after an odd number of double quotes. uapi counts bytes. A write that leaves the key as it is is refused for a problem that it already had only when it sets the SSID up or changes its mode or encryption"
+						"description": "Encryption passphrase; accepted on write, masked on read. Required for every encryption other than none, wep and owe when no key is stored yet, which validate() enforces. LuCI writes an EAP SSID without a key, so such an SSID needs one only in a write that sends `encryption`. It is not a schema conditional, because a read-modify-write body cannot carry a masked field. A key with a newline is refused, because wifi-scripts writes it into the daemon's config as one line. With psk, psk2, psk-mixed, sae or sae-mixed, a write also refuses a key that the daemon refuses or misreads. In mode ap, the key must be 8 to 63 bytes, or 64 hex digits other than with plain sae. In mode sta or adhoc, other than with plain sae, the key must be 8 to 63 bytes with no control character, because wifi-scripts gives wpa_supplicant every key as a passphrase, a key of 64 hex digits too. In mode sta, adhoc or mesh, the key must not hold a `#` after an odd number of double quotes. uapi counts bytes. A write that leaves the key as it is is refused for a problem that it already had only when it sets the SSID up or changes its mode or encryption"
 					},
 					"r0kh": {
 						"type": "array",
@@ -31379,6 +32211,11 @@
 										"wpa2",
 										"wpa3",
 										"wpa3-mixed",
+										"sae-compat",
+										"wpa3-192",
+										"wpa-mixed",
+										"psk3",
+										"psk3-mixed",
 										"psk2+ccmp",
 										"psk2+ccmp256",
 										"psk2+gcmp",
@@ -31438,7 +32275,27 @@
 										"wpa3-mixed+aes",
 										"wpa3-mixed+tkip+aes",
 										"wpa3-mixed+aes+tkip",
-										"wpa3-mixed+ccmp+tkip"
+										"wpa3-mixed+ccmp+tkip",
+										"wpa3-192+ccmp",
+										"wpa3-192+ccmp256",
+										"wpa3-192+gcmp",
+										"wpa3-192+gcmp256",
+										"wpa3-192+tkip",
+										"wpa3-192+tkip+ccmp",
+										"wpa3-192+aes",
+										"wpa3-192+tkip+aes",
+										"wpa3-192+aes+tkip",
+										"wpa3-192+ccmp+tkip",
+										"wpa-mixed+ccmp",
+										"wpa-mixed+ccmp256",
+										"wpa-mixed+gcmp",
+										"wpa-mixed+gcmp256",
+										"wpa-mixed+tkip",
+										"wpa-mixed+tkip+ccmp",
+										"wpa-mixed+aes",
+										"wpa-mixed+tkip+aes",
+										"wpa-mixed+aes+tkip",
+										"wpa-mixed+ccmp+tkip"
 									]
 								}
 							},
@@ -31468,6 +32325,8 @@
 										"wpa2",
 										"wpa3",
 										"wpa3-mixed",
+										"wpa3-192",
+										"wpa-mixed",
 										"wpa+ccmp",
 										"wpa+ccmp256",
 										"wpa+gcmp",
@@ -31507,7 +32366,27 @@
 										"wpa3-mixed+aes",
 										"wpa3-mixed+tkip+aes",
 										"wpa3-mixed+aes+tkip",
-										"wpa3-mixed+ccmp+tkip"
+										"wpa3-mixed+ccmp+tkip",
+										"wpa3-192+ccmp",
+										"wpa3-192+ccmp256",
+										"wpa3-192+gcmp",
+										"wpa3-192+gcmp256",
+										"wpa3-192+tkip",
+										"wpa3-192+tkip+ccmp",
+										"wpa3-192+aes",
+										"wpa3-192+tkip+aes",
+										"wpa3-192+aes+tkip",
+										"wpa3-192+ccmp+tkip",
+										"wpa-mixed+ccmp",
+										"wpa-mixed+ccmp256",
+										"wpa-mixed+gcmp",
+										"wpa-mixed+gcmp256",
+										"wpa-mixed+tkip",
+										"wpa-mixed+tkip+ccmp",
+										"wpa-mixed+aes",
+										"wpa-mixed+tkip+aes",
+										"wpa-mixed+aes+tkip",
+										"wpa-mixed+ccmp+tkip"
 									]
 								}
 							},
@@ -31543,6 +32422,11 @@
 										"wpa2",
 										"wpa3",
 										"wpa3-mixed",
+										"sae-compat",
+										"wpa3-192",
+										"wpa-mixed",
+										"psk3",
+										"psk3-mixed",
 										"psk2+ccmp",
 										"psk2+ccmp256",
 										"psk2+gcmp",
@@ -31602,7 +32486,27 @@
 										"wpa3-mixed+aes",
 										"wpa3-mixed+tkip+aes",
 										"wpa3-mixed+aes+tkip",
-										"wpa3-mixed+ccmp+tkip"
+										"wpa3-mixed+ccmp+tkip",
+										"wpa3-192+ccmp",
+										"wpa3-192+ccmp256",
+										"wpa3-192+gcmp",
+										"wpa3-192+gcmp256",
+										"wpa3-192+tkip",
+										"wpa3-192+tkip+ccmp",
+										"wpa3-192+aes",
+										"wpa3-192+tkip+aes",
+										"wpa3-192+aes+tkip",
+										"wpa3-192+ccmp+tkip",
+										"wpa-mixed+ccmp",
+										"wpa-mixed+ccmp256",
+										"wpa-mixed+gcmp",
+										"wpa-mixed+gcmp256",
+										"wpa-mixed+tkip",
+										"wpa-mixed+tkip+ccmp",
+										"wpa-mixed+aes",
+										"wpa-mixed+tkip+aes",
+										"wpa-mixed+aes+tkip",
+										"wpa-mixed+ccmp+tkip"
 									]
 								},
 								"ft_psk_generate_local": {
@@ -31688,6 +32592,13 @@
 							"wpa2",
 							"wpa3",
 							"wpa3-mixed",
+							"sae-compat",
+							"wpa3-192",
+							"wpa-mixed",
+							"psk3",
+							"psk3-mixed",
+							"wep-open",
+							"wep-shared",
 							"psk+ccmp",
 							"psk+ccmp256",
 							"psk+gcmp",
@@ -31768,6 +32679,26 @@
 							"wpa3-mixed+tkip+aes",
 							"wpa3-mixed+aes+tkip",
 							"wpa3-mixed+ccmp+tkip",
+							"wpa3-192+ccmp",
+							"wpa3-192+ccmp256",
+							"wpa3-192+gcmp",
+							"wpa3-192+gcmp256",
+							"wpa3-192+tkip",
+							"wpa3-192+tkip+ccmp",
+							"wpa3-192+aes",
+							"wpa3-192+tkip+aes",
+							"wpa3-192+aes+tkip",
+							"wpa3-192+ccmp+tkip",
+							"wpa-mixed+ccmp",
+							"wpa-mixed+ccmp256",
+							"wpa-mixed+gcmp",
+							"wpa-mixed+gcmp256",
+							"wpa-mixed+tkip",
+							"wpa-mixed+tkip+ccmp",
+							"wpa-mixed+aes",
+							"wpa-mixed+tkip+aes",
+							"wpa-mixed+aes+tkip",
+							"wpa-mixed+ccmp+tkip",
 							null
 						]
 					},
@@ -32235,7 +33166,7 @@
 					},
 					"interface": {
 						"type": "string",
-						"description": "Server-side interface that issued the lease"
+						"description": "Network device that odhcpd served the lease on, as odhcpd names it (for example `br-lan`), not the uci interface"
 					},
 					"ia_type": {
 						"type": "string",
@@ -32262,7 +33193,7 @@
 							"integer",
 							"null"
 						],
-						"description": "Unix epoch seconds when the lease expires; null for non-numeric values like 'forever'"
+						"description": "Unix epoch seconds when the lease expires; null for one that does not expire"
 					}
 				}
 			},
@@ -32290,7 +33221,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 254
+						"maximum": 4294967295
 					},
 					"limit": {
 						"type": [
@@ -32298,13 +33229,14 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 254
+						"maximum": 4294967295
 					},
 					"leasetime": {
 						"type": [
 							"string",
 							"null"
-						]
+						],
+						"description": "Lease time: a number of seconds, or a number with a suffix such as h or d, or `infinite`, or `deprecated`, as LuCI writes them"
 					},
 					"ignore": {
 						"type": "boolean",
@@ -32349,23 +33281,14 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 2,
-						"description": "When odhcpd announces this device as default router in its router advertisements. 0 or null, when the router has an IPv6 default route and the interface a global prefix. 1, when the interface has a prefix, a ULA one included. 2, always."
+						"description": "When odhcpd announces this device as default router in its router advertisements. 0 or null, when the router has an IPv6 default route and the interface a global prefix. 1, when the interface has a prefix, a ULA one included. 2, always. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"dhcpv4": {
 						"type": [
 							"string",
 							"null"
 						],
-						"enum": [
-							"disabled",
-							"server",
-							"relay",
-							"hybrid",
-							null
-						],
-						"description": "DHCPv4 service on this interface. LuCI offers `disabled` and `server`. dnsmasq serves on every value but `disabled`. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes null as `disabled`."
+						"description": "DHCPv4 service on this interface. LuCI offers `disabled` and `server`, and its DHCP setup writes `server`. dnsmasq serves on every value but `disabled`. An unset value is served by the dnsmasq of OpenWrt 25.12, and taken as `disabled` by the dnsmasq of OpenWrt main, so a read of null serves DHCPv4 on one and not on the other. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes null as `disabled`. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ra_flags": {
 						"type": [
@@ -32448,7 +33371,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 254
+						"maximum": 4294967295
 					},
 					"limit": {
 						"type": [
@@ -32456,14 +33379,15 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 254
+						"maximum": 4294967295
 					},
 					"leasetime": {
 						"type": [
 							"string",
 							"null"
 						],
-						"pattern": "^[0-9]+[smhdwMY]?$"
+						"pattern": "^([0-9]+[smhdwMY]?|infinite|deprecated)$",
+						"description": "Lease time: a number of seconds, or a number with a suffix such as h or d, or `infinite`, or `deprecated`, as LuCI writes them"
 					},
 					"ignore": {
 						"type": "boolean",
@@ -32508,23 +33432,23 @@
 							"integer",
 							"null"
 						],
+						"description": "When odhcpd announces this device as default router in its router advertisements. 0 or null, when the router has an IPv6 default route and the interface a global prefix. 1, when the interface has a prefix, a ULA one included. 2, always. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 0,
-						"maximum": 2,
-						"description": "When odhcpd announces this device as default router in its router advertisements. 0 or null, when the router has an IPv6 default route and the interface a global prefix. 1, when the interface has a prefix, a ULA one included. 2, always."
+						"maximum": 2
 					},
 					"dhcpv4": {
 						"type": [
 							"string",
 							"null"
 						],
+						"description": "DHCPv4 service on this interface. LuCI offers `disabled` and `server`, and its DHCP setup writes `server`. dnsmasq serves on every value but `disabled`. An unset value is served by the dnsmasq of OpenWrt 25.12, and taken as `disabled` by the dnsmasq of OpenWrt main, so a read of null serves DHCPv4 on one and not on the other. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes null as `disabled`. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"disabled",
 							"server",
 							"relay",
 							"hybrid",
 							null
-						],
-						"description": "DHCPv4 service on this interface. LuCI offers `disabled` and `server`. dnsmasq serves on every value but `disabled`. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes null as `disabled`."
+						]
 					},
 					"ra_flags": {
 						"type": [
@@ -32591,7 +33515,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 254
+						"maximum": 4294967295
 					},
 					"limit": {
 						"type": [
@@ -32599,14 +33523,14 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 254
+						"maximum": 4294967295
 					},
 					"leasetime": {
 						"type": [
 							"string",
 							"null"
 						],
-						"pattern": "^[0-9]+[smhdwMY]?$"
+						"pattern": "^([0-9]+[smhdwMY]?|infinite|deprecated)$"
 					},
 					"ignore": {
 						"type": [
@@ -32758,15 +33682,16 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 1000000
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"port": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 65535
+						"minimum": 0,
+						"maximum": 65535,
+						"description": "DNS port. 0 turns the DNS server of dnsmasq off, as next to another resolver"
 					},
 					"domainneeded": {
 						"type": "boolean",
@@ -32873,6 +33798,7 @@
 							"null"
 						],
 						"minimum": 0,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"maximum": 1000000
 					},
 					"port": {
@@ -32880,8 +33806,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 65535
+						"minimum": 0,
+						"maximum": 65535,
+						"description": "DNS port. 0 turns the DNS server of dnsmasq off, as next to another resolver"
 					},
 					"domainneeded": {
 						"type": "boolean",
@@ -33000,7 +33927,7 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
+						"minimum": 0,
 						"maximum": 65535
 					},
 					"domainneeded": {
@@ -33113,9 +34040,7 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 7,
-						"description": "syslog priority (0=emerg .. 7=debug)"
+						"description": "syslog priority (0=emerg .. 7=debug). odhcpd keeps the low 3 bits of another number"
 					},
 					"runtime": {
 						"type": "object",
@@ -33157,9 +34082,7 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 7,
-						"description": "syslog priority (0=emerg .. 7=debug)"
+						"description": "syslog priority (0=emerg .. 7=debug). odhcpd keeps the low 3 bits of another number"
 					}
 				}
 			},
@@ -33195,9 +34118,7 @@
 						"type": [
 							"integer",
 							"null"
-						],
-						"minimum": 0,
-						"maximum": 7
+						]
 					}
 				}
 			},
@@ -33220,7 +34141,7 @@
 							"string",
 							"null"
 						],
-						"description": "System hostname (alphanumerics, dashes, underscores, dots)"
+						"description": "System hostname (alphanumerics, dashes, underscores, dots). A write takes a trailing dot, as LuCI does"
 					},
 					"description": {
 						"type": [
@@ -33303,8 +34224,8 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*$",
-						"description": "System hostname (alphanumerics, dashes, underscores, dots)"
+						"pattern": "^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*\\.?$",
+						"description": "System hostname (alphanumerics, dashes, underscores, dots). A write takes a trailing dot, as LuCI does"
 					},
 					"description": {
 						"type": [
@@ -33383,7 +34304,7 @@
 							"string",
 							"null"
 						],
-						"pattern": "^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*$"
+						"pattern": "^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*\\.?$"
 					},
 					"description": {
 						"type": [
@@ -33635,8 +34556,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 65535
+						"minimum": 0,
+						"maximum": 65535,
+						"description": "SSH port. 0 makes dropbear listen on a random port"
 					},
 					"password_auth": {
 						"type": "boolean",
@@ -33692,8 +34614,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 65535
+						"minimum": 0,
+						"maximum": 65535,
+						"description": "SSH port. 0 makes dropbear listen on a random port"
 					},
 					"password_auth": {
 						"type": "boolean",
@@ -33746,7 +34669,7 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
+						"minimum": 0,
 						"maximum": 65535
 					},
 					"password_auth": {
@@ -33896,14 +34819,14 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"tcp_keepalive": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"index_page": {
 						"type": [
@@ -33958,7 +34881,7 @@
 						],
 						"items": {
 							"type": "string",
-							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+							"pattern": "^(\\[[0-9A-Fa-f:.]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
 						}
 					},
 					"listen_https": {
@@ -33968,7 +34891,7 @@
 						],
 						"items": {
 							"type": "string",
-							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+							"pattern": "^(\\[[0-9A-Fa-f:.]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
 						}
 					},
 					"home": {
@@ -34050,6 +34973,7 @@
 							"integer",
 							"null"
 						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 0
 					},
 					"tcp_keepalive": {
@@ -34057,6 +34981,7 @@
 							"integer",
 							"null"
 						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 0
 					},
 					"index_page": {
@@ -34107,7 +35032,7 @@
 						],
 						"items": {
 							"type": "string",
-							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+							"pattern": "^(\\[[0-9A-Fa-f:.]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
 						}
 					},
 					"listen_https": {
@@ -34117,7 +35042,7 @@
 						],
 						"items": {
 							"type": "string",
-							"pattern": "^(\\[[0-9A-Fa-f:]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
+							"pattern": "^(\\[[0-9A-Fa-f:.]+\\]|[0-9A-Fa-f:.]*):[0-9]+$"
 						}
 					},
 					"home": {
@@ -34256,9 +35181,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 36500,
-						"description": "Certificate validity in days"
+						"minimum": 0,
+						"maximum": 49710,
+						"description": "Certificate validity in days. A write takes 1 to 49710: px5g makes a certificate that has already expired for 0, and wraps a larger number. A read also gives a stored 0. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"bits": {
 						"type": [
@@ -34327,8 +35252,8 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 36500,
-						"description": "Certificate validity in days"
+						"maximum": 49710,
+						"description": "Certificate validity in days. A write takes 1 to 49710: px5g makes a certificate that has already expired for 0, and wraps a larger number. A read also gives a stored 0. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"bits": {
 						"type": [
@@ -34393,7 +35318,7 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 36500
+						"maximum": 49710
 					},
 					"bits": {
 						"type": [
@@ -34474,18 +35399,14 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 4,
-						"description": "How aggressively to add local FQDNs (0..4)"
+						"description": "How aggressively to add local FQDNs (0..4). A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"add_wan_fqdn": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 4,
-						"description": "How aggressively to add WAN FQDNs (0..4)"
+						"description": "How aggressively to add WAN FQDNs (0..4). A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"dnssec_enabled": {
 						"type": "boolean",
@@ -34577,29 +35498,21 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"0",
-							"1",
-							"2",
-							null
-						],
-						"description": "0 = off, 1 = private nets, 2 = all rebind attacks blocked"
+						"description": "0 = off, 1 = private nets, 2 = all rebind attacks blocked. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"num_threads": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 64
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ttl_min": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 86400
+						"description": "Minimum TTL of the cache in seconds. unbound.sh runs a value above 1800 as 300. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"domain": {
 						"type": [
@@ -34667,18 +35580,18 @@
 							"integer",
 							"null"
 						],
+						"description": "How aggressively to add local FQDNs (0..4). A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 0,
-						"maximum": 4,
-						"description": "How aggressively to add local FQDNs (0..4)"
+						"maximum": 4
 					},
 					"add_wan_fqdn": {
 						"type": [
 							"integer",
 							"null"
 						],
+						"description": "How aggressively to add WAN FQDNs (0..4). A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 0,
-						"maximum": 4,
-						"description": "How aggressively to add WAN FQDNs (0..4)"
+						"maximum": 4
 					},
 					"dnssec_enabled": {
 						"type": "boolean",
@@ -34770,19 +35683,20 @@
 							"string",
 							"null"
 						],
+						"description": "0 = off, 1 = private nets, 2 = all rebind attacks blocked. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"0",
 							"1",
 							"2",
 							null
-						],
-						"description": "0 = off, 1 = private nets, 2 = all rebind attacks blocked"
+						]
 					},
 					"num_threads": {
 						"type": [
 							"integer",
 							"null"
 						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 1,
 						"maximum": 64
 					},
@@ -34791,6 +35705,7 @@
 							"integer",
 							"null"
 						],
+						"description": "Minimum TTL of the cache in seconds. unbound.sh runs a value above 1800 as 300. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 0,
 						"maximum": 86400
 					},
@@ -35316,6 +36231,11 @@
 							"fq_codel",
 							"pie",
 							"htb",
+							"codel",
+							"sfq",
+							"fq_pie",
+							"ns2_codel",
+							"pfifo_fast",
 							null
 						]
 					},
@@ -35324,13 +36244,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"piece_of_cake.qos",
-							"simple.qos",
-							"simplest.qos",
-							"layer_cake.qos",
-							null
-						]
+						"description": "A file in /usr/lib/sqm, which LuCI lists and start-sqm sources, such as piece_of_cake.qos, simple.qos, simplest.qos, layer_cake.qos or simplest_tbf.qos."
 					},
 					"linklayer": {
 						"type": [
@@ -35405,6 +36319,11 @@
 							"fq_codel",
 							"pie",
 							"htb",
+							"codel",
+							"sfq",
+							"fq_pie",
+							"ns2_codel",
+							"pfifo_fast",
 							null
 						]
 					},
@@ -35413,13 +36332,8 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"piece_of_cake.qos",
-							"simple.qos",
-							"simplest.qos",
-							"layer_cake.qos",
-							null
-						]
+						"pattern": "^[A-Za-z0-9_][A-Za-z0-9_.+-]*\\.qos$",
+						"description": "A file in /usr/lib/sqm, which LuCI lists and start-sqm sources, such as piece_of_cake.qos, simple.qos, simplest.qos, layer_cake.qos or simplest_tbf.qos."
 					},
 					"linklayer": {
 						"type": [
@@ -35489,6 +36403,11 @@
 							"fq_codel",
 							"pie",
 							"htb",
+							"codel",
+							"sfq",
+							"fq_pie",
+							"ns2_codel",
+							"pfifo_fast",
 							null
 						]
 					},
@@ -35497,13 +36416,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"piece_of_cake.qos",
-							"simple.qos",
-							"simplest.qos",
-							"layer_cake.qos",
-							null
-						]
+						"pattern": "^[A-Za-z0-9_][A-Za-z0-9_.+-]*\\.qos$"
 					},
 					"linklayer": {
 						"type": [
@@ -35732,12 +36645,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"v1",
-							"v2c",
-							"usm",
-							null
-						]
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"secname": {
 						"type": [
@@ -35777,6 +36685,7 @@
 							"string",
 							"null"
 						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"v1",
 							"v2c",
@@ -35864,36 +36773,21 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"any",
-							"v1",
-							"v2c",
-							"usm",
-							null
-						]
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"level": {
 						"type": [
 							"string",
 							"null"
 						],
-						"enum": [
-							"noauth",
-							"auth",
-							"priv",
-							null
-						]
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"prefix": {
 						"type": [
 							"string",
 							"null"
 						],
-						"enum": [
-							"exact",
-							"prefix",
-							null
-						]
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"read": {
 						"type": [
@@ -35955,6 +36849,7 @@
 							"string",
 							"null"
 						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"any",
 							"v1",
@@ -35968,6 +36863,7 @@
 							"string",
 							"null"
 						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"noauth",
 							"auth",
@@ -35980,6 +36876,7 @@
 							"string",
 							"null"
 						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"enum": [
 							"exact",
 							"prefix",
@@ -36136,9 +37033,7 @@
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 127,
-						"description": "SNMPv2-MIB::sysServices bitfield"
+						"description": "SNMPv2-MIB::sysServices bitfield. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"sys_descr": {
 						"type": [
@@ -36199,9 +37094,9 @@
 							"integer",
 							"null"
 						],
+						"description": "SNMPv2-MIB::sysServices bitfield. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"minimum": 0,
-						"maximum": 127,
-						"description": "SNMPv2-MIB::sysServices bitfield"
+						"maximum": 127
 					},
 					"sys_descr": {
 						"type": [
@@ -36523,9 +37418,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
+						"minimum": 0,
 						"maximum": 65535,
-						"description": "TCP port for the /metrics endpoint"
+						"description": "TCP port for the /metrics endpoint. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"runtime": {
 						"type": "object",
@@ -36557,7 +37452,7 @@
 						],
 						"minimum": 1,
 						"maximum": 65535,
-						"description": "TCP port for the /metrics endpoint"
+						"description": "TCP port for the /metrics endpoint. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					}
 				}
 			},
@@ -36679,7 +37574,7 @@
 							"string",
 							"null"
 						],
-						"description": "Firewall mark mask for mwan3-tagged packets (hex, default 0x3F00)."
+						"description": "Firewall mark mask for mwan3-tagged packets, in hex, decimal or octal with a leading 0, as the shell arithmetic of mwan3 reads it (default 0x3F00). A decimal or octal mask is at most 0xFFFFFFFF."
 					},
 					"logging": {
 						"type": "boolean",
@@ -36696,7 +37591,9 @@
 							"alert",
 							"crit",
 							"err",
+							"error",
 							"warn",
+							"warning",
 							"notice",
 							"info",
 							"debug",
@@ -36725,8 +37622,8 @@
 							"string",
 							"null"
 						],
-						"pattern": "^0x[0-9A-Fa-f]+$",
-						"description": "Firewall mark mask for mwan3-tagged packets (hex, default 0x3F00)."
+						"pattern": "^(0[xX][0-9A-Fa-f]+|0[0-7]*|[1-9][0-9]{0,9})$",
+						"description": "Firewall mark mask for mwan3-tagged packets, in hex, decimal or octal with a leading 0, as the shell arithmetic of mwan3 reads it (default 0x3F00). A decimal or octal mask is at most 0xFFFFFFFF."
 					},
 					"logging": {
 						"type": "boolean",
@@ -36743,7 +37640,9 @@
 							"alert",
 							"crit",
 							"err",
+							"error",
 							"warn",
+							"warning",
 							"notice",
 							"info",
 							"debug",
@@ -36768,7 +37667,7 @@
 							"string",
 							"null"
 						],
-						"pattern": "^0x[0-9A-Fa-f]+$"
+						"pattern": "^(0[xX][0-9A-Fa-f]+|0[0-7]*|[1-9][0-9]{0,9})$"
 					},
 					"logging": {
 						"type": [
@@ -36786,7 +37685,9 @@
 							"alert",
 							"crit",
 							"err",
+							"error",
 							"warn",
+							"warning",
 							"notice",
 							"info",
 							"debug",
@@ -36844,8 +37745,12 @@
 							"httping",
 							"nping-tcp",
 							"nping-udp",
+							"nping-icmp",
+							"nping-arp",
+							"nslookup",
 							null
-						]
+						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"reliability": {
 						"type": [
@@ -36861,17 +37766,16 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 10,
-						"description": "Probes per cycle per track_ip. Maps to the `count` uci option; renamed on the wire because Terraform reserves the top-level `count` attribute."
+						"description": "Probes per cycle per track_ip. Maps to the `count` uci option; renamed on the wire because Terraform reserves the top-level `count` attribute. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"size": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
+						"minimum": 0,
 						"maximum": 65507,
-						"description": "Probe payload size in bytes."
+						"description": "Probe payload size in bytes. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"max_ttl": {
 						"type": [
@@ -36898,23 +37802,21 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 100
+						"minimum": 1
 					},
 					"recovery_latency": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1
+						"minimum": 0
 					},
 					"recovery_loss": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 100
+						"minimum": 0
 					},
 					"timeout": {
 						"type": [
@@ -36922,31 +37824,29 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 60
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"interval": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"failure_interval": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0
 					},
 					"recovery_interval": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0
 					},
 					"keep_failure_interval": {
 						"type": "boolean",
@@ -36974,16 +37874,9 @@
 							"null"
 						],
 						"items": {
-							"type": "string",
-							"enum": [
-								"ifup",
-								"ifdown",
-								"connected",
-								"disconnected",
-								"never"
-							]
+							"type": "string"
 						},
-						"description": "Events that flush conntrack table."
+						"description": "Events that flush conntrack table. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"runtime": {
 						"type": "object",
@@ -37040,8 +37933,11 @@
 							"httping",
 							"nping-tcp",
 							"nping-udp",
+							"nping-icmp",
+							"nping-arp",
 							null
-						]
+						],
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"reliability": {
 						"type": [
@@ -37057,8 +37953,8 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 10,
-						"description": "Probes per cycle per track_ip. Maps to the `count` uci option; renamed on the wire because Terraform reserves the top-level `count` attribute."
+						"description": "Probes per cycle per track_ip. Maps to the `count` uci option; renamed on the wire because Terraform reserves the top-level `count` attribute. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
+						"maximum": 10
 					},
 					"size": {
 						"type": [
@@ -37067,7 +37963,7 @@
 						],
 						"minimum": 1,
 						"maximum": 65507,
-						"description": "Probe payload size in bytes."
+						"description": "Probe payload size in bytes. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"max_ttl": {
 						"type": [
@@ -37094,23 +37990,21 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 100
+						"minimum": 1
 					},
 					"recovery_latency": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1
+						"minimum": 0
 					},
 					"recovery_loss": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 100
+						"minimum": 0
 					},
 					"timeout": {
 						"type": [
@@ -37118,6 +38012,7 @@
 							"null"
 						],
 						"minimum": 1,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"maximum": 60
 					},
 					"interval": {
@@ -37126,6 +38021,7 @@
 							"null"
 						],
 						"minimum": 1,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
 						"maximum": 3600
 					},
 					"failure_interval": {
@@ -37133,16 +38029,14 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0
 					},
 					"recovery_interval": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0
 					},
 					"keep_failure_interval": {
 						"type": "boolean",
@@ -37179,7 +38073,7 @@
 								"never"
 							]
 						},
-						"description": "Events that flush conntrack table."
+						"description": "Events that flush conntrack table. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					}
 				},
 				"required": [
@@ -37231,6 +38125,8 @@
 							"httping",
 							"nping-tcp",
 							"nping-udp",
+							"nping-icmp",
+							"nping-arp",
 							null
 						]
 					},
@@ -37283,23 +38179,21 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 100
+						"minimum": 1
 					},
 					"recovery_latency": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1
+						"minimum": 0
 					},
 					"recovery_loss": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 0,
-						"maximum": 100
+						"minimum": 0
 					},
 					"timeout": {
 						"type": [
@@ -37322,16 +38216,14 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0
 					},
 					"recovery_interval": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0
 					},
 					"keep_failure_interval": {
 						"type": [
@@ -37395,9 +38287,8 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
 						"maximum": 1000,
-						"description": "Lower wins. Members in the same policy with equal metric share load."
+						"description": "Lower wins. Members in the same policy with equal metric share load. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"weight": {
 						"type": [
@@ -37405,8 +38296,7 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 1000,
-						"description": "Relative load-share weight among equal-metric members."
+						"description": "Relative load-share weight among equal-metric members. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"runtime": {
 						"type": "object",
@@ -37438,9 +38328,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
 						"maximum": 1000,
-						"description": "Lower wins. Members in the same policy with equal metric share load."
+						"description": "Lower wins. Members in the same policy with equal metric share load. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
+						"minimum": 1
 					},
 					"weight": {
 						"type": [
@@ -37448,8 +38338,8 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 1000,
-						"description": "Relative load-share weight among equal-metric members."
+						"description": "Relative load-share weight among equal-metric members. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read.",
+						"maximum": 1000
 					}
 				},
 				"required": [
@@ -37475,8 +38365,8 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 1000
+						"maximum": 1000,
+						"minimum": 1
 					},
 					"weight": {
 						"type": [
@@ -37620,6 +38510,7 @@
 						"enum": [
 							"ipv4",
 							"ipv6",
+							"any",
 							null
 						]
 					},
@@ -37628,13 +38519,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"tcp",
-							"udp",
-							"icmp",
-							"all",
-							null
-						]
+						"description": "IP protocol as iptables takes it: a number from 0 to 255, which iptables reads as octal after a leading 0 and as hex after 0x, or a name that iptables resolves, such as tcp, udp, icmp, esp or all, which LuCI suggests. A write refuses another value, because iptables refuses the rules of the whole family for it."
 					},
 					"src_ip": {
 						"type": [
@@ -37675,7 +38560,8 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 86400
+						"maximum": 2147483,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ipset": {
 						"type": [
@@ -37721,6 +38607,7 @@
 						"enum": [
 							"ipv4",
 							"ipv6",
+							"any",
 							null
 						]
 					},
@@ -37729,13 +38616,8 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"tcp",
-							"udp",
-							"icmp",
-							"all",
-							null
-						]
+						"pattern": "^(0[xX][0-9A-Fa-f]+|[0-9]+|[A-Za-z][A-Za-z0-9._-]*)$",
+						"description": "IP protocol as iptables takes it: a number from 0 to 255, which iptables reads as octal after a leading 0 and as hex after 0x, or a name that iptables resolves, such as tcp, udp, icmp, esp or all, which LuCI suggests. A write refuses another value, because iptables refuses the rules of the whole family for it."
 					},
 					"src_ip": {
 						"type": [
@@ -37778,7 +38660,8 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 86400
+						"maximum": 1000000,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ipset": {
 						"type": [
@@ -37820,6 +38703,7 @@
 						"enum": [
 							"ipv4",
 							"ipv6",
+							"any",
 							null
 						]
 					},
@@ -37828,13 +38712,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"tcp",
-							"udp",
-							"icmp",
-							"all",
-							null
-						]
+						"pattern": "^(0[xX][0-9A-Fa-f]+|[0-9]+|[A-Za-z][A-Za-z0-9._-]*)$"
 					},
 					"src_ip": {
 						"type": [
@@ -37874,7 +38752,7 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 86400
+						"maximum": 1000000
 					},
 					"ipset": {
 						"type": [
@@ -37932,7 +38810,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 3
+						"maximum": 2147483647,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ipv6": {
 						"type": "boolean",
@@ -37965,7 +38844,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"max_retry_band": {
 						"type": [
@@ -37994,7 +38873,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"band_steering_threshold": {
 						"type": [
@@ -38002,7 +38881,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"remote_update_interval": {
 						"type": [
@@ -38161,7 +39040,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 3
+						"maximum": 5,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"ipv6": {
 						"type": "boolean",
@@ -38194,7 +39074,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"max_retry_band": {
 						"type": [
@@ -38223,7 +39103,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"band_steering_threshold": {
 						"type": [
@@ -38231,7 +39111,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"remote_update_interval": {
 						"type": [
@@ -38389,7 +39269,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 3
+						"maximum": 5
 					},
 					"ipv6": {
 						"type": [
@@ -38424,7 +39304,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"max_retry_band": {
 						"type": [
@@ -38453,7 +39333,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"band_steering_threshold": {
 						"type": [
@@ -38461,7 +39341,7 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 255
+						"maximum": 2147483647
 					},
 					"remote_update_interval": {
 						"type": [
@@ -38618,8 +39498,10 @@
 						"enum": [
 							"tun",
 							"tap",
+							"null",
 							null
-						]
+						],
+						"description": "tun or tap. openvpn also takes `null`, a device that carries no traffic, which a read gives, and a write refuses a change to it. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"proto": {
 						"type": [
@@ -38647,8 +39529,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 65535
+						"minimum": 0,
+						"maximum": 65535,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"lport": {
 						"type": [
@@ -38663,8 +39546,9 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 65535
+						"minimum": 0,
+						"maximum": 65535,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"remote": {
 						"type": [
@@ -38773,16 +39657,16 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0,
+						"maximum": 2147483647
 					},
 					"ping_restart": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 86400
+						"minimum": 0,
+						"maximum": 2147483647
 					},
 					"persist_key": {
 						"type": "boolean",
@@ -38815,8 +39699,11 @@
 							"lz4-v2",
 							"stub",
 							"stub-v2",
+							"migrate",
+							"frames_only",
 							null
-						]
+						],
+						"description": "Compression framing. `frames_only` is LuCI's name for a bare `compress`, which the init script writes for it."
 					},
 					"cipher": {
 						"type": [
@@ -38941,7 +39828,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 11
+						"maximum": 2147483647,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"mute": {
 						"type": [
@@ -39017,7 +39905,8 @@
 							"tun",
 							"tap",
 							null
-						]
+						],
+						"description": "tun or tap. openvpn also takes `null`, a device that carries no traffic, which a read gives, and a write refuses a change to it. A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"proto": {
 						"type": [
@@ -39046,7 +39935,8 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 65535
+						"maximum": 65535,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"lport": {
 						"type": [
@@ -39062,7 +39952,8 @@
 							"null"
 						],
 						"minimum": 1,
-						"maximum": 65535
+						"maximum": 65535,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"remote": {
 						"type": [
@@ -39171,16 +40062,16 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0,
+						"maximum": 2147483647
 					},
 					"ping_restart": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 86400
+						"minimum": 0,
+						"maximum": 2147483647
 					},
 					"persist_key": {
 						"type": "boolean",
@@ -39213,8 +40104,11 @@
 							"lz4-v2",
 							"stub",
 							"stub-v2",
+							"migrate",
+							"frames_only",
 							null
-						]
+						],
+						"description": "Compression framing. `frames_only` is LuCI's name for a bare `compress`, which the init script writes for it."
 					},
 					"cipher": {
 						"type": [
@@ -39339,7 +40233,8 @@
 							"null"
 						],
 						"minimum": 0,
-						"maximum": 11
+						"maximum": 11,
+						"description": "A write that changes this field to a value that the Request does not take answers 422, and a write that sends back the stored value passes, such as a PUT of the read."
 					},
 					"mute": {
 						"type": [
@@ -39557,16 +40452,16 @@
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 3600
+						"minimum": 0,
+						"maximum": 2147483647
 					},
 					"ping_restart": {
 						"type": [
 							"integer",
 							"null"
 						],
-						"minimum": 1,
-						"maximum": 86400
+						"minimum": 0,
+						"maximum": 2147483647
 					},
 					"persist_key": {
 						"type": [
@@ -39603,6 +40498,8 @@
 							"lz4-v2",
 							"stub",
 							"stub-v2",
+							"migrate",
+							"frames_only",
 							null
 						]
 					},
@@ -39791,11 +40688,18 @@
 					"example": "<?cursor=c_r_01HX&limit=100>; rel=\"next\""
 				}
 			},
+			"XKernelUnread": {
+				"description": "Comma-separated up interfaces with proto=wireguard whose kernel peers uapi could not read, because `wg show <interface> dump` failed or printed a shape that uapi does not read. The list holds no entry for them, so an absent header is what says that the list covers every up interface.",
+				"schema": {
+					"type": "string",
+					"example": "wg0"
+				}
+			},
 			"XNextCursor": {
 				"description": "Convenience companion to Link rel=next: the bare next-cursor token.",
 				"schema": {
 					"type": "string",
-					"pattern": "^c_[A-Za-z0-9_-]+$"
+					"pattern": "^c_[A-Za-z0-9_.:-]+$"
 				}
 			},
 			"IdempotentReplayed": {

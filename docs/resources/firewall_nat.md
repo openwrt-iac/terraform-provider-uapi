@@ -31,9 +31,9 @@ resource "uapi_firewall_nat" "example" {
 - `enabled` (Boolean) Whether the entry is active.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `name` (String) Human-readable label for this NAT rule.
-- `snat_ip` (String) IPv4 address to rewrite the source to. Requires target SNAT.
+- `snat_ip` (String) IPv4 address to rewrite the source to. Requires target `SNAT`. On a stored `NPT` rule, the prefix that firewall4 maps `match.src_ip` to.
 - `snat_port` (String) Port or port range to rewrite the source port to. Requires target SNAT.
-- `target` (String) What to do with matched traffic: `SNAT` rewrites the source to `snat_ip`/`snat_port`, `MASQUERADE` rewrites it to the outbound interface address, `ACCEPT` exempts it from source NAT. Defaults to `MASQUERADE`.
+- `target` (String) What to do with matched traffic: `SNAT` rewrites the source to `snat_ip`/`snat_port`, `MASQUERADE` rewrites it to the outbound interface address, `ACCEPT` exempts it from source NAT. Defaults to `MASQUERADE`. A read also gives `NPT`, which the firewall4 of OpenWrt main takes. uapi refuses a change of `target` to `NPT`, and from uapi 3.5.0 an update that keeps a stored `NPT` passes.
 
 ### Read-Only
 

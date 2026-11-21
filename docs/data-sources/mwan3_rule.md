@@ -30,11 +30,11 @@ data "uapi_mwan3_rule" "example" {
 - `dest_ip` (String) Destination IP addresses or CIDRs.
 - `dest_port` (String) Destination ports.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `family` (String) Address family of the traffic that this rule matches: `ipv4` or `ipv6`. Unset, mwan3 applies the rule to both.
+- `family` (String) Address family of the traffic that this rule matches: `ipv4`, `ipv6` or `any`. Unset or `any`, mwan3 applies the rule to both. A write of `any`, which LuCI writes, needs uapi 3.5.0 or later.
 - `ipset` (String) uci option ipset.
 - `logging` (Boolean) uci option logging.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `proto` (String) Protocol.
+- `proto` (String) IP protocol as iptables takes it: a number from 0 to 255, or a name that iptables resolves, such as `tcp`, `udp`, `icmp`, `esp` or `all`. uapi refuses another value, because iptables refuses the rules of the whole family for it. Before uapi 3.5.0, a write takes only `tcp`, `udp`, `icmp` and `all`.
 - `src_ip` (String) Source IP addresses or CIDRs.
 - `src_port` (String) Source ports.
 - `sticky` (Boolean) uci option sticky.
