@@ -36,6 +36,9 @@ type mockUAPI struct {
 	wgPeerRuntime map[string]any
 	// kernelPeers answers GET /network/wireguard_kernel_peers.
 	kernelPeers []map[string]any
+	// interruptedWrites answers the interrupted_writes of GET /diagnostics. uapi
+	// 3.5.0 always sends the key, so nil answers an empty list.
+	interruptedWrites []any
 	// emptySweep answers a ?validate=1 with an empty invalid_sections, which is what
 	// a router with nothing wrong sends: the key is present and empty, verified
 	// against a real 2.5.0 build.
@@ -361,6 +364,13 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 				"address": "192.168.1.10", "device": "br-lan", "interface": "lan",
 			},
 			"request_id": "req-acc-1",
+			"limits": map[string]any{
+				"max_body_bytes": 262144, "max_body_containers": 2000, "body_read_s": 10, "reload_budget_s": 20,
+			},
+			"interrupted_writes": []any{},
+		}
+		if m.interruptedWrites != nil {
+			body["interrupted_writes"] = m.interruptedWrites
 		}
 		// The sweep is opt-in, so the three keys it fills are absent without it.
 		if r.URL.Query().Get("validate") == "1" {
