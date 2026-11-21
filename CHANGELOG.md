@@ -6,6 +6,13 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-11-21
+
+Tracks uapi 3.5.0. There is no provider 3.4: uapi 3.4 published only the v4
+announcements. `uapi_diagnostics.limits` and `interrupted_writes` and
+`uapi_wireguard_kernel_peers.unread_interfaces` need uapi >= 3.5.0. Everything else
+works against uapi 3.0 to 3.4.
+
 ### Added
 - **`data.uapi_diagnostics.limits`**: the request bounds that uapi applies, from the
   `config limits` options of /etc/config/uapi (uapi #339, #374): `max_body_bytes`,
@@ -24,11 +31,11 @@ line). Format follows Keep a Changelog.
   empty. An older server never sends the header, and the list then reads empty.
 
 ### Changed
-- The vendored uapi spec follows the uapi `v3` branch, the 3.5.0 candidate. No attribute,
-  type or plan behavior changes: uapi 3.4 and 3.5 add no curated field, and the provider
-  does not validate enums or bounds, so the values that a uapi 3.5.0 write takes, such as
-  `leasetime = "infinite"`, a dnsmasq `port` of 0 or an mwan3 rule `proto` of `esp`, pass
-  through as they are. uapi 3.4 published only the v4 announcements, so there is no
+- The vendored uapi spec is the one of the uapi v3.5.0 tag. No attribute, type or plan
+  behavior changes: uapi 3.4 and 3.5 add no curated field, and the provider does not
+  validate enums or bounds, so the values that a uapi 3.5.0 write takes, such as
+  `leasetime = "infinite"`, a dnsmasq `port` of 0 or an mwan3 rule `proto` of `esp`,
+  pass through as they are. uapi 3.4 published only the v4 announcements, so there is no
   provider 3.4.
 - Descriptions that uapi 3.5.0 made wrong or incomplete:
   - `uapi_dhcp_server.dhcpv4`: an unset value serves DHCPv4 with the dnsmasq of OpenWrt
