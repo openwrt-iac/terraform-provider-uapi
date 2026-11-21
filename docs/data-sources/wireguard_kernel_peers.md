@@ -26,6 +26,7 @@ output "unclaimed_kernel_peers" {
 ### Read-Only
 
 - `peers` (Attributes List) Unclaimed kernel peers. (see [below for nested schema](#nestedatt--peers))
+- `unread_interfaces` (List of String) Up interfaces with proto=wireguard whose kernel peers uapi could not read, because `wg show <interface> dump` failed or printed a shape that uapi does not read. `peers` holds no entry for them, so only an empty list says that `peers` covers every up interface. A read warns while the list is not empty. Needs uapi 3.5.0 or later, which reports them in the `X-Kernel-Unread` header: an older server never does, and the list then reads empty without that guarantee.
 
 <a id="nestedatt--peers"></a>
 ### Nested Schema for `peers`
