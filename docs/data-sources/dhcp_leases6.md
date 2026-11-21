@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_leases6 Data Source - uapi"
 subcategory: ""
 description: |-
-  The current active DHCPv6 leases reported by the router at runtime.
+  The current active DHCPv6 leases reported by the router at runtime, from the lease file of odhcpd. Before uapi 3.5.0 the list is always empty: uapi skipped the lease lines of odhcpd, which start with #.
 ---
 
 # uapi_dhcp_leases6 (Data Source)
 
-The current active DHCPv6 leases reported by the router at runtime.
+The current active DHCPv6 leases reported by the router at runtime, from the lease file of odhcpd. Before uapi 3.5.0 the list is always empty: uapi skipped the lease lines of odhcpd, which start with `#`.
 
 ## Example Usage
 
@@ -33,10 +33,10 @@ output "active_leases6" {
 Read-Only:
 
 - `duid` (String) Client DUID (hex).
-- `expires_at` (Number) Unix epoch seconds when the lease expires; null for non-numeric values like 'forever'.
+- `expires_at` (Number) Unix epoch seconds when the lease expires; null for a lease that does not expire.
 - `hostname` (String) Client hostname, if known.
 - `ia_type` (String) Identity Association type (IA_NA, IA_PD).
 - `iaid` (String) Identity Association ID (hex).
-- `interface` (String) Server-side interface that issued the lease.
+- `interface` (String) Network device that odhcpd served the lease on, as odhcpd names it (for example `br-lan`), not the uci interface.
 - `ip` (String) Assigned IPv6 address or prefix.
 - `prefix_length` (Number) Prefix length for IA_PD; null for IA_NA.

@@ -59,7 +59,7 @@ resource "uapi_network_interface" "example" {
 - `peerdns` (Boolean) uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`.
 - `private_key` (String, Sensitive) WireGuard private key. Write-only: never returned by the API. Applies only to proto `wireguard`.
 - `reqaddress` (String) uci option reqaddress. Applies only to proto `dhcpv6`.
-- `reqprefix` (String) Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
+- `reqprefix` (String) Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. From uapi 3.5.0, a prefix length or a prefix can carry a `:IAID` suffix of up to 8 hex digits, as odhcp6c reads it. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
 - `sourcefilter` (Boolean) Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
 
 ### Read-Only

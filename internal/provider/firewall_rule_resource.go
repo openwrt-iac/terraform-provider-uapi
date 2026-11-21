@@ -68,7 +68,7 @@ func (r *firewallRuleResource) Schema(_ context.Context, _ resource.SchemaReques
 			"set_dscp":  optionalComputedString("DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or value 0-63 to set. Required by target DSCP."),
 			"set_mark":  optionalComputedString("fwmark to set, as a value or value/mask (decimal or `0x` hex). Target MARK requires this or `set_xmark`."),
 			"set_xmark": optionalComputedString("fwmark to set with XOR semantics, as a value or value/mask. The alternative to `set_mark` for target MARK."),
-			"target":    schema.StringAttribute{Required: true, Description: "Target / action."},
+			"target":    schema.StringAttribute{Required: true, Description: "What to do with matched traffic: `ACCEPT`, `REJECT`, `DROP`, `NOTRACK`, `MARK` or `DSCP`. A read also gives `HELPER`, which LuCI writes for a conntrack helper rule. uapi does not model the helper and refuses `HELPER` in a create and in a PUT, because a PUT removes the `set_helper` option and firewall4 skips a HELPER rule without it. The provider updates a rule with a PUT, so it can read such a rule but not update it."},
 			"match": schema.SingleNestedAttribute{
 				Required:    true,
 				Description: "Match conditions.",

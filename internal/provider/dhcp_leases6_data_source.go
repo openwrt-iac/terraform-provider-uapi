@@ -44,7 +44,8 @@ func (d *dhcpLeases6DataSource) Configure(_ context.Context, req datasource.Conf
 
 func (d *dhcpLeases6DataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dsschema.Schema{
-		Description: "The current active DHCPv6 leases reported by the router at runtime.",
+		Description: "The current active DHCPv6 leases reported by the router at runtime, from the lease file of odhcpd. " +
+			"Before uapi 3.5.0 the list is always empty: uapi skipped the lease lines of odhcpd, which start with `#`.",
 		Attributes: map[string]dsschema.Attribute{
 			"leases": dsschema.ListNestedAttribute{
 				Computed:    true,
@@ -54,11 +55,11 @@ func (d *dhcpLeases6DataSource) Schema(_ context.Context, _ datasource.SchemaReq
 						"duid":          dsComputedString("Client DUID (hex)."),
 						"iaid":          dsComputedString("Identity Association ID (hex)."),
 						"hostname":      dsComputedString("Client hostname, if known."),
-						"interface":     dsComputedString("Server-side interface that issued the lease."),
+						"interface":     dsComputedString("Network device that odhcpd served the lease on, as odhcpd names it (for example `br-lan`), not the uci interface."),
 						"ia_type":       dsComputedString("Identity Association type (IA_NA, IA_PD)."),
 						"ip":            dsComputedString("Assigned IPv6 address or prefix."),
 						"prefix_length": dsschema.Int64Attribute{Computed: true, Description: "Prefix length for IA_PD; null for IA_NA."},
-						"expires_at":    dsschema.Int64Attribute{Computed: true, Description: "Unix epoch seconds when the lease expires; null for non-numeric values like 'forever'."},
+						"expires_at":    dsschema.Int64Attribute{Computed: true, Description: "Unix epoch seconds when the lease expires; null for a lease that does not expire."},
 					},
 				},
 			},

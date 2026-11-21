@@ -6,6 +6,30 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Changed
+- The vendored uapi spec follows the uapi `v3` branch, the 3.5.0 candidate. No attribute,
+  type or plan behavior changes: uapi 3.4 and 3.5 add no curated field, and the provider
+  does not validate enums or bounds, so the values that a uapi 3.5.0 write takes, such as
+  `leasetime = "infinite"`, a dnsmasq `port` of 0 or an mwan3 rule `proto` of `esp`, pass
+  through as they are. uapi 3.4 published only the v4 announcements, so there is no
+  provider 3.4.
+- Descriptions that uapi 3.5.0 made wrong or incomplete:
+  - `uapi_dhcp_server.dhcpv4`: an unset value serves DHCPv4 with the dnsmasq of OpenWrt
+    25.12 and not with the dnsmasq of OpenWrt main.
+  - `uapi_firewall_nat.target` and `snat_ip`: a read also gives the `NPT` target of the
+    firewall4 of OpenWrt main.
+  - `uapi_firewall_rule.target`: a read also gives `HELPER`, and uapi refuses it in a PUT,
+    so the provider can read such a rule but not update it.
+  - `uapi_mwan3_rule.family` takes `any`, and `proto` takes a number or a name that
+    iptables resolves.
+  - `uapi_network_interface.reqprefix` takes a `:IAID` suffix.
+  - `uapi_network_wireguard_peer.endpoint_port` and `persistent_keepalive`: the proto
+    handler of OpenWrt main leaves out a value that wg cannot read.
+  - `uapi_wireless_interface.encryption`: a WEP write answers 422 unless the router sets
+    WEP up, which a stock image does not.
+  - `data.uapi_dhcp_leases6`: `interface` is the device that odhcpd names, such as
+    `br-lan`, and the list is always empty before uapi 3.5.0.
+
 ### Fixed
 - The `suppress_prefixlength` description of `uapi_network_rule` and its data source
   said that 0 ignores every connected route: the lookup ignores only the default
