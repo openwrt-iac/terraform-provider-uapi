@@ -17,6 +17,11 @@ line). Format follows Keep a Changelog.
   sent it got no answer. The example adds a `check` block, which warns at each plan
   while uapi reports one. Both need uapi 3.5.0 or later and read null against an older
   server.
+- **`data.uapi_wireguard_kernel_peers.unread_interfaces`**: the up wireguard interfaces
+  whose kernel uapi could not read, from the `X-Kernel-Unread` header of uapi 3.5.0
+  (uapi #380). `peers` holds no entry for them, so an empty `peers` next to an unread
+  interface is not a kernel without drift, and the read warns while the list is not
+  empty. An older server never sends the header, and the list then reads empty.
 
 ### Changed
 - The vendored uapi spec follows the uapi `v3` branch, the 3.5.0 candidate. No attribute,

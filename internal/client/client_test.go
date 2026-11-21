@@ -277,6 +277,33 @@ func TestGetListPaginates(t *testing.T) {
 	}
 }
 
+// uapi computes a report header such as X-Kernel-Unread for the whole
+// collection and repeats it on every page, so an element seen twice is kept once.
+func TestGetListHeaderGathersPages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Kernel-Unread", "wg1, wg2")
+		if r.URL.Query().Get("cursor") == "" {
+			w.Header().Set("X-Next-Cursor", "c_2")
+			_, _ = w.Write([]byte(`[{"id":"a"}]`))
+			return
+		}
+		w.Header().Add("X-Kernel-Unread", "wg3")
+		_, _ = w.Write([]byte(`[{"id":"b"}]`))
+	}))
+	defer srv.Close()
+
+	list, values, err := testClient(srv.URL).GetListHeader(context.Background(), "/network/wireguard_kernel_peers", "X-Kernel-Unread")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(list) != 2 {
+		t.Errorf("pagination should aggregate both pages, got %+v", list)
+	}
+	if got := strings.Join(values, ","); got != "wg1,wg2,wg3" {
+		t.Errorf("header values = %q, want wg1,wg2,wg3", got)
+	}
+}
+
 // The query form is what has to be asserted: uhttpd's CGI layer forwards a fixed
 // header allowlist that Idempotency-Key is not on, so a header-only key never
 // reaches uapi and a retried create double-applies. Asserting the header alone

@@ -119,16 +119,16 @@ func (e *APIError) Error() string {
 // makes the replay safe. ifMatch and the POST idempotency key are sent as
 // the ?if_match= and ?idempotency_key= query parameters: uhttpd's CGI layer
 // forwards a fixed header allowlist that neither header is on, so the header
-// header allowlist that neither header is on, so the header form alone never
-// reaches uapi and both guarantees are silently inert. The headers are sent too,
-// for a deployment that does not front uapi with uhttpd. Returns the response
-// ETag and, for collection GETs, the X-Next-Cursor for pagination.
-func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch string) (respBody []byte, status int, etag, nextCursor string, err error) {
+// form alone never reaches uapi and both guarantees are silently inert. The
+// headers are sent too, for a deployment that does not front uapi with uhttpd.
+// Returns the response headers, which carry the ETag and, for collection GETs,
+// the X-Next-Cursor for pagination.
+func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch string) (respBody []byte, status int, hdr http.Header, err error) {
 	var payload []byte
 	if body != nil {
 		payload, err = json.Marshal(body)
 		if err != nil {
-			return nil, 0, "", "", fmt.Errorf("encoding request body: %w", err)
+			return nil, 0, nil, fmt.Errorf("encoding request body: %w", err)
 		}
 	}
 
@@ -160,7 +160,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 		}
 		req, err := http.NewRequestWithContext(ctx, method, target, reader)
 		if err != nil {
-			return nil, 0, "", "", err
+			return nil, 0, nil, err
 		}
 		req.Header.Set("Authorization", "Bearer "+c.token)
 		req.Header.Set("Accept", "application/json")
@@ -187,7 +187,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 				})
 				continue
 			}
-			return nil, 0, "", "", err
+			return nil, 0, nil, err
 		}
 		raw, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
@@ -198,7 +198,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 			if replayPost(ctx, method, readErr, &retryDeadline, attempt) {
 				continue
 			}
-			return nil, resp.StatusCode, "", "", fmt.Errorf("reading response body: %w", readErr)
+			return nil, resp.StatusCode, nil, fmt.Errorf("reading response body: %w", readErr)
 		}
 
 		throttled := resp.StatusCode == http.StatusLocked || resp.StatusCode == http.StatusTooManyRequests
@@ -210,15 +210,14 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 				wait := retryWait(resp.Header.Get("Retry-After"), attempt)
 				select {
 				case <-ctx.Done():
-					return nil, resp.StatusCode, "", "", ctx.Err()
+					return nil, resp.StatusCode, nil, ctx.Err()
 				case <-time.After(wait):
 				}
 				continue
 			}
 		}
 
-		etag = resp.Header.Get("ETag")
-		nextCursor = resp.Header.Get("X-Next-Cursor")
+		etag := resp.Header.Get("ETag")
 		// Surfaced whatever the status: a write that reconfigures the management
 		// path is worth reporting even when it also failed.
 		if mp := resp.Header.Get("X-Mgmt-Path-Warning"); mp != "" {
@@ -235,9 +234,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 			"reload_services": resp.Header.Get("X-Reload-Services"),
 		})
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			return raw, resp.StatusCode, etag, nextCursor, nil
+			return raw, resp.StatusCode, resp.Header, nil
 		}
-		return nil, resp.StatusCode, etag, nextCursor, decodeError(resp.StatusCode, raw)
+		return nil, resp.StatusCode, resp.Header, decodeError(resp.StatusCode, raw)
 	}
 }
 
@@ -346,7 +345,7 @@ func IsFieldConflict(err error) bool {
 
 // GetObject fetches a single resource and its ETag. found is false on 404.
 func (c *Client) GetObject(ctx context.Context, path string) (obj map[string]any, etag string, found bool, err error) {
-	raw, _, etag, _, err := c.do(ctx, http.MethodGet, path, nil, "")
+	raw, _, hdr, err := c.do(ctx, http.MethodGet, path, nil, "")
 	if err != nil {
 		if IsNotFound(err) {
 			return nil, "", false, nil
@@ -356,13 +355,23 @@ func (c *Client) GetObject(ctx context.Context, path string) (obj map[string]any
 	if err := json.Unmarshal(raw, &obj); err != nil {
 		return nil, "", false, fmt.Errorf("decoding response: %w", err)
 	}
-	return obj, etag, true, nil
+	return obj, hdr.Get("ETag"), true, nil
 }
 
 // GetList fetches a collection, following cursor pagination (X-Next-Cursor)
 // until the server stops returning a next cursor.
 func (c *Client) GetList(ctx context.Context, path string) ([]map[string]any, error) {
+	all, _, err := c.GetListHeader(ctx, path, "")
+	return all, err
+}
+
+// GetListHeader is GetList for a collection that also reports in a
+// comma-separated response header, such as X-Kernel-Unread. It returns the
+// elements of that header over every page, once each, in the order seen.
+func (c *Client) GetListHeader(ctx context.Context, path, header string) ([]map[string]any, []string, error) {
 	var all []map[string]any
+	var values []string
+	seen := map[string]bool{}
 	next := ""
 	for page := 0; page < maxPages; page++ {
 		sep := "?"
@@ -373,17 +382,28 @@ func (c *Client) GetList(ctx context.Context, path string) ([]map[string]any, er
 		if next != "" {
 			p += "&cursor=" + url.QueryEscape(next)
 		}
-		raw, _, _, cursor, err := c.do(ctx, http.MethodGet, p, nil, "")
+		raw, _, hdr, err := c.do(ctx, http.MethodGet, p, nil, "")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		var list []map[string]any
 		if err := json.Unmarshal(raw, &list); err != nil {
-			return nil, fmt.Errorf("decoding response: %w", err)
+			return nil, nil, fmt.Errorf("decoding response: %w", err)
 		}
 		all = append(all, list...)
+		if header != "" {
+			for _, line := range hdr.Values(header) {
+				for _, v := range strings.Split(line, ",") {
+					if v = strings.TrimSpace(v); v != "" && !seen[v] {
+						seen[v] = true
+						values = append(values, v)
+					}
+				}
+			}
+		}
+		cursor := hdr.Get("X-Next-Cursor")
 		if cursor == "" {
-			return all, nil
+			return all, values, nil
 		}
 		next = cursor
 	}
@@ -392,11 +412,11 @@ func (c *Client) GetList(ctx context.Context, path string) ([]map[string]any, er
 	tflog.Warn(ctx, "uapi list truncated at page bound", map[string]any{
 		"path": path, "max_pages": maxPages, "items": len(all),
 	})
-	return all, nil
+	return all, values, nil
 }
 
 func (c *Client) writeObject(ctx context.Context, method, path string, body any, ifMatch string) (map[string]any, string, error) {
-	raw, _, etag, _, err := c.do(ctx, method, path, body, ifMatch)
+	raw, _, hdr, err := c.do(ctx, method, path, body, ifMatch)
 	if err != nil {
 		return nil, "", err
 	}
@@ -406,7 +426,7 @@ func (c *Client) writeObject(ctx context.Context, method, path string, body any,
 			return nil, "", fmt.Errorf("decoding response: %w", err)
 		}
 	}
-	return obj, etag, nil
+	return obj, hdr.Get("ETag"), nil
 }
 
 // Post creates a resource; ifMatch is normally empty for creation.
@@ -426,7 +446,7 @@ func (c *Client) Patch(ctx context.Context, path string, body any, ifMatch strin
 
 // Delete removes a resource, optionally guarded by If-Match. A 404 is success.
 func (c *Client) Delete(ctx context.Context, path string, ifMatch string) error {
-	_, _, _, _, err := c.do(ctx, http.MethodDelete, path, nil, ifMatch)
+	_, _, _, err := c.do(ctx, http.MethodDelete, path, nil, ifMatch)
 	if err != nil && !IsNotFound(err) {
 		return err
 	}

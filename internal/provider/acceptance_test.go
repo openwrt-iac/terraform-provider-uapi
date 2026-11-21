@@ -805,19 +805,35 @@ func TestAccWireguardKernelPeers(t *testing.T) {
 		"persistent_keepalive": 0, "latest_handshake": 1893456000,
 		"rx_bytes": 111, "tx_bytes": 222,
 	}}
+	cfg := providerHCL(m.URL) + `
+data "uapi_wireguard_kernel_peers" "all" {}`
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: accProviders(),
-		Steps: []resource.TestStep{{
-			Config: providerHCL(m.URL) + `
-data "uapi_wireguard_kernel_peers" "all" {}`,
-			Check: resource.ComposeAggregateTestCheckFunc(
-				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.#", "1"),
-				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.id", "a1b2c3d4e5f6"),
-				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.interface", "wg0"),
-				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.allowed_ips.0", "10.9.0.0/24"),
-				resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.rx_bytes", "111"),
-			),
-		}},
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.#", "1"),
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.id", "a1b2c3d4e5f6"),
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.interface", "wg0"),
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.allowed_ips.0", "10.9.0.0/24"),
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "peers.0.rx_bytes", "111"),
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "unread_interfaces.#", "0"),
+				),
+			},
+			{
+				// uapi 3.5.0 names the up interfaces whose kernel it could not
+				// read (#380): their peers are missing from the list, not absent
+				// from the kernel.
+				PreConfig: func() { m.kernelUnread = "wg1,wg2" },
+				Config:    cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "unread_interfaces.#", "2"),
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "unread_interfaces.0", "wg1"),
+					resource.TestCheckResourceAttr("data.uapi_wireguard_kernel_peers.all", "unread_interfaces.1", "wg2"),
+				),
+			},
+		},
 	})
 }
 

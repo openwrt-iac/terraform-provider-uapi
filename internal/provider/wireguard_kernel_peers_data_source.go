@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -22,7 +23,8 @@ func NewWireguardKernelPeersDataSource() datasource.DataSource {
 }
 
 type wireguardKernelPeersModel struct {
-	Peers []wireguardKernelPeerModel `tfsdk:"peers"`
+	Peers            []wireguardKernelPeerModel `tfsdk:"peers"`
+	UnreadInterfaces types.List                 `tfsdk:"unread_interfaces"`
 }
 
 type wireguardKernelPeerModel struct {
@@ -67,17 +69,32 @@ func (d *wireguardKernelPeersDataSource) Schema(_ context.Context, _ datasource.
 					},
 				},
 			},
+			"unread_interfaces": dsComputedStringList("Up interfaces with proto=wireguard whose kernel peers uapi could not read, " +
+				"because `wg show <interface> dump` failed or printed a shape that uapi does not read. `peers` holds no " +
+				"entry for them, so only an empty list says that `peers` covers every up interface. A read warns while " +
+				"the list is not empty. Needs uapi 3.5.0 or later, which reports them in the `X-Kernel-Unread` header: " +
+				"an older server never does, and the list then reads empty without that guarantee."),
 		},
 	}
 }
 
 func (d *wireguardKernelPeersDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
-	list, err := d.client.GetList(ctx, "/network/wireguard_kernel_peers")
+	list, unread, err := d.client.GetListHeader(ctx, "/network/wireguard_kernel_peers", "X-Kernel-Unread")
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading wireguard kernel peers", err.Error())
 		return
 	}
-	out := wireguardKernelPeersModel{Peers: make([]wireguardKernelPeerModel, 0, len(list))}
+	if len(unread) > 0 {
+		resp.Diagnostics.AddWarning("uapi could not read the kernel peers of "+strings.Join(unread, ", "),
+			"`wg show <interface> dump` failed or printed a shape that uapi does not read, so `peers` lists no "+
+				"unclaimed peer of these interfaces, whatever their kernel holds. Run wg show on the router to see it.")
+	}
+	unreadList, ud := types.ListValueFrom(ctx, types.StringType, append([]string{}, unread...))
+	resp.Diagnostics.Append(ud...)
+	out := wireguardKernelPeersModel{
+		Peers:            make([]wireguardKernelPeerModel, 0, len(list)),
+		UnreadInterfaces: unreadList,
+	}
 	for _, obj := range list {
 		out.Peers = append(out.Peers, wireguardKernelPeerModel{
 			ID:                  strVal(obj, "id"),

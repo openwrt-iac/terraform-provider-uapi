@@ -34,6 +34,9 @@ type mockUAPI struct {
 	// nil mirrors "uapi did not read the kernel", which reads as all null. A write
 	// answers no runtime key, as uapi answers {}.
 	wgPeerRuntime map[string]any
+	// kernelUnread is the X-Kernel-Unread header of the kernelPeers answer:
+	// the up interfaces whose kernel uapi could not read. Empty sends no header.
+	kernelUnread string
 	// kernelPeers answers GET /network/wireguard_kernel_peers.
 	kernelPeers []map[string]any
 	// interruptedWrites answers the interrupted_writes of GET /diagnostics. uapi
@@ -284,6 +287,9 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	case path == "/network/wireguard_kernel_peers" && r.Method == http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
+		if m.kernelUnread != "" {
+			w.Header().Set("X-Kernel-Unread", m.kernelUnread)
+		}
 		_ = json.NewEncoder(w).Encode(m.kernelPeers)
 		return
 	case path == "/dhcp/leases" && r.Method == http.MethodGet:
