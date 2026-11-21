@@ -22,18 +22,36 @@ type diagnosticsDataSource struct{ client *client.Client }
 func NewDiagnosticsDataSource() datasource.DataSource { return &diagnosticsDataSource{} }
 
 type diagnosticsModel struct {
-	Validate        types.Bool            `tfsdk:"validate"`
-	Version         types.String          `tfsdk:"version"`
-	UptimeSeconds   types.Int64           `tfsdk:"uptime_seconds"`
-	ResourcesLoaded types.List            `tfsdk:"resources_loaded"`
-	LockState       *lockStateModel       `tfsdk:"lock_state"`
-	RecentErrors    []recentErrorModel    `tfsdk:"recent_errors"`
-	ManagementPath  *managementPathModel  `tfsdk:"management_path"`
-	InvalidSections []invalidSectionModel `tfsdk:"invalid_sections"`
-	SweptResources  types.List            `tfsdk:"swept_resources"`
-	SkippedForScope types.List            `tfsdk:"skipped_for_scope"`
-	RequestID       types.String          `tfsdk:"request_id"`
-	StateDirs       types.Map             `tfsdk:"state_dirs"`
+	Validate          types.Bool              `tfsdk:"validate"`
+	Version           types.String            `tfsdk:"version"`
+	UptimeSeconds     types.Int64             `tfsdk:"uptime_seconds"`
+	ResourcesLoaded   types.List              `tfsdk:"resources_loaded"`
+	LockState         *lockStateModel         `tfsdk:"lock_state"`
+	RecentErrors      []recentErrorModel      `tfsdk:"recent_errors"`
+	ManagementPath    *managementPathModel    `tfsdk:"management_path"`
+	InvalidSections   []invalidSectionModel   `tfsdk:"invalid_sections"`
+	SweptResources    types.List              `tfsdk:"swept_resources"`
+	SkippedForScope   types.List              `tfsdk:"skipped_for_scope"`
+	RequestID         types.String            `tfsdk:"request_id"`
+	StateDirs         types.Map               `tfsdk:"state_dirs"`
+	Limits            *limitsModel            `tfsdk:"limits"`
+	InterruptedWrites []interruptedWriteModel `tfsdk:"interrupted_writes"`
+}
+
+type limitsModel struct {
+	MaxBodyBytes      types.Int64 `tfsdk:"max_body_bytes"`
+	MaxBodyContainers types.Int64 `tfsdk:"max_body_containers"`
+	BodyReadS         types.Int64 `tfsdk:"body_read_s"`
+	ReloadBudgetS     types.Int64 `tfsdk:"reload_budget_s"`
+}
+
+type interruptedWriteModel struct {
+	PID           types.Int64  `tfsdk:"pid"`
+	RequestID     types.String `tfsdk:"request_id"`
+	Packages      types.List   `tfsdk:"packages"`
+	Staged        types.List   `tfsdk:"staged"`
+	StartedAt     types.Int64  `tfsdk:"started_at"`
+	ReloadStarted types.Bool   `tfsdk:"reload_started"`
 }
 
 type managementPathModel struct {
@@ -159,6 +177,36 @@ func (d *diagnosticsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 					"`false`: the path holds anything else, and uapi does not use it as it stands. `null`: the path does " +
 					"not exist yet, and uapi creates it at its first write there. Needs uapi 3.3.0 or later; reads as " +
 					"null against an older server.",
+			},
+			"limits": dsschema.SingleNestedAttribute{
+				Computed: true,
+				Description: "The request bounds that uapi applies: the `config limits` options of /etc/config/uapi, with the " +
+					"compiled default where an option is absent or out of bounds. An option can lower a bound, not raise it. " +
+					"Needs uapi 3.5.0 or later; reads as null against an older server.",
+				Attributes: map[string]dsschema.Attribute{
+					"max_body_bytes":      dsComputedInt64("Largest request body in bytes. A larger `Content-Length` answers 413."),
+					"max_body_containers": dsComputedInt64("Largest number of `{` and `[` characters in a request body, which bounds the JSON parse."),
+					"body_read_s":         dsComputedInt64("Seconds that a request body has to arrive in full."),
+					"reload_budget_s":     dsComputedInt64("Seconds that a write waits in total for its daemon reloads. After that, the write answers `X-Reload-Status: unverified`."),
+				},
+			},
+			"interrupted_writes": dsschema.ListNestedAttribute{
+				Computed: true,
+				Description: "Writes whose request process stopped after the commit and before the write finished: uhttpd " +
+					"killed it (a client disconnect or `script_timeout`), or the write threw. The commit can be in uci with no " +
+					"check, no restore and no answer to the client. Report only: uapi corrects nothing, and the records stay " +
+					"until a reboot. Empty when no write was interrupted. Needs uapi 3.5.0 or later; reads as null against an " +
+					"older server.",
+				NestedObject: dsschema.NestedAttributeObject{
+					Attributes: map[string]dsschema.Attribute{
+						"pid":            dsComputedInt64("Process id of the request that made the write."),
+						"request_id":     dsComputedString("Request id of the write, when it had one."),
+						"packages":       dsComputedStringList("uci packages of the write. Empty for a write outside uci."),
+						"staged":         dsComputedStringList("Names of the sections that the package held with the staged changes, just before the commit. Null for a write over several packages or outside uci."),
+						"started_at":     dsComputedInt64("Unix epoch seconds when uapi recorded the write, just before the commit."),
+						"reload_started": dsComputedBool("Whether the daemon reload of the write had started."),
+					},
+				},
 			},
 		},
 	}
@@ -291,6 +339,37 @@ func (d *diagnosticsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		m, md := types.MapValue(types.BoolType, vals)
 		resp.Diagnostics.Append(md...)
 		out.StateDirs = m
+	}
+	if lm, ok := obj["limits"].(map[string]any); ok {
+		out.Limits = &limitsModel{
+			MaxBodyBytes:      int64Val(lm, "max_body_bytes"),
+			MaxBodyContainers: int64Val(lm, "max_body_containers"),
+			BodyReadS:         int64Val(lm, "body_read_s"),
+			ReloadBudgetS:     int64Val(lm, "reload_budget_s"),
+		}
+	}
+	// Non-nil once the key is there, so a server with nothing to report reads
+	// an empty list, and only an older server, which sends no key, reads null.
+	if arr, ok := obj["interrupted_writes"].([]any); ok {
+		out.InterruptedWrites = []interruptedWriteModel{}
+		for _, e := range arr {
+			m, ok := e.(map[string]any)
+			if !ok {
+				continue
+			}
+			pkgs, pd := listVal(ctx, m, "packages")
+			resp.Diagnostics.Append(pd...)
+			staged, sd := listVal(ctx, m, "staged")
+			resp.Diagnostics.Append(sd...)
+			out.InterruptedWrites = append(out.InterruptedWrites, interruptedWriteModel{
+				PID:           int64Val(m, "pid"),
+				RequestID:     strVal(m, "request_id"),
+				Packages:      pkgs,
+				Staged:        staged,
+				StartedAt:     int64Val(m, "started_at"),
+				ReloadStarted: boolVal(m, "reload_started"),
+			})
+		}
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &out)...)
 }

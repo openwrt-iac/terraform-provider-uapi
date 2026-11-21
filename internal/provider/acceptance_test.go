@@ -256,6 +256,61 @@ data "uapi_diagnostics" "swept" {
 	})
 }
 
+// uapi 3.5.0 reports the request bounds it applies and the writes that a killed
+// request process left after the commit. A router with nothing interrupted
+// sends an empty list, which must read as empty, not null, so length() works.
+func TestAccDiagnostics_limitsAndInterruptedWrites(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	cfg := providerHCL(m.URL) + `
+data "uapi_diagnostics" "d" {}`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "limits.max_body_bytes", "262144"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "limits.max_body_containers", "2000"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "limits.body_read_s", "10"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "limits.reload_budget_s", "20"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.#", "0"),
+				),
+			},
+			{
+				// A single-package write lists its staged sections; a batch over
+				// several packages has none, and a write may lack a request id.
+				PreConfig: func() {
+					m.interruptedWrites = []any{
+						map[string]any{
+							"pid": 4242, "request_id": "req-killed", "packages": []any{"network"},
+							"staged": []any{"lan", "wan"}, "started_at": 1893456000, "reload_started": true,
+						},
+						map[string]any{
+							"pid": 4343, "request_id": nil, "packages": []any{"dhcp", "firewall"},
+							"staged": nil, "started_at": 1893456001, "reload_started": false,
+						},
+					}
+				},
+				Config: cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.#", "2"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.0.pid", "4242"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.0.request_id", "req-killed"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.0.packages.0", "network"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.0.staged.#", "2"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.0.started_at", "1893456000"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.0.reload_started", "true"),
+					resource.TestCheckNoResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.1.request_id"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.1.packages.#", "2"),
+					resource.TestCheckNoResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.1.staged"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.1.reload_started", "false"),
+				),
+			},
+		},
+	})
+}
+
 // A router with nothing wrong sends an empty invalid_sections. The decode must
 // still produce an empty list rather than leaving the slice nil, because the
 // framework reflects a nil slice to a null attribute and length()/for_each would

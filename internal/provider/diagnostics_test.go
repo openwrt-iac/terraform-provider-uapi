@@ -17,7 +17,8 @@ import (
 // answer a null map, not a provider panic: a zero types.Map carries a nil
 // element type, and ToTerraformValue reads m.ElementType before its null
 // branch, so an unassigned field kills the state encode. The literal in Read
-// initializes it; this pins that.
+// initializes it; this pins that. The fields of uapi 3.5.0 (limits,
+// interrupted_writes) read null against an older server in the same way.
 func TestDiagnosticsStateDirsMissingReadsNull(t *testing.T) {
 	ctx := context.Background()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,5 +52,11 @@ func TestDiagnosticsStateDirsMissingReadsNull(t *testing.T) {
 	}
 	if !m.StateDirs.IsNull() {
 		t.Errorf("state_dirs = %v, want null", m.StateDirs)
+	}
+	if m.Limits != nil {
+		t.Errorf("limits = %+v, want null", m.Limits)
+	}
+	if m.InterruptedWrites != nil {
+		t.Errorf("interrupted_writes = %v, want null: an older server reported nothing, which is not an empty report", m.InterruptedWrites)
 	}
 }

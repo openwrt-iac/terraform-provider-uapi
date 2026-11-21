@@ -6,6 +6,18 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Added
+- **`data.uapi_diagnostics.limits`**: the request bounds that uapi applies, from the
+  `config limits` options of /etc/config/uapi (uapi #339, #374): `max_body_bytes`,
+  `max_body_containers`, `body_read_s` and `reload_budget_s`.
+- **`data.uapi_diagnostics.interrupted_writes`**: the writes whose request process
+  stopped after the commit and before the write finished, with the pid, the request id,
+  the packages, the staged sections and whether the reload had started (uapi #341,
+  #384). Such a commit can be in uci with no check and no restore, and the apply that
+  sent it got no answer. The example adds a `check` block, which warns at each plan
+  while uapi reports one. Both need uapi 3.5.0 or later and read null against an older
+  server.
+
 ### Changed
 - The vendored uapi spec follows the uapi `v3` branch, the 3.5.0 candidate. No attribute,
   type or plan behavior changes: uapi 3.4 and 3.5 add no curated field, and the provider
