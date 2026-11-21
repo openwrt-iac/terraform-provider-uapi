@@ -61,7 +61,10 @@ func (e *tokenEphemeral) Schema(_ context.Context, _ ephemeral.SchemaRequest, re
 			"scopes": ephschema.ListAttribute{
 				ElementType: types.StringType,
 				Required:    true,
-				Description: "Scopes for the new token (must be a subset of the caller's scopes).",
+				Description: "Scopes for the new token, in the form `<segment>[:<segment>...]:(rw|ro)`, such as " +
+					"`firewall:rules:rw`. The caller's own scopes must cover each one, equal or narrower: a `*:rw` caller " +
+					"can mint `firewall:ro`. A scope that they do not cover answers 403 `scope_escalation_blocked`. uapi 3.x " +
+					"also mints a scope that it does not know, and such a scope grants nothing.",
 			},
 			"expires_in_seconds": ephschema.Int64Attribute{
 				Optional:    true,

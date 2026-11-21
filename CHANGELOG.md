@@ -52,6 +52,10 @@ line). Format follows Keep a Changelog.
   said that 0 ignores every connected route: the lookup ignores only the default
   route, so the connected routes are what the rule keeps. The overlay prose inverted
   the example; the vendored uapi spec text was right. (#60)
+- The `scopes` description of the `uapi_token` ephemeral resource said "a subset of the
+  caller's scopes". uapi 3.5.0 corrected its own text to "equal to or narrower": the
+  caller's scopes must cover each requested scope, so a `*:rw` caller can mint
+  `firewall:ro`, which is no literal subset of `["*:rw"]`.
 
 ## [3.3.0] - 2026-11-03
 
