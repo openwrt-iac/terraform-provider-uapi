@@ -147,6 +147,13 @@ string.
 the configuration now removes the policy from the router. Set each policy that a
 zone must keep.
 
+**Set the sqm options that a queue must keep.** `uapi_sqm_queue` now models the
+options of LuCI's sqm form. `ilimit`, `elimit`, `itarget`, `etarget`, `iqdisc_opts` and
+`eqdisc_opts` follow the same rule as the zone policies: removing one from the
+configuration removes it from the router. A queue that LuCI made holds `itarget = "auto"`
+and `etarget = "auto"`, so set both, or the first apply after an import removes them. The
+plan shows each such removal.
+
 **A new access point needs `mode = "ap"`.** uapi 4.0 stores no mode when the
 configuration sets none, and wifi-scripts sets up nothing for a section without
 a mode.
