@@ -275,6 +275,9 @@ data "uapi_diagnostics" "d" {}`
 					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "limits.body_read_s", "10"),
 					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "limits.reload_budget_s", "20"),
 					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "interrupted_writes.#", "0"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "stopped_instances.#", "1"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "stopped_instances.0.service", "dnsmasq"),
+					resource.TestCheckResourceAttr("data.uapi_diagnostics.d", "stopped_instances.0.instance", "cfg01411c"),
 				),
 			},
 			{

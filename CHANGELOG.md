@@ -31,6 +31,21 @@ and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new
   `eqdisc_opts` are plain Optional: removing one from the configuration removes it from the
   router.
 - The new guide "Migrating from provider 3.x to 4.0".
+- **The `uapi_service_recover` action** starts a service again when procd gave up on one
+  of its instances, through `POST /uapi/services/{name}/recover` of uapi 4.0 (uapi
+  #461). uapi stops and starts the whole service once, so its other instances restart
+  too, and it starts nothing when procd gave up on no instance. A 500 `recover_failed`
+  is an error that names the instances still down. Needs Terraform 1.14 or later.
+- **`data.uapi_diagnostics.stopped_instances`**: the daemon instances that procd gave
+  up on and does not start again on its own, as `service` and `instance` (uapi #457).
+  The action example adds a `check` block that warns while the list is not empty.
+- **Warnings for a write that uapi committed but that did not take full effect**,
+  from the headers of uapi 4.0: a daemon that procd gave up on (`X-Reload-Status:
+  stopped`), a reload that uapi could not confirm (`unverified`), a WireGuard interface
+  that a stored peer keeps down (`X-Kernel-Blocked`, also on a write of
+  `uapi_network_interface`), and a peer that WireGuard set without its endpoint
+  (`X-Kernel-Status: omitted`). They are warnings and not errors: the write is in uci,
+  and an error after a create would taint the resource. (#66)
 
 ### Changed
 - **BREAKING: the endpoint is `/api/v4`.** uapi 4.0 moves its own endpoints under

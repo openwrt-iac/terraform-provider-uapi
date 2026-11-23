@@ -36,6 +36,12 @@ type diagnosticsModel struct {
 	StateDirs         types.Map               `tfsdk:"state_dirs"`
 	Limits            *limitsModel            `tfsdk:"limits"`
 	InterruptedWrites []interruptedWriteModel `tfsdk:"interrupted_writes"`
+	StoppedInstances  []stoppedInstanceModel  `tfsdk:"stopped_instances"`
+}
+
+type stoppedInstanceModel struct {
+	Service  types.String `tfsdk:"service"`
+	Instance types.String `tfsdk:"instance"`
 }
 
 type limitsModel struct {
@@ -205,6 +211,19 @@ func (d *diagnosticsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 					},
 				},
 			},
+			"stopped_instances": dsschema.ListNestedAttribute{
+				Computed: true,
+				Description: "Daemon instances that procd gave up on after too many deaths soon after a start, and that it " +
+					"does not start again on its own, of the services that the `uapi_service_recover` action takes. A write " +
+					"that leaves dnsmasq so warns. The `uapi_service_recover` action, or a start or a reload of the service, " +
+					"starts it again. Empty when every such instance runs.",
+				NestedObject: dsschema.NestedAttributeObject{
+					Attributes: map[string]dsschema.Attribute{
+						"service":  dsComputedString("Service of the instance, such as `dnsmasq`."),
+						"instance": dsComputedString("Instance name in `service list`, such as `cfg01411c`."),
+					},
+				},
+			},
 		},
 	}
 }
@@ -366,6 +385,17 @@ func (d *diagnosticsDataSource) Read(ctx context.Context, req datasource.ReadReq
 				StartedAt:     int64Val(m, "started_at"),
 				ReloadStarted: boolVal(m, "reload_started"),
 			})
+		}
+	}
+	if arr, ok := obj["stopped_instances"].([]any); ok {
+		out.StoppedInstances = []stoppedInstanceModel{}
+		for _, e := range arr {
+			if m, ok := e.(map[string]any); ok {
+				out.StoppedInstances = append(out.StoppedInstances, stoppedInstanceModel{
+					Service:  strVal(m, "service"),
+					Instance: strVal(m, "instance"),
+				})
+			}
 		}
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &out)...)

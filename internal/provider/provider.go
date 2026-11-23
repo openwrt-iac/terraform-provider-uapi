@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -18,6 +19,7 @@ import (
 var (
 	_ provider.Provider                       = &uapiProvider{}
 	_ provider.ProviderWithEphemeralResources = &uapiProvider{}
+	_ provider.ProviderWithActions            = &uapiProvider{}
 )
 
 type uapiProvider struct {
@@ -102,6 +104,7 @@ func (p *uapiProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	resp.ResourceData = c
 	resp.DataSourceData = c
 	resp.EphemeralResourceData = c
+	resp.ActionData = c
 }
 
 func (p *uapiProvider) Resources(_ context.Context) []func() resource.Resource {
@@ -134,6 +137,10 @@ func (p *uapiProvider) EphemeralResources(_ context.Context) []func() ephemeral.
 	return []func() ephemeral.EphemeralResource{
 		NewTokenEphemeral,
 	}
+}
+
+func (p *uapiProvider) Actions(_ context.Context) []func() action.Action {
+	return []func() action.Action{NewServiceRecoverAction}
 }
 
 func firstNonEmpty(configured types.String, fallbacks ...string) string {

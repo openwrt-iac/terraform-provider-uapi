@@ -432,6 +432,7 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 				"max_body_bytes": 262144, "max_body_containers": 2000, "body_read_s": 10, "reload_budget_s": 20,
 			},
 			"interrupted_writes": []any{},
+			"stopped_instances":  []any{map[string]any{"service": "dnsmasq", "instance": "cfg01411c"}},
 		}
 		if m.interruptedWrites != nil {
 			body["interrupted_writes"] = m.interruptedWrites

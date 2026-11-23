@@ -97,6 +97,13 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
   second, scoped provider instance or a downstream ephemeral consumer. Requires Terraform 1.10+ or
   OpenTofu 1.11+.
 
+### Actions
+
+- `uapi_service_recover`: starts a service again when procd gave up on one of its instances, such
+  as a dnsmasq that a reload killed too often. Run it with
+  `terraform apply -invoke=action.uapi_service_recover.<name>`, or from the `action_trigger` of a
+  resource. Requires Terraform 1.14+.
+
 ## Data sources
 
 Every resource type has a matching lookup data source (by `id`, or no argument for singletons), plus:
