@@ -122,13 +122,22 @@ resource "uapi_network_wireguard_peer" "t" {
 		// snmpd
 		// Creates the group it references. Referencing a bare name assumed a group
 		// already existed, which is true of the fake and of no real router, so this
-		// case failed every live run and had to be triaged as known-noise.
+		// case failed every live run and had to be triaged as known-noise. uapi also
+		// refuses an access without the seven fields that snmpd.init needs, though
+		// its spec requires only `group`.
 		{typ: "uapi_snmpd_access", hcl: `resource "uapi_snmpd_group" "for_access" {
   group = "acc_group"
 }
 
 resource "uapi_snmpd_access" "t" {
-  group = uapi_snmpd_group.for_access.group
+  group   = uapi_snmpd_group.for_access.group
+  context = "none"
+  version = "any"
+  level   = "noauth"
+  prefix  = "exact"
+  read    = "all"
+  write   = "none"
+  notify  = "none"
 }`},
 		{typ: "uapi_snmpd_agent", hcl: `resource "uapi_snmpd_agent" "t" {}`},
 		{typ: "uapi_snmpd_com2sec", hcl: `resource "uapi_snmpd_com2sec" "t" {
