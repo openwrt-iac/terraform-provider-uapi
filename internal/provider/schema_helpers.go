@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"context"
+
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -104,6 +106,14 @@ func optionalStringList(desc string) schema.ListAttribute {
 	}
 }
 
+// optionalInt64 is the integer form of optionalString: clear-on-omit.
+func optionalInt64(desc string) schema.Int64Attribute {
+	return schema.Int64Attribute{
+		Optional:    true,
+		Description: desc,
+	}
+}
+
 func optionalComputedBool(desc string) schema.BoolAttribute {
 	return schema.BoolAttribute{
 		Optional:      true,
@@ -111,6 +121,38 @@ func optionalComputedBool(desc string) schema.BoolAttribute {
 		Description:   desc,
 		PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 	}
+}
+
+// optionalComputedBoolNonNullState is optionalComputedBool for a field whose
+// null read is a stored value that the daemon refuses, while an absent value
+// reads a default (a firewall `enabled` or `masq` that fw4 cannot parse).
+// UseStateForUnknown would plan that null, but the PUT leaves the field out,
+// which removes the refused value, and the read then gives the default:
+// Terraform would report an inconsistent result. So a null prior stays unknown.
+func optionalComputedBoolNonNullState(desc string) schema.BoolAttribute {
+	return schema.BoolAttribute{
+		Optional:      true,
+		Computed:      true,
+		Description:   desc,
+		PlanModifiers: []planmodifier.Bool{useNonNullStateForUnknown{}},
+	}
+}
+
+type useNonNullStateForUnknown struct{}
+
+func (useNonNullStateForUnknown) Description(context.Context) string {
+	return "Copies a non-null prior state value into an unknown planned value."
+}
+
+func (m useNonNullStateForUnknown) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (useNonNullStateForUnknown) PlanModifyBool(_ context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
+	if req.StateValue.IsNull() || !req.PlanValue.IsUnknown() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	resp.PlanValue = req.StateValue
 }
 
 func optionalComputedInt64(desc string) schema.Int64Attribute {

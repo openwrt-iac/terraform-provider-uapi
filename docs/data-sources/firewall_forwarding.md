@@ -28,7 +28,7 @@ data "uapi_firewall_forwarding" "example" {
 ### Read-Only
 
 - `dest` (String) uci option dest.
-- `enabled` (Boolean) Whether the entry is active.
+- `enabled` (Boolean) Whether the forwarding is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `family` (String) Address family: any, ipv4, or ipv6.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.

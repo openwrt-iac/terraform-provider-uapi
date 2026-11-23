@@ -44,6 +44,19 @@ const (
 	markDesc  = "Match an fwmark as a value or value/mask, decimal or `0x` hex. Prefix with `!` to negate."
 )
 
+// Shared by the firewall bools that fw4 parses: fw4 skips the section, or stops
+// on firewall/defaults, for a value that it cannot parse, and uapi reads it null.
+const (
+	fwSkipBoolDesc     = " A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it."
+	fwDefaultsBoolDesc = " A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration."
+)
+
+// Shared by the zone policies, which carry x-uapi-clear-on-omit.
+const zonePolicyDesc = " Unset, firewall4 applies the policy of `uapi_firewall_defaults`, and the attribute reads null. Removing it from the configuration removes the policy from the router, so the zone takes the policy of `uapi_firewall_defaults` again."
+
+// Shared by the write-only secrets of network_interface.
+const ifSecretDesc = " Removing it from the configuration keeps the stored value, and `\"\"` removes it. A switch to another proto removes it, unless the configuration sets it."
+
 // Shared by unbound_srv and unbound_ext. unbound-uci-ext documents an unbound-checkconf run that
 // nothing performs, so the grammar is only checked by unbound itself at the restart.
 const unboundLineDesc = "Nothing checks their grammar before unbound restarts, and unbound stops on a line that it cannot parse. If unbound ran before the write, uapi 3.2.0 and later then restore the previous lines and answer `500 reload_failed_restored`."
@@ -75,10 +88,6 @@ var commonDesc = map[string]string{
 	"has_key":            "Whether a key is configured (the value is never returned).",
 	"has_private_key":    "Whether a private key is configured.",
 	"has_preshared_key":  "Whether a preshared key is configured.",
-	"tls_auth":           "OpenVPN tls-auth/tls-crypt key material. Write-only: never returned by the API.",
-	"pkcs12":             "OpenVPN PKCS#12 bundle. Write-only: never returned by the API.",
-	"has_tls_auth":       "Whether tls-auth/tls-crypt key material is configured.",
-	"has_pkcs12":         "Whether a PKCS#12 bundle is configured.",
 	"probe_count":        "Probes per cycle per track_ip.",
 	"download":           "Download shaping rate in kbit/s.",
 	"upload":             "Upload shaping rate in kbit/s.",
@@ -156,19 +165,41 @@ func natMatchFields() *nested {
 var descriptors = []descriptor{
 	// firewall
 	{Type: "firewall_zone", Schema: "FirewallZones", Collection: "firewall/zones", Kind: "collection", Label: "firewall zone", GenDataSource: true, Descs: map[string]string{
-		"name": "Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores.",
+		"name":          "Zone name, referenced by rules and forwardings: a letter or an underscore, then letters, digits, dashes and underscores. firewall4 skips a zone whose name starts with a digit or a dash, so uapi refuses it.",
+		"input":         "Policy for traffic from this zone to the router: `ACCEPT`, `REJECT` or `DROP`." + zonePolicyDesc,
+		"output_policy": "Policy for traffic from the router to this zone: `ACCEPT`, `REJECT` or `DROP`." + zonePolicyDesc,
+		"forward":       "Policy for traffic that the router forwards from this zone when no forwarding or rule matches: `ACCEPT`, `REJECT` or `DROP`." + zonePolicyDesc,
+		"masq":          "Whether firewall4 masquerades IPv4 traffic that leaves through this zone. Unset means false." + fwSkipBoolDesc,
+		"mtu_fix":       "Whether firewall4 clamps the TCP MSS of traffic that leaves through this zone to the path MTU. Unset means false." + fwSkipBoolDesc,
 	}},
 	{Type: "firewall_rule", Schema: "FirewallRules", Collection: "firewall/rules", Kind: "collection", Label: "firewall rule", GenDataSource: true, Nested: matchFields(false), Descs: map[string]string{
-		"target": "What to do with matched traffic: `ACCEPT`, `REJECT`, `DROP`, `NOTRACK`, `MARK` or `DSCP`. A read also gives `HELPER`, which LuCI writes for a conntrack helper rule. uapi does not model the helper and refuses `HELPER` in a create and in a PUT, because a PUT removes the `set_helper` option and firewall4 skips a HELPER rule without it. The provider updates a rule with a PUT, so it can read such a rule but not update it.",
+		"enabled": "Whether the rule is active. Unset means true." + fwSkipBoolDesc,
+		"target":  "What to do with matched traffic: `ACCEPT`, `REJECT`, `DROP`, `NOTRACK`, `MARK` or `DSCP`. A read also gives `HELPER`, which LuCI writes for a conntrack helper rule. uapi does not model the helper and refuses `HELPER` in a create and in a PUT, because a PUT removes the `set_helper` option and firewall4 skips a HELPER rule without it. The provider updates a rule with a PUT, so it can read such a rule but not update it.",
 	}},
-	{Type: "firewall_redirect", Schema: "FirewallRedirects", Collection: "firewall/redirects", Kind: "collection", Label: "firewall redirect", GenDataSource: true, Nested: matchFields(true), SchemaVersion: 1},
-	{Type: "firewall_forwarding", Schema: "FirewallForwardings", Collection: "firewall/forwardings", Kind: "collection", Label: "firewall forwarding", GenDataSource: true},
+	{Type: "firewall_redirect", Schema: "FirewallRedirects", Collection: "firewall/redirects", Kind: "collection", Label: "firewall redirect", GenDataSource: true, Nested: matchFields(true), SchemaVersion: 1, Descs: map[string]string{
+		"enabled":    "Whether the redirect is active. Unset means true." + fwSkipBoolDesc,
+		"reflection": "Whether firewall4 adds NAT reflection rules, so that internal hosts reach the redirect through the external address. Unset, firewall4 adds them. A stored value that firewall4 cannot parse, such as `YES`, reads null too, and firewall4 then skips the section.",
+	}},
+	{Type: "firewall_forwarding", Schema: "FirewallForwardings", Collection: "firewall/forwardings", Kind: "collection", Label: "firewall forwarding", GenDataSource: true, Descs: map[string]string{
+		"enabled": "Whether the forwarding is active. Unset means true." + fwSkipBoolDesc,
+	}},
 	{Type: "firewall_nat", Schema: "FirewallNat", Collection: "firewall/nat", Kind: "collection", Label: "firewall NAT rule", GenDataSource: true, Nested: natMatchFields(), Descs: map[string]string{
 		"target":  "What to do with matched traffic: `SNAT` rewrites the source to `snat_ip`/`snat_port`, `MASQUERADE` rewrites it to the outbound interface address, `ACCEPT` exempts it from source NAT. Defaults to `MASQUERADE`. A read also gives `NPT`, which the firewall4 of OpenWrt main takes. uapi refuses a change of `target` to `NPT`, and from uapi 3.5.0 an update that keeps a stored `NPT` passes.",
 		"snat_ip": "IPv4 address to rewrite the source to. Requires target `SNAT`. On a stored `NPT` rule, the prefix that firewall4 maps `match.src_ip` to.",
 		"name":    "Human-readable label for this NAT rule.",
+		"enabled": "Whether the NAT rule is active. Unset means true." + fwSkipBoolDesc,
 	}},
-	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true},
+	{Type: "firewall_defaults", Schema: "FirewallDefaults", Collection: "firewall/defaults", Kind: "singleton", Label: "firewall defaults", GenDataSource: true, Descs: map[string]string{
+		"input":              "Default policy for traffic to the router, which a zone without its own `input` takes: `ACCEPT`, `REJECT` or `DROP`.",
+		"output_policy":      "Default policy for traffic from the router, which a zone without its own `output_policy` takes: `ACCEPT`, `REJECT` or `DROP`.",
+		"forward":            "Default policy for forwarded traffic, which a zone without its own `forward` takes: `ACCEPT`, `REJECT` or `DROP`.",
+		"syn_flood":          "Whether firewall4 limits incoming TCP SYN packets to `synflood_rate`. A read gives what firewall4 applies: LuCI writes `synflood_protect`, which firewall4 reads first. uapi writes true as `synflood_protect` too. Unset means false." + fwDefaultsBoolDesc,
+		"synflood_rate":      "SYN packets that `syn_flood` lets through, as a rate with its whole unit, such as `25/second` or `100/minute`. A read gives the rate as firewall4 applies it, so a stored `25` or `25/s` reads `25/second`. uapi refuses a bare number such as `25` and a unit prefix such as `25/m`, so write the whole unit. Unset, firewall4 applies 25/second. A string since provider 4.0.",
+		"drop_invalid":       "Whether firewall4 drops packets that conntrack marks invalid. Unset means false." + fwDefaultsBoolDesc,
+		"tcp_syncookies":     "Kernel TCP SYN cookies. Unset reads false." + fwDefaultsBoolDesc,
+		"flow_offloading":    "Whether firewall4 offloads established flows to the software flow table. Unset means false." + fwDefaultsBoolDesc,
+		"flow_offloading_hw": "Whether firewall4 offloads established flows to the hardware, when the driver can. Needs `flow_offloading`. Unset means false." + fwDefaultsBoolDesc,
+	}},
 	// network (interface + wireless_interface data sources are hand-written: runtime)
 	{Type: "network_interface", Schema: "NetworkInterfaces", Collection: "network/interfaces", Kind: "collection", Label: "network interface", GenDataSource: true, Runtime: "interface", SchemaVersion: 1,
 		// Phrased to read correctly on the data source too, where "set one or the
@@ -179,17 +210,18 @@ var descriptors = []descriptor{
 		Descs: map[string]string{
 			"ipaddr":         "Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.",
 			"ipaddrs":        "Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry.",
-			"proto":          "Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto.",
+			"proto":          "Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard`, `openvpn` or `none`. A proto needs its handler package on the router, such as `openvpn-openssl` for `openvpn`. netifd loads a handler that is installed later only after a reboot or `/etc/init.d/network restart`, and until then `runtime.effective_proto` reads `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto.",
 			"broadcast":      "IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`.",
 			"broadcast_flag": "Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's \"Use broadcast flag\". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later.",
 			"clientid":       "Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`.",
 			"reqprefix":      "Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. From uapi 3.5.0, a prefix length or a prefix can carry a `:IAID` suffix of up to 8 hex digits, as odhcp6c reads it.",
 			"sourcefilter":   "Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later.",
-			"listen_port":    "UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port.",
+			"listen_port":    "UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A read gives the number that the wireguard handler gives wg: a service name that uci holds, such as `openvpn`, reads null, and wg then listens on a port that the kernel picks. A stored number outside 0 to 65535 reads -1: wg refuses the whole interface, and uapi refuses every write of the interface until one sets a port.",
 			"ip6prefix":      "IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later.",
-			"mtu":            "MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384.",
+			"mtu":            "MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384. On proto `wireguard`, the handler applies it to the tunnel.",
+			"disabled":       "Whether netifd ignores this interface. A disabled interface has no ubus object, and netifd installs none of its addresses and routes. A stored `1` or `true` reads true.",
 			"metric":         "Metric of the routes that this interface installs without a metric of their own. Applies to every proto.",
-			"defaultroute":   "Whether to install the default route that the protocol provides. Unset means true. Applies to every proto.",
+			"defaultroute":   "Whether to install the default route that the protocol provides. Unset means true. Applies to every proto. On proto `openvpn`, openvpn-hotplug provides one each time openvpn knows a route gateway, which a `topology subnet` server always pushes, also without `redirect-gateway`. netifd then replaces the default route of wan, and when the tunnel goes down, the main table has no IPv4 default route until wan restarts. Set it to false on an openvpn client that must not carry the default route.",
 			"delegate":       "Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto.",
 			"ip4table":       "Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.",
 			"ip6table":       "Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.",
@@ -197,6 +229,63 @@ var descriptors = []descriptor{
 			"ip6hint":        "Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto.",
 			"ip6class":       "Prefix classes that this interface can take its subnet from: `local` for the ULA prefix, or the name of the interface that received the prefix. Unset means any. Needs uapi 3.2.0 or later.",
 			"ip6weight":      "Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later.",
+			// proto openvpn (uapi 4.0) and the login of pppoe, ppp, wwan and openvpn.
+			"auth":              "HMAC digest, such as `SHA256` (`--auth`).",
+			"ca":                "Absolute path of the CA certificate PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists.",
+			"cert":              "Absolute path of the local certificate PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists.",
+			"cert_password":     "Passphrase of the private key, which the handler writes to a file that it gives openvpn as `--askpass`. Write-only: a read gives `has_cert_password`." + ifSecretDesc,
+			"cipher":            "Data cipher for a peer that negotiates none, such as `AES-256-CBC` (`--cipher`).",
+			"client":            "Run in client mode (`--client`), which takes the options that the server pushes. Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"client_to_client":  "Server mode: route traffic between clients inside openvpn (`--client-to-client`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"config":            "Absolute path of an openvpn config file, which openvpn reads beside these options (`--config`). LuCI's raw config tab stores `/etc/openvpn/<id>/<id>_config.cfg`. The handler runs openvpn in the directory of this file, so a relative path in it resolves there. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists.",
+			"crl_verify":        "Absolute path of the certificate revocation list PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists.",
+			"data_ciphers":      "Ciphers that openvpn negotiates, as one entry of names joined by colons, such as `AES-256-GCM:CHACHA20-POLY1305`. It replaces `ncp_ciphers`. Set one entry: the handler gives openvpn each entry as a `--data-ciphers` of its own, openvpn keeps only the last, and uapi refuses several entries.",
+			"dev":               "tun or tap device name, such as `tun0`. openvpn needs a device, from this field or from `config`.",
+			"dev_type":          "`tun` or `tap`. Unset, the handler passes `--dev-type tun`. openvpn also takes `null`, a device that carries no traffic, which a read gives and uapi refuses in a write.",
+			"dh":                "Absolute path of the Diffie-Hellman parameters PEM, for server mode. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists.",
+			"duplicate_cn":      "Server mode: let several clients connect with one common name (`--duplicate-cn`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"float":             "Let the peer change its address or port (`--float`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"group":             "Group that openvpn drops its privileges to.",
+			"has_cert_password": "Whether uci holds `cert_password` (the value is never returned).",
+			"has_key":           "Whether uci holds `key` (the path is never returned).",
+			"has_password":      "Whether uci holds `password` (the value is never returned).",
+			"has_pkcs12":        "Whether uci holds `pkcs12` (the path is never returned).",
+			"has_tls_auth":      "Whether uci holds `tls_auth` (the path is never returned).",
+			"ifconfig":          "Tunnel addresses: `local remote` on a point-to-point tun, `address netmask` otherwise.",
+			"ifconfig_pool":     "Server-mode address pool: `start end [netmask]`.",
+			"keepalive":         "`interval timeout` pair, such as `10 60`.",
+			"key":               "Absolute path of the private key PEM on the router, not the key material itself. The handler leaves the option out when the file does not exist at ifup. Write-only: a read gives `has_key`." + ifSecretDesc,
+			"local":             "Local IP address or host name to bind to (`--local`), as LuCI's form takes it.",
+			"log":               "Absolute path of a log file, which openvpn truncates at each start (`--log`).",
+			"log_append":        "Absolute path of a log file that openvpn appends to (`--log-append`).",
+			"lport":             "Local port (`--lport`).",
+			"mute":              "Log at most this many messages of one category in a row (`--mute`).",
+			"nobind":            "Bind to no local address and port (`--nobind`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"ovpnproto":         "Transport protocol, openvpn's `--proto`, such as `udp` or `tcp-client`. uci names it `ovpnproto` because `proto` is the netifd protocol. It is the `proto` of the 3.x `uapi_openvpn_instance`. Unset, openvpn uses udp.",
+			"password":          "Password that the interface logs in with, beside `username`. On proto `pppoe` and `ppp`, a password without `username` does nothing, because ppp.sh then gives pppd neither. Write-only: a read gives `has_password`." + ifSecretDesc,
+			"persist_key":       "Keep the keys across a restart (`--persist-key`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"persist_tun":       "Keep the tun or tap device across a restart (`--persist-tun`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"ping":              "Seconds between pings when no other traffic passes (`--ping`).",
+			"ping_restart":      "Seconds without traffic from the peer before openvpn restarts (`--ping-restart`).",
+			"pkcs12":            "Absolute path of the PKCS#12 bundle on the router, not the bundle itself. The handler leaves the option out when the file does not exist at ifup. Write-only: a read gives `has_pkcs12`." + ifSecretDesc,
+			"port":              "Local and remote port (`--port`).",
+			"push":              "Server-mode directives pushed to clients, such as `route 10.0.0.0 255.255.255.0`. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words.",
+			"remote":            "Servers that a client connects to, each `host [port [proto]]`, tried in order. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words.",
+			"remote_cert_tls":   "Require that the peer certificate carries the key usage of a client or of a server.",
+			"route":             "Routes of the tunnel, each `network [netmask [gateway [metric]]]`, which openvpn-hotplug hands to netifd. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words.",
+			"route_gateway":     "Gateway of the `route` entries that name none.",
+			"rport":             "Remote port (`--rport`).",
+			"server":            "Server-mode subnet, such as `10.8.0.0 255.255.255.0`.",
+			"server_bridge":     "Bridged server mode: `gateway netmask pool-start pool-end`.",
+			"tls_auth":          "Absolute path of the tls-auth key file on the router, not the key material itself. Write-only: a read gives `has_tls_auth`." + ifSecretDesc,
+			"tls_client":        "Take the TLS client role (`--tls-client`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"tls_crypt":         "Absolute path of the tls-crypt key file. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists.",
+			"tls_server":        "Take the TLS server role (`--tls-server`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag.",
+			"topology":          "Server-mode topology.",
+			"user":              "User that openvpn drops its privileges to.",
+			"username":          "User name that the interface logs in with. ppp.sh gives it and `password` to pppd, and gives neither when it is unset. wwan hands both to the handler of the modem that it finds, such as qmi or mbim. The openvpn handler writes both to a file that it gives openvpn as `--auth-user-pass`. Removing it from the configuration removes it from the router, and so does a switch to another proto.",
+			"verb":              "Log verbosity. uapi takes 0 to 11.",
+			"verify_x509_name":  "Accept only a peer certificate of this name: `name [type]`.",
 		}},
 	{Type: "network_device", Schema: "NetworkDevices", Collection: "network/devices", Kind: "collection", Label: "network device", GenDataSource: true, Descs: map[string]string{
 		"name": "Device name as netifd and the kernel see it (`br-lan`, `eth0`).",
@@ -209,15 +298,15 @@ var descriptors = []descriptor{
 		"suppress_prefixlength": "Ignore a route that the lookup of this rule finds when its prefix is this long or shorter, and go on to the next rule: 0 ignores only a default route. A rule that looks up `main` with 0, placed ahead of a rule that sends a source subnet to a VPN table, keeps the LAN reachable in one section, which otherwise needs one rule per destination. 0 to 32. Needs uapi 3.3.0 or later.",
 		"tos":                   "Match this TOS value: 0, 4, 8, 12, 16, 20, 24 or 28, as netifd reads an integer. Needs uapi 3.3.0 or later.",
 		"uidrange":              "Match traffic of local sockets owned by this uid, or by a range such as `1000-1005`, each from 0 to 4294967294. Needs uapi 3.3.0 or later.",
-		"ipproto":               "Match this IP protocol, as an integer from 1 to 255 that LuCI writes, or as the spelling that uci holds, such as a protocol name. A decimal reads as an integer. Needs uapi 3.3.0 or later.",
+		"ipproto":               "Match this IP protocol, as an integer from 1 to 255, which LuCI writes. A read also gives another spelling that uci holds and netifd takes, such as `tcp` or `06`. An update that keeps such a value passes, but uapi refuses a change to one, so write the number. A decimal reads as an integer.",
 		"sport":                 "Match this source port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later.",
 		"dport":                 "Match this destination port, or a range such as `1000-2000`, each from 1 to 65534. Needs uapi 3.3.0 or later.",
 	}},
 	{Type: "network_bridge_vlan", Schema: "NetworkBridgeVlans", Collection: "network/bridge_vlans", Kind: "collection", Label: "network bridge VLAN", GenDataSource: true},
 	{Type: "network_wireguard_peer", Schema: "NetworkWireguardPeers", Collection: "network/wireguard_peers", Kind: "collection", Label: "network WireGuard peer", GenDataSource: true, Runtime: "wireguard", PostReadWarn: "warnWireguardPeerNotInKernel", Descs: map[string]string{
-		"allowed_ips":          "Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional.",
-		"endpoint_port":        "UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0: wireguard.sh then cannot bring the interface up, and the proto handler of OpenWrt main leaves the endpoint out. uapi refuses a write of 0, so an update of such a peer fails until a port is set.",
-		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1: wireguard.sh then cannot bring the interface up, and the proto handler of OpenWrt main leaves the keepalive out. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.",
+		"allowed_ips":          "Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list.",
+		"endpoint_port":        "UDP port of the endpoint. A service name that uci holds, such as `https`, reads as its port from /etc/services, as the proto handler resolves it. A name that does not resolve reads 0, and the handler then leaves the endpoint out. uapi refuses every write of the peer while the port reads 0, so set a port. A peer with an `endpoint_host` and no port reads null, and the handler gives wg port 51820 for it.",
+		"persistent_keepalive": "Seconds between keepalive packets. 0 or unset turns them off. A stored value that the proto handler cannot read, such as `25x`, reads -1, and the handler then leaves the keepalive out. uapi refuses every write of the peer while the keepalive reads -1, so set a value.",
 	}},
 	// wireless
 	{Type: "wireless_device", Schema: "WirelessDevices", Collection: "wireless/devices", Kind: "collection", Label: "wireless device", GenDataSource: true, IntStr: []string{"channel"}, PatchUpdates: true, Descs: map[string]string{
@@ -229,7 +318,11 @@ var descriptors = []descriptor{
 		"cell_density": "Basic rates by coverage cell density: 0 disabled, 1 normal, 2 high, 3 very high. Defaults to 0. Needs uapi 3.2.0 or later.",
 		"legacy_rates": "Whether the legacy 802.11b rates are allowed. Defaults to false. Needs uapi 3.2.0 or later.",
 	}},
-	{Type: "wireless_interface", Schema: "WirelessInterfaces", Collection: "wireless/interfaces", Kind: "collection", Label: "wireless interface", GenDataSource: true, Runtime: "wireless", PatchUpdates: true, Descs: map[string]string{
+	{Type: "wireless_interface", Schema: "WirelessInterfaces", Collection: "wireless/interfaces", Kind: "collection", Label: "wireless interface", GenDataSource: true, Runtime: "wireless", PatchUpdates: true, SchemaVersion: 1, Descs: map[string]string{
+		"device":                 "Radios of this SSID, as `uapi_wireless_device` ids. A read gives a list, also for one radio that uci holds as a string. A list since provider 4.0.",
+		"network":                "Network interfaces that this SSID joins. A read gives a list, also for one network that uci holds as a string. A list since provider 4.0.",
+		"mode":                   "Operating mode: `ap`, `sta`, `adhoc`, `monitor` or `mesh`. A section without a mode reads null, and wifi-scripts sets up nothing for it. uapi stores no mode when the configuration sets none, so set `ap` for an access point. A read also gives `wds` or `ahdemo`, which wifi-scripts skips and uapi refuses in a write.",
+		"ssid":                   "Network name that the access point broadcasts. A list that uci holds reads as its JSON text, such as `[ \"home\", \"net\" ]`, which hostapd broadcasts.",
 		"encryption":             "Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`. From uapi 3.5.0, a write of a WEP value (`wep`, `wep-open`, `wep-shared`) answers 422 unless the router sets WEP up, which needs the shell wifi-scripts. A stock image builds the ucode wifi-scripts, which give the daemon no WEP key, so the SSID would run without encryption.",
 		"ieee80211r":             "Whether 802.11r fast BSS transition is on, for roaming between the access points of one mobility domain. Defaults to false. Needs uapi 3.2.0 or later.",
 		"ft_over_ds":             "Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later.",
@@ -253,7 +346,7 @@ var descriptors = []descriptor{
 		"match_tag": "dnsmasq tags a request must carry for this reservation to apply (LuCI's Match Tag). Prefix a tag with `!` to negate it. Only a tag that dnsmasq sets from the request before it looks up hosts can match, such as one from a `config vendorclass`, `config userclass` or `config mac` rule. `known` and the DHCP range's own tag are set later, so `known` never matches and `!known` always does. A comma, a double quote, a `#`, a control character or a blank value is refused.",
 	}, SchemaVersion: 1},
 	{Type: "dhcp_server", Schema: "DhcpServers", Collection: "dhcp/servers", Kind: "collection", Label: "dhcp server", GenDataSource: true, Descs: map[string]string{
-		"dhcpv4":      "DHCPv4 service on this interface: `server`, `disabled`, `relay` or `hybrid`. dnsmasq serves on every value but `disabled`. Unset differs by platform: the dnsmasq of OpenWrt 25.12 serves, and the dnsmasq of OpenWrt main takes it as `disabled`, so set `server` to serve on both. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes an unset option as `disabled`. LuCI offers only `server` and `disabled`, and its DHCP setup writes `server`. odhcpd.defaults writes it into the stock `lan`. Reads null when unset. Needs uapi 3.3.0 or later.",
+		"dhcpv4":      "DHCPv4 service on this interface: `server`, `disabled`, `relay` or `hybrid`. dnsmasq serves on every value but `disabled`, and takes an unset value as `disabled`, so set `server` to serve. odhcpd has no DHCPv4 relay and serves on every value but `disabled` too, but only when `dhcp/odhcpd` sets `maindhcp`, and it takes an unset option as `disabled`. LuCI offers only `server` and `disabled`, and its DHCP setup writes `server`. odhcpd.defaults writes it into the stock `lan`. Reads null when unset. Needs uapi 3.3.0 or later.",
 		"ra_flags":    "Flags of the router advertisements: `managed-config` (clients ask for a DHCPv6 address), `other-config`, `home-agent`, or `none`, which LuCI writes when no flag is selected. The stock `lan` carries `managed-config` and `other-config`, and a PUT that left the field out removed them, so clients that follow the managed flag stopped asking DHCPv6. Unset reads null, which odhcpd takes as `other-config` only, and `none` sets no flag. Needs uapi 3.3.0 or later.",
 		"ra_slaac":    "Whether the router advertisements offer SLAAC addressing. odhcpd.defaults writes it into the stock `lan`, and a PUT that left the field out removed it. Reads true when unset, as odhcpd takes unset. odhcpd reads only `1`, `true`, `0` and `false`, and takes true for any other stored value. Needs uapi 3.3.0 or later.",
 		"dhcp_option": "DHCP options that dnsmasq sends, one per entry, such as `6,192.168.1.1`. dnsmasq.init passes each list entry whole, and dnsmasq reads it as one option. From uapi 3.2.0, an option that holds several words reads as one entry per word, as dnsmasq.init splits it. uapi 3.2.0 also refuses an entry in which an address is followed by whitespace and another option, such as `3,10.0.0.1 6,10.0.0.1`. A space in a text option, such as `15,my domain`, is valid.",
@@ -307,12 +400,9 @@ var descriptors = []descriptor{
 		"family": "Address family of the traffic that this rule matches: `ipv4`, `ipv6` or `any`. Unset or `any`, mwan3 applies the rule to both. A write of `any`, which LuCI writes, needs uapi 3.5.0 or later.",
 		"proto":  "IP protocol as iptables takes it: a number from 0 to 255, or a name that iptables resolves, such as `tcp`, `udp`, `icmp`, `esp` or `all`. uapi refuses another value, because iptables refuses the rules of the whole family for it. Before uapi 3.5.0, a write takes only `tcp`, `udp`, `icmp` and `all`.",
 	}},
-	{Type: "mwan3_globals", Schema: "Mwan3Globals", Collection: "mwan3/globals", Kind: "singleton", Label: "mwan3 globals", GenDataSource: true},
-	// usteer + openvpn (added in uapi 2.0.0-rc3; openvpn key/tls_auth/pkcs12 are write-only per the spec)
-	{Type: "usteer_config", Schema: "UsteerConfig", Collection: "usteer/config", Kind: "singleton", Label: "usteer config", GenDataSource: true},
-	{Type: "openvpn_instance", Schema: "OpenvpnInstances", Collection: "openvpn/instances", Kind: "collection", Label: "openvpn instance", GenDataSource: true, Descs: map[string]string{
-		"key":      "Path to the private key PEM on the router, not the key material itself. Write-only: reads return `has_key`.",
-		"tls_auth": "Path to the tls-auth/tls-crypt key file on the router, not the key material itself. Write-only: reads return `has_tls_auth`.",
-		"pkcs12":   "Path to the PKCS#12 bundle on the router, not the bundle itself. Write-only: reads return `has_pkcs12`.",
+	{Type: "mwan3_globals", Schema: "Mwan3Globals", Collection: "mwan3/globals", Kind: "singleton", Label: "mwan3 globals", GenDataSource: true, Descs: map[string]string{
+		"loglevel": "Level of the iptables LOG rules of mwan3: `emerg`, `alert`, `crit`, `error`, `warning`, `notice`, `info` or `debug`, as LuCI offers. iptables refuses `err` and `warn`, and mwan3 then loads none of its rules, so uapi refuses them. A read also gives another level that iptables takes, such as `panic` or `3`, and an update that keeps it passes.",
 	}},
+	// usteer (added in uapi 2.0.0-rc3)
+	{Type: "usteer_config", Schema: "UsteerConfig", Collection: "usteer/config", Kind: "singleton", Label: "usteer config", GenDataSource: true},
 }

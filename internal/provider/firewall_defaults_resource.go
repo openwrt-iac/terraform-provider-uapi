@@ -35,7 +35,7 @@ type firewallDefaultsModel struct {
 	OutputPolicy     types.String `tfsdk:"output_policy"`
 	SynFlood         types.Bool   `tfsdk:"syn_flood"`
 	SynfloodBurst    types.Int64  `tfsdk:"synflood_burst"`
-	SynfloodRate     types.Int64  `tfsdk:"synflood_rate"`
+	SynfloodRate     types.String `tfsdk:"synflood_rate"`
 	TcpSyncookies    types.Bool   `tfsdk:"tcp_syncookies"`
 }
 
@@ -54,16 +54,16 @@ func (r *firewallDefaultsResource) Schema(_ context.Context, _ resource.SchemaRe
 			"id":                 computedIDAttribute(),
 			"managed":            managedAttribute(),
 			"etag":               etagAttribute(),
-			"drop_invalid":       optionalComputedBool("uci option drop_invalid."),
-			"flow_offloading":    optionalComputedBool("uci option flow_offloading."),
-			"flow_offloading_hw": optionalComputedBool("uci option flow_offloading_hw."),
-			"forward":            optionalComputedString("uci option forward."),
-			"input":              optionalComputedString("uci option input."),
-			"output_policy":      optionalComputedString("uci option output_policy."),
-			"syn_flood":          optionalComputedBool("uci option syn_flood."),
+			"drop_invalid":       optionalComputedBool("Whether firewall4 drops packets that conntrack marks invalid. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration."),
+			"flow_offloading":    optionalComputedBool("Whether firewall4 offloads established flows to the software flow table. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration."),
+			"flow_offloading_hw": optionalComputedBool("Whether firewall4 offloads established flows to the hardware, when the driver can. Needs `flow_offloading`. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration."),
+			"forward":            optionalComputedString("Default policy for forwarded traffic, which a zone without its own `forward` takes: `ACCEPT`, `REJECT` or `DROP`."),
+			"input":              optionalComputedString("Default policy for traffic to the router, which a zone without its own `input` takes: `ACCEPT`, `REJECT` or `DROP`."),
+			"output_policy":      optionalComputedString("Default policy for traffic from the router, which a zone without its own `output_policy` takes: `ACCEPT`, `REJECT` or `DROP`."),
+			"syn_flood":          optionalComputedBool("Whether firewall4 limits incoming TCP SYN packets to `synflood_rate`. A read gives what firewall4 applies: LuCI writes `synflood_protect`, which firewall4 reads first. uapi writes true as `synflood_protect` too. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration."),
 			"synflood_burst":     optionalComputedInt64("uci option synflood_burst."),
-			"synflood_rate":      optionalComputedInt64("uci option synflood_rate."),
-			"tcp_syncookies":     optionalComputedBool("uci option tcp_syncookies."),
+			"synflood_rate":      optionalComputedString("SYN packets that `syn_flood` lets through, as a rate with its whole unit, such as `25/second` or `100/minute`. A read gives the rate as firewall4 applies it, so a stored `25` or `25/s` reads `25/second`. uapi refuses a bare number such as `25` and a unit prefix such as `25/m`, so write the whole unit. Unset, firewall4 applies 25/second. A string since provider 4.0."),
+			"tcp_syncookies":     optionalComputedBool("Kernel TCP SYN cookies. Unset reads false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration."),
 		},
 	}
 }
@@ -78,7 +78,7 @@ func (r *firewallDefaultsResource) body(ctx context.Context, m firewallDefaultsM
 	putStr(out, "output_policy", m.OutputPolicy)
 	putBool(out, "syn_flood", m.SynFlood)
 	putInt64(out, "synflood_burst", m.SynfloodBurst)
-	putInt64(out, "synflood_rate", m.SynfloodRate)
+	putStr(out, "synflood_rate", m.SynfloodRate)
 	putBool(out, "tcp_syncookies", m.TcpSyncookies)
 	return out
 }
@@ -94,7 +94,7 @@ func (r *firewallDefaultsResource) read(ctx context.Context, obj map[string]any,
 	m.OutputPolicy = strVal(obj, "output_policy")
 	m.SynFlood = boolVal(obj, "syn_flood")
 	m.SynfloodBurst = int64Val(obj, "synflood_burst")
-	m.SynfloodRate = int64Val(obj, "synflood_rate")
+	m.SynfloodRate = strVal(obj, "synflood_rate")
 	m.TcpSyncookies = boolVal(obj, "tcp_syncookies")
 }
 

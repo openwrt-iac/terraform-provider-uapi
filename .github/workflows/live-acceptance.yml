@@ -27,7 +27,7 @@ on:
   workflow_dispatch:
     inputs:
       endpoint:
-        description: "uapi v3 endpoint, e.g. https://router.example.com/api/v3"
+        description: "uapi v4 endpoint (OpenWrt main or its next release), e.g. https://router.example.com/api/v4"
         required: true
 
 permissions:

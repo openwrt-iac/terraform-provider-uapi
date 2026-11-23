@@ -21,16 +21,16 @@ data "uapi_firewall_defaults" "example" {}
 
 ### Read-Only
 
-- `drop_invalid` (Boolean) uci option drop_invalid.
+- `drop_invalid` (Boolean) Whether firewall4 drops packets that conntrack marks invalid. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `flow_offloading` (Boolean) uci option flow_offloading.
-- `flow_offloading_hw` (Boolean) uci option flow_offloading_hw.
-- `forward` (String) uci option forward.
+- `flow_offloading` (Boolean) Whether firewall4 offloads established flows to the software flow table. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration.
+- `flow_offloading_hw` (Boolean) Whether firewall4 offloads established flows to the hardware, when the driver can. Needs `flow_offloading`. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration.
+- `forward` (String) Default policy for forwarded traffic, which a zone without its own `forward` takes: `ACCEPT`, `REJECT` or `DROP`.
 - `id` (String) Stable id.
-- `input` (String) uci option input.
+- `input` (String) Default policy for traffic to the router, which a zone without its own `input` takes: `ACCEPT`, `REJECT` or `DROP`.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `output_policy` (String) uci option output_policy.
-- `syn_flood` (Boolean) uci option syn_flood.
+- `output_policy` (String) Default policy for traffic from the router, which a zone without its own `output_policy` takes: `ACCEPT`, `REJECT` or `DROP`.
+- `syn_flood` (Boolean) Whether firewall4 limits incoming TCP SYN packets to `synflood_rate`. A read gives what firewall4 applies: LuCI writes `synflood_protect`, which firewall4 reads first. uapi writes true as `synflood_protect` too. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration.
 - `synflood_burst` (Number) uci option synflood_burst.
-- `synflood_rate` (Number) uci option synflood_rate.
-- `tcp_syncookies` (Boolean) uci option tcp_syncookies.
+- `synflood_rate` (String) SYN packets that `syn_flood` lets through, as a rate with its whole unit, such as `25/second` or `100/minute`. A read gives the rate as firewall4 applies it, so a stored `25` or `25/s` reads `25/second`. uapi refuses a bare number such as `25` and a unit prefix such as `25/m`, so write the whole unit. Unset, firewall4 applies 25/second. A string since provider 4.0.
+- `tcp_syncookies` (Boolean) Kernel TCP SYN cookies. Unset reads false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 then applies no ruleset. uapi refuses every write of the defaults until one sets the attribute, so set it in the configuration.

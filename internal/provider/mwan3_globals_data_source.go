@@ -35,7 +35,7 @@ func (d *mwan3GlobalsDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"managed":  dsManagedAttribute(),
 			"etag":     dsComputedString("Opaque ETag of the resource's current state."),
 			"logging":  dsComputedBool("uci option logging."),
-			"loglevel": dsComputedString("uci option loglevel."),
+			"loglevel": dsComputedString("Level of the iptables LOG rules of mwan3: `emerg`, `alert`, `crit`, `error`, `warning`, `notice`, `info` or `debug`, as LuCI offers. iptables refuses `err` and `warn`, and mwan3 then loads none of its rules, so uapi refuses them. A read also gives another level that iptables takes, such as `panic` or `3`, and an update that keeps it passes."),
 			"mmx_mask": dsComputedString("uci option mmx_mask."),
 		},
 	}

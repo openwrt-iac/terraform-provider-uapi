@@ -15,7 +15,7 @@ type wirelessInterfaceDSModel struct {
 	ID                    types.String                   `tfsdk:"id"`
 	Managed               types.Bool                     `tfsdk:"managed"`
 	ETag                  types.String                   `tfsdk:"etag"`
-	Device                types.String                   `tfsdk:"device"`
+	Device                types.List                     `tfsdk:"device"`
 	Disabled              types.Bool                     `tfsdk:"disabled"`
 	Encryption            types.String                   `tfsdk:"encryption"`
 	FtOverDs              types.Bool                     `tfsdk:"ft_over_ds"`
@@ -30,7 +30,7 @@ type wirelessInterfaceDSModel struct {
 	MobilityDomain        types.String                   `tfsdk:"mobility_domain"`
 	Mode                  types.String                   `tfsdk:"mode"`
 	Nasid                 types.String                   `tfsdk:"nasid"`
-	Network               types.String                   `tfsdk:"network"`
+	Network               types.List                     `tfsdk:"network"`
 	PmkR1Push             types.Bool                     `tfsdk:"pmk_r1_push"`
 	R0KeyLifetime         types.Int64                    `tfsdk:"r0_key_lifetime"`
 	R0kh                  types.List                     `tfsdk:"r0kh"`
@@ -65,7 +65,7 @@ func (d *wirelessInterfaceDataSource) Schema(_ context.Context, _ datasource.Sch
 			"id":                     dsIDAttribute(),
 			"managed":                dsManagedAttribute(),
 			"etag":                   dsComputedString("Opaque ETag of the resource's current state."),
-			"device":                 dsComputedString("Underlying device."),
+			"device":                 dsComputedStringList("Radios of this SSID, as `uapi_wireless_device` ids. A read gives a list, also for one radio that uci holds as a string. A list since provider 4.0."),
 			"disabled":               dsComputedBool("Whether the entry is disabled."),
 			"encryption":             dsComputedString("Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`. From uapi 3.5.0, a write of a WEP value (`wep`, `wep-open`, `wep-shared`) answers 422 unless the router sets WEP up, which needs the shell wifi-scripts. A stock image builds the ucode wifi-scripts, which give the daemon no WEP key, so the SSID would run without encryption."),
 			"ft_over_ds":             dsComputedBool("Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later."),
@@ -78,16 +78,16 @@ func (d *wirelessInterfaceDataSource) Schema(_ context.Context, _ datasource.Sch
 			"isolate":                dsComputedBool("uci option isolate."),
 			"key":                    dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"mobility_domain":        dsComputedString("802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later."),
-			"mode":                   dsComputedString("uci option mode."),
+			"mode":                   dsComputedString("Operating mode: `ap`, `sta`, `adhoc`, `monitor` or `mesh`. A section without a mode reads null, and wifi-scripts sets up nothing for it. uapi stores no mode when the configuration sets none, so set `ap` for an access point. A read also gives `wds` or `ahdemo`, which wifi-scripts skips and uapi refuses in a write."),
 			"nasid":                  dsComputedString("802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later."),
-			"network":                dsComputedString("uci option network."),
+			"network":                dsComputedStringList("Network interfaces that this SSID joins. A read gives a list, also for one network that uci holds as a string. A list since provider 4.0."),
 			"pmk_r1_push":            dsComputedBool("Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later."),
 			"r0_key_lifetime":        dsComputedInt64("802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. Needs uapi 3.2.0 or later."),
 			"r0kh":                   dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"r1_key_holder":          dsComputedString("802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later."),
 			"r1kh":                   dsschema.ListAttribute{ElementType: types.StringType, Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
 			"reassociation_deadline": dsComputedInt64("802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, OpenWrt uses 20000. Needs uapi 3.2.0 or later."),
-			"ssid":                   dsComputedString("uci option ssid."),
+			"ssid":                   dsComputedString("Network name that the access point broadcasts. A list that uci holds reads as its JSON text, such as `[ \"home\", \"net\" ]`, which hostapd broadcasts."),
 			"runtime":                wirelessInterfaceRuntimeAttribute(),
 		},
 	}

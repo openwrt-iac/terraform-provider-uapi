@@ -66,7 +66,8 @@ hand-written specials are skipped by the generator and edited directly.
 ## Conventions that prevent bugs
 
 - **Server-defaulted fields are `Optional + Computed`** with `UseStateForUnknown` (see the `optionalComputed*` helpers). Omitting them must not produce a perpetual diff against the value uapi fills in. New fields that the API defaults or normalizes follow this pattern; only genuinely caller-owned fields are plain `Required`/`Optional`.
-- **Clear-on-omit fields are plain `Optional`** (the `optclear` kind -> `optionalString`, no Computed). Driven solely by the spec's `x-uapi-clear-on-omit` flag (uapi >= 2.2.3), which uapi sets only on caller-owned fields whose `fromUci` reads back null when absent (`section.X ?? null`, nullable type). Removing such a field from config clears the uci option (the value plans to null and the collection PUT drops it). Do NOT make a server-defaulted field clear-on-omit (perpetual non-converging diff); the spec flag and uapi's lint enforce the split. Today, all on `network_interface`: `netmask`, `gateway`, `broadcast`, `ip6gw`, `ip6prefix`.
+- **Clear-on-omit fields are plain `Optional`** (the `optclear` kind -> `optionalString`, `optionalStringList` or `optionalInt64`, no Computed). Driven solely by the spec's `x-uapi-clear-on-omit` flag (uapi >= 2.2.3), which uapi sets only on caller-owned fields whose `fromUci` reads back null when absent (`section.X ?? null`, nullable type). Removing such a field from config clears the uci option (the value plans to null and the collection PUT drops it). Do NOT make a server-defaulted field clear-on-omit (perpetual non-converging diff); the spec flag and uapi's lint enforce the split. Today: on `network_interface`, `netmask`, `gateway`, `broadcast`, `ip6gw`, `ip6prefix`, `username` and most of the proto `openvpn` options (its ports and timers are the integer ones); on `firewall_zone`, `input`, `output_policy` and `forward` (uapi 4.0).
+- **A nullable field with a non-null spec `default` reads null for a refused value.** uapi 4.0 reads a firewall bool that fw4 cannot parse (`enabled 'YES'`) as null, while an absent one reads the default. On a resource that updates with a PUT, the generator gives such an `optcomp` bool `optionalComputedBoolNonNullState`, which plans unknown instead of copying a null prior: the PUT leaves the field out, uapi removes the refused value, and the read gives the default. With `UseStateForUnknown` the plan says null and Terraform reports "inconsistent result after apply". A merge PATCH leaves the field alone, so the singletons keep `UseStateForUnknown`.
 - **A configured `[]` must survive a null read.** uci cannot store an empty list, so uapi drops `[]` on write and reads null back, while Terraform requires the applied value to equal the configured `[]`. Generated `read()` uses `listValKeepEmpty` with the planned or prior value (the nested `match` block starts from a copy of it for the same reason). A hand-written list attribute needs the same. Cost of missing this: from 3.0.0 to 3.0.1, `[]` failed every apply, and it was the only way to clear an Optional+Computed list.
 - **A field that the planned proto does not take plans as null.** uapi (>= 3.2.0) refuses a value for such a field with 422 and leaves it out of a read. The generated `ModifyPlan` nulls each one that the configuration does not set, makes a field that enters scope on a proto switch unknown (`UseStateForUnknown` copies a null prior too, and the new proto can read a default: `nohostroute` is false on wireguard), and makes them all unknown when `proto` is unknown. `ValidateConfig` reports a configured one at plan time; both read the table the generator takes from the spec (see `field_scope.go`). Cost of missing this: an Optional+Computed field keeps its prior value through `UseStateForUnknown`, so provider 3.1 sent the old proto's fields on every proto switch and uapi 3.2 refused the PUT.
 - **`body()` sends only known, non-null attributes.** Unknown computed values are omitted so the server applies its default. The `putX` helpers enforce this.
@@ -76,7 +77,7 @@ hand-written specials are skipped by the generator and edited directly.
 
 ## Forward compatibility (the uapi major contract)
 
-uapi keeps a major additive: within `/api/v3/` it may add response fields, optional request fields,
+uapi keeps a major additive: within `/api/v4/` it may add response fields, optional request fields,
 resources, error codes, and enum values, and only bumps the major for breaking changes (its own
 `docs/versioning.md` enumerates what counts, with named carve-outs). One installation serves exactly
 one major, so a provider major talks to exactly one uapi major. The
@@ -90,7 +91,7 @@ provider depends on that, so preserve these invariants:
 - **Branch on HTTP status, not the error `code` string.** `code`/`message` are surfaced in
   diagnostics, but control flow (e.g. 404 -> RemoveResource) keys off the status only.
 - **Keep the client API-version-agnostic.** The major version lives in the user-supplied
-  `endpoint` path; do not hardcode `/api/v3`.
+  `endpoint` path; do not hardcode `/api/v4`.
 
 **Version numbering:** the provider mirrors uapi. Provider `x.y.*` covers exactly the surface of
 uapi `x.y.*` (major and minor track uapi; patch is the provider's own bugfix line). Tag releases

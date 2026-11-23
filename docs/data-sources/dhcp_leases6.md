@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_leases6 Data Source - uapi"
 subcategory: ""
 description: |-
-  The current active DHCPv6 leases reported by the router at runtime, from the lease file of odhcpd. Before uapi 3.5.0 the list is always empty: uapi skipped the lease lines of odhcpd, which start with #.
+  The current active DHCPv6 leases reported by the router at runtime, as odhcpd reports them over ubus (ubus call dhcp ipv6leases, as LuCI reads them). A lease with several addresses or prefixes gives one entry for each. The list is empty when odhcpd does not run.
 ---
 
 # uapi_dhcp_leases6 (Data Source)
 
-The current active DHCPv6 leases reported by the router at runtime, from the lease file of odhcpd. Before uapi 3.5.0 the list is always empty: uapi skipped the lease lines of odhcpd, which start with `#`.
+The current active DHCPv6 leases reported by the router at runtime, as odhcpd reports them over ubus (`ubus call dhcp ipv6leases`, as LuCI reads them). A lease with several addresses or prefixes gives one entry for each. The list is empty when odhcpd does not run.
 
 ## Example Usage
 
@@ -34,7 +34,7 @@ Read-Only:
 
 - `duid` (String) Client DUID (hex).
 - `expires_at` (Number) Unix epoch seconds when the lease expires; null for a lease that does not expire.
-- `hostname` (String) Client hostname, if known.
+- `hostname` (String) Hostname that the client sent, as odhcpd holds it, which is not always a valid DNS name; null when the client sent none. A control byte, the backslash and each byte that is not valid UTF-8 read as `\x` and two lowercase hex digits, so `\x5c` is a backslash.
 - `ia_type` (String) Identity Association type (IA_NA, IA_PD).
 - `iaid` (String) Identity Association ID (hex).
 - `interface` (String) Network device that odhcpd served the lease on, as odhcpd names it (for example `br-lan`), not the uci interface.

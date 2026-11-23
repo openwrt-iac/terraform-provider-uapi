@@ -298,3 +298,81 @@ func TestPriorStateNumericChannelDecodes(t *testing.T) {
 		t.Errorf("channel = %q, want \"6\"", got)
 	}
 }
+
+// State written by provider 3.x: device and network are strings. The write-only
+// key and key holders must survive, or every SSID plans to set them again.
+func TestUpgradeWirelessInterface_stringsToLists(t *testing.T) {
+	s := runUpgrade(t, &wirelessInterfaceResource{}, `{"id":"wlan0","managed":true,"etag":"\"v1\"",
+		"device":"radio0","network":"lan guest","ssid":"home","encryption":"psk2",
+		"key":"supersecret","has_key":true,"r0kh":["02:00:00:00:00:01,nas1,k"],"has_r0kh":true}`)
+	if got := stringList(t, s, "device"); strings.Join(got, ",") != "radio0" {
+		t.Errorf("device = %v, want [radio0]", got)
+	}
+	if got := stringList(t, s, "network"); strings.Join(got, ",") != "lan,guest" {
+		t.Errorf("network = %v, want the two words split out of the scalar", got)
+	}
+	if v := attrString(t, s, "key"); v != "supersecret" {
+		t.Errorf("key = %q, want it carried over", v)
+	}
+	if got := stringList(t, s, "r0kh"); len(got) != 1 {
+		t.Errorf("r0kh = %v, want it carried over", got)
+	}
+	if v := attrString(t, s, "etag"); v != `"v1"` {
+		t.Errorf("etag = %q, want it carried over", v)
+	}
+}
+
+// Provider 3.x refreshed against uapi 4.0 reads the new arrays through strVal,
+// which formats them with %v. The brackets must not end up in a radio id.
+func TestUpgradeWirelessInterface_formattedArrays(t *testing.T) {
+	s := runUpgrade(t, &wirelessInterfaceResource{}, `{"id":"wlan0","managed":true,"etag":"\"v1\"",
+		"device":"[radio0]","network":"[lan guest]","ssid":"home"}`)
+	if got := stringList(t, s, "device"); strings.Join(got, ",") != "radio0" {
+		t.Errorf("device = %v, want [radio0] without brackets", got)
+	}
+	if got := stringList(t, s, "network"); strings.Join(got, ",") != "lan,guest" {
+		t.Errorf("network = %v, want both networks without brackets", got)
+	}
+}
+
+// State that already holds lists, as a 4.0 refresh writes, must stay as it is.
+func TestUpgradeWirelessInterface_listsAreNoop(t *testing.T) {
+	s := runUpgrade(t, &wirelessInterfaceResource{}, `{"id":"wlan0","managed":true,"etag":"\"v1\"",
+		"device":["radio0"],"network":["lan"],"ssid":"home"}`)
+	if got := stringList(t, s, "device"); strings.Join(got, ",") != "radio0" {
+		t.Errorf("device = %v, want the list unchanged", got)
+	}
+	if got := stringList(t, s, "network"); strings.Join(got, ",") != "lan" {
+		t.Errorf("network = %v, want the list unchanged", got)
+	}
+}
+
+// synflood_rate was types.Int64 through 3.x and is a String in 4.0. The
+// passthrough decoder coerces between scalars, so it needs no StateUpgrader.
+func TestPriorStateNumericSynfloodRateDecodes(t *testing.T) {
+	ctx := context.Background()
+	r := &firewallDefaultsResource{}
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	if schemaResp.Schema.Version != 0 {
+		t.Fatalf("schema version = %d, want 0: a bump here means a StateUpgrader is required", schemaResp.Schema.Version)
+	}
+	prior := map[string]any{}
+	for n := range schemaResp.Schema.Attributes {
+		prior[n] = nil
+	}
+	prior["id"] = "defaults"
+	prior["synflood_rate"] = 25
+	rawJSON, err := json.Marshal(prior)
+	if err != nil {
+		t.Fatalf("marshaling prior state: %v", err)
+	}
+	val, err := (&tfprotov6.RawState{JSON: rawJSON}).Unmarshal(schemaResp.Schema.Type().TerraformType(ctx))
+	if err != nil {
+		t.Fatalf("prior state with a numeric synflood_rate must decode into the String attribute: %v", err)
+	}
+	s := tfsdk.State{Schema: schemaResp.Schema, Raw: val}
+	if got := attrString(t, s, "synflood_rate"); got != "25" {
+		t.Errorf("synflood_rate = %q, want \"25\"", got)
+	}
+}

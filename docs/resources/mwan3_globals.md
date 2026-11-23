@@ -23,7 +23,7 @@ resource "uapi_mwan3_globals" "example" {
 ### Optional
 
 - `logging` (Boolean) uci option logging.
-- `loglevel` (String) uci option loglevel.
+- `loglevel` (String) Level of the iptables LOG rules of mwan3: `emerg`, `alert`, `crit`, `error`, `warning`, `notice`, `info` or `debug`, as LuCI offers. iptables refuses `err` and `warn`, and mwan3 then loads none of its rules, so uapi refuses them. A read also gives another level that iptables takes, such as `panic` or `3`, and an update that keeps it passes.
 - `mmx_mask` (String) uci option mmx_mask.
 
 ### Read-Only

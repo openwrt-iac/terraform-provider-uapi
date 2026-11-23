@@ -63,8 +63,9 @@ func (e *tokenEphemeral) Schema(_ context.Context, _ ephemeral.SchemaRequest, re
 				Required:    true,
 				Description: "Scopes for the new token, in the form `<segment>[:<segment>...]:(rw|ro)`, such as " +
 					"`firewall:rules:rw`. The caller's own scopes must cover each one, equal or narrower: a `*:rw` caller " +
-					"can mint `firewall:ro`. A scope that they do not cover answers 403 `scope_escalation_blocked`. uapi 3.x " +
-					"also mints a scope that it does not know, and such a scope grants nothing.",
+					"can mint `firewall:ro`. A scope that they do not cover answers 403 `scope_escalation_blocked`. A scope that " +
+					"uapi does not know, such as a typo or a path that uapi 4.0 removed, answers 422 `validation_failed`. " +
+					"A scope on a uci package that is not installed answers 422 too, so mint it after the install.",
 			},
 			"expires_in_seconds": ephschema.Int64Attribute{
 				Optional:    true,
@@ -113,7 +114,7 @@ func (e *tokenEphemeral) Open(ctx context.Context, req ephemeral.OpenRequest, re
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	obj, _, err := e.client.Post(ctx, "/tokens", body, "")
+	obj, _, err := e.client.Post(ctx, "/uapi/tokens", body, "")
 	if err != nil {
 		if client.IsConflict(err) {
 			name := m.Name.ValueString()
@@ -142,7 +143,7 @@ func (e *tokenEphemeral) Close(ctx context.Context, req ephemeral.CloseRequest, 
 	if err := json.Unmarshal(raw, &id); err != nil || id == "" {
 		return
 	}
-	if err := e.client.Delete(ctx, "/tokens/"+id, ""); err != nil {
+	if err := e.client.Delete(ctx, "/uapi/tokens/"+id, ""); err != nil {
 		resp.Diagnostics.AddError("Error revoking token", err.Error())
 	}
 }

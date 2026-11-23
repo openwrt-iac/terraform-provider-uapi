@@ -44,8 +44,9 @@ func (d *dhcpLeases6DataSource) Configure(_ context.Context, req datasource.Conf
 
 func (d *dhcpLeases6DataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dsschema.Schema{
-		Description: "The current active DHCPv6 leases reported by the router at runtime, from the lease file of odhcpd. " +
-			"Before uapi 3.5.0 the list is always empty: uapi skipped the lease lines of odhcpd, which start with `#`.",
+		Description: "The current active DHCPv6 leases reported by the router at runtime, as odhcpd reports them over ubus " +
+			"(`ubus call dhcp ipv6leases`, as LuCI reads them). A lease with several addresses or prefixes gives one entry " +
+			"for each. The list is empty when odhcpd does not run.",
 		Attributes: map[string]dsschema.Attribute{
 			"leases": dsschema.ListNestedAttribute{
 				Computed:    true,
@@ -54,7 +55,7 @@ func (d *dhcpLeases6DataSource) Schema(_ context.Context, _ datasource.SchemaReq
 					Attributes: map[string]dsschema.Attribute{
 						"duid":          dsComputedString("Client DUID (hex)."),
 						"iaid":          dsComputedString("Identity Association ID (hex)."),
-						"hostname":      dsComputedString("Client hostname, if known."),
+						"hostname":      dsComputedString("Hostname that the client sent, as odhcpd holds it, which is not always a valid DNS name; null when the client sent none. A control byte, the backslash and each byte that is not valid UTF-8 read as `\\x` and two lowercase hex digits, so `\\x5c` is a backslash."),
 						"interface":     dsComputedString("Network device that odhcpd served the lease on, as odhcpd names it (for example `br-lan`), not the uci interface."),
 						"ia_type":       dsComputedString("Identity Association type (IA_NA, IA_PD)."),
 						"ip":            dsComputedString("Assigned IPv6 address or prefix."),
@@ -68,7 +69,7 @@ func (d *dhcpLeases6DataSource) Schema(_ context.Context, _ datasource.SchemaReq
 }
 
 func (d *dhcpLeases6DataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
-	list, err := d.client.GetList(ctx, "/dhcp/leases6")
+	list, err := d.client.GetList(ctx, "/dhcp/leases?family=v6")
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading dhcp leases6", err.Error())
 		return

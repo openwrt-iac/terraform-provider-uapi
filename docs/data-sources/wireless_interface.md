@@ -27,7 +27,7 @@ data "uapi_wireless_interface" "example" {
 
 ### Read-Only
 
-- `device` (String) Underlying device.
+- `device` (List of String) Radios of this SSID, as `uapi_wireless_device` ids. A read gives a list, also for one radio that uci holds as a string. A list since provider 4.0.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `encryption` (String) Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`. From uapi 3.5.0, a write of a WEP value (`wep`, `wep-open`, `wep-shared`) answers 422 unless the router sets WEP up, which needs the shell wifi-scripts. A stock image builds the ucode wifi-scripts, which give the daemon no WEP key, so the SSID would run without encryption.
 - `etag` (String) Opaque ETag of the resource's current state.
@@ -42,9 +42,9 @@ data "uapi_wireless_interface" "example" {
 - `key` (String, Sensitive) Always null; never returned by the API.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `mobility_domain` (String) 802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later.
-- `mode` (String) uci option mode.
+- `mode` (String) Operating mode: `ap`, `sta`, `adhoc`, `monitor` or `mesh`. A section without a mode reads null, and wifi-scripts sets up nothing for it. uapi stores no mode when the configuration sets none, so set `ap` for an access point. A read also gives `wds` or `ahdemo`, which wifi-scripts skips and uapi refuses in a write.
 - `nasid` (String) 802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later.
-- `network` (String) uci option network.
+- `network` (List of String) Network interfaces that this SSID joins. A read gives a list, also for one network that uci holds as a string. A list since provider 4.0.
 - `pmk_r1_push` (Boolean) Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later.
 - `r0_key_lifetime` (Number) 802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. Needs uapi 3.2.0 or later.
 - `r0kh` (List of String, Sensitive) Always null; never returned by the API.
@@ -52,7 +52,7 @@ data "uapi_wireless_interface" "example" {
 - `r1kh` (List of String, Sensitive) Always null; never returned by the API.
 - `reassociation_deadline` (Number) 802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, OpenWrt uses 20000. Needs uapi 3.2.0 or later.
 - `runtime` (Attributes) Live iwinfo-derived runtime state (read-only). (see [below for nested schema](#nestedatt--runtime))
-- `ssid` (String) uci option ssid.
+- `ssid` (String) Network name that the access point broadcasts. A list that uci holds reads as its JSON text, such as `[ "home", "net" ]`, which hostapd broadcasts.
 
 <a id="nestedatt--runtime"></a>
 ### Nested Schema for `runtime`

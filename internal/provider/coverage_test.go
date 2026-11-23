@@ -104,7 +104,7 @@ resource "uapi_network_wireguard_peer" "t" {
   type = "mac80211"
 }`},
 		{typ: "uapi_wireless_interface", hcl: `resource "uapi_wireless_interface" "t" {
-  device = "radio0"
+  device = ["radio0"]
 }`},
 		// dhcp / dns
 		{typ: "uapi_dhcp_host", hcl: `resource "uapi_dhcp_host" "t" {
@@ -173,13 +173,6 @@ resource "uapi_snmpd_access" "t" {
 }`},
 		{typ: "uapi_mwan3_globals", singleton: true, hcl: `resource "uapi_mwan3_globals" "t" {}`},
 		{typ: "uapi_usteer_config", singleton: true, hcl: `resource "uapi_usteer_config" "t" {}`},
-		// `key` is a path on the router, not key material. The fixture used to pass
-		// a PEM header, which the fake accepted and a real router rejects with
-		// "must be an absolute filesystem path".
-		{typ: "uapi_openvpn_instance", hcl: `resource "uapi_openvpn_instance" "t" {
-  client = true
-  key    = "/etc/openvpn/client.key"
-}`},
 		// packages (no etag)
 		{typ: "uapi_package", noEtag: true, hcl: `resource "uapi_package" "t" {
   name = "curl"

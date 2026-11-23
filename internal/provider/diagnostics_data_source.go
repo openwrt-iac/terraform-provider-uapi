@@ -175,14 +175,12 @@ func (d *diagnosticsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 				Description: "State directories under /var/run, keyed by path, as uapi finds them; the read creates " +
 					"and changes nothing. `true`: a directory owned by uapi's request uid, mode 0700, which uapi uses. " +
 					"`false`: the path holds anything else, and uapi does not use it as it stands. `null`: the path does " +
-					"not exist yet, and uapi creates it at its first write there. Needs uapi 3.3.0 or later; reads as " +
-					"null against an older server.",
+					"not exist yet, and uapi creates it at its first write there.",
 			},
 			"limits": dsschema.SingleNestedAttribute{
 				Computed: true,
 				Description: "The request bounds that uapi applies: the `config limits` options of /etc/config/uapi, with the " +
-					"compiled default where an option is absent or out of bounds. An option can lower a bound, not raise it. " +
-					"Needs uapi 3.5.0 or later; reads as null against an older server.",
+					"compiled default where an option is absent or out of bounds. An option can lower a bound, not raise it.",
 				Attributes: map[string]dsschema.Attribute{
 					"max_body_bytes":      dsComputedInt64("Largest request body in bytes. A larger `Content-Length` answers 413."),
 					"max_body_containers": dsComputedInt64("Largest number of `{` and `[` characters in a request body, which bounds the JSON parse."),
@@ -195,8 +193,7 @@ func (d *diagnosticsDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 				Description: "Writes whose request process stopped after the commit and before the write finished: uhttpd " +
 					"killed it (a client disconnect or `script_timeout`), or the write threw. The commit can be in uci with no " +
 					"check, no restore and no answer to the client. Report only: uapi corrects nothing, and the records stay " +
-					"until a reboot. Empty when no write was interrupted. Needs uapi 3.5.0 or later; reads as null against an " +
-					"older server.",
+					"until a reboot. Empty when no write was interrupted.",
 				NestedObject: dsschema.NestedAttributeObject{
 					Attributes: map[string]dsschema.Attribute{
 						"pid":            dsComputedInt64("Process id of the request that made the write."),
@@ -218,7 +215,7 @@ func (d *diagnosticsDataSource) Read(ctx context.Context, req datasource.ReadReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	path := "/diagnostics"
+	path := "/uapi/diagnostics"
 	if cfg.Validate.ValueBool() {
 		path += "?validate=1"
 	}

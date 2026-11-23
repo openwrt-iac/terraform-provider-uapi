@@ -29,6 +29,7 @@ type specProp struct {
 	Deprecated   bool   `json:"deprecated"`
 	XClearOnOmit bool   `json:"x-uapi-clear-on-omit"`
 	Enum         []any  `json:"enum"`
+	Default      any    `json:"default"`
 }
 
 // specCond is one `allOf` entry of a request schema: `if` names a discriminator
@@ -96,6 +97,11 @@ type field struct {
 	Kind       string // "required" | "optcomp" | "optclear" | "writeonly" | "createonly" | "computedbool" | "computedstring" | "intstr"
 	Desc       string
 	Deprecated bool // spec `deprecated: true`: emit a DeprecationMessage
+	// NullRefused marks an optcomp field whose null read is a stored value that
+	// the daemon refuses, while an absent one reads the spec default. Its plan
+	// must not copy a null prior: the PUT leaves the field out, which removes the
+	// refused value, and the read then gives the default.
+	NullRefused bool
 }
 
 type nested struct {
@@ -268,6 +274,9 @@ func buildResource(d descriptor, props, writable map[string]specProp, required [
 				f.Kind = "optclear"
 			} else {
 				f.Kind = "optcomp"
+				// A merge PATCH leaves an omitted field alone, so only a PUT update
+				// removes the refused value and reads the default back.
+				f.NullRefused = nullableWithDefault(p) && d.Kind == "collection" && !d.PatchUpdates
 			}
 		}
 		// createonly carries its own message (it reuses the description, which is
@@ -315,6 +324,22 @@ func typeOf(p specProp) string {
 		}
 	}
 	return "string"
+}
+
+// nullableWithDefault reports whether p admits null and declares a non-null
+// default: the read gives the default for an absent value and null for one
+// that the daemon refuses.
+func nullableWithDefault(p specProp) bool {
+	t, ok := p.Type.([]any)
+	if !ok || p.Default == nil {
+		return false
+	}
+	for _, e := range t {
+		if s, _ := e.(string); s == "null" {
+			return true
+		}
+	}
+	return false
 }
 
 // intStrUnion reports whether p is a type union admitting both an integer and

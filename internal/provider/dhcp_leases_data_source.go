@@ -41,18 +41,18 @@ func (d *dhcpLeasesDataSource) Configure(_ context.Context, req datasource.Confi
 
 func (d *dhcpLeasesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = dsschema.Schema{
-		Description: "Active IPv4 DHCP leases reported by the router at runtime.",
+		Description: "Active IPv4 DHCP leases reported by the router at runtime, from the lease file of dnsmasq.",
 		Attributes: map[string]dsschema.Attribute{
 			"leases": dsschema.ListNestedAttribute{
 				Computed:    true,
 				Description: "Active DHCP leases.",
 				NestedObject: dsschema.NestedAttributeObject{
 					Attributes: map[string]dsschema.Attribute{
-						"expires_at": dsComputedInt64("Unix epoch seconds when the lease expires."),
+						"expires_at": dsComputedInt64("Unix epoch seconds when the lease expires; null for a lease that does not expire, for which dnsmasq writes 0."),
 						"mac":        dsComputedString("Client MAC address."),
 						"ip":         dsComputedString("Assigned IP address."),
-						"hostname":   dsComputedString("Client hostname, if known."),
-						"duid":       dsComputedString("Client DUID, if known."),
+						"hostname":   dsComputedString("Client hostname, as dnsmasq writes it; null when the client sent none. A control byte, the backslash and each byte that is not valid UTF-8 read as `\\x` and two lowercase hex digits, so `\\x5c` is a backslash."),
+						"duid":       dsComputedString("Client id that dnsmasq records; null when the client sent none."),
 					},
 				},
 			},

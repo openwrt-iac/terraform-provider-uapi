@@ -37,6 +37,9 @@ const (
 // maxPages bounds cursor-pagination so a misbehaving server cannot loop forever.
 const maxPages = 1000
 
+// maxListRestarts bounds how often a listing starts again after a stale cursor.
+const maxListRestarts = 3
+
 func newIdempotencyKey() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -373,6 +376,7 @@ func (c *Client) GetListHeader(ctx context.Context, path, header string) ([]map[
 	var values []string
 	seen := map[string]bool{}
 	next := ""
+	restarts := 0
 	for page := 0; page < maxPages; page++ {
 		sep := "?"
 		if strings.Contains(path, "?") {
@@ -384,6 +388,14 @@ func (c *Client) GetListHeader(ctx context.Context, path, header string) ([]map[
 		}
 		raw, _, hdr, err := c.do(ctx, http.MethodGet, p, nil, "")
 		if err != nil {
+			// uapi 4.0 answers 400 to a cursor that ends on an anonymous section
+			// when an item up to it changed, so the next page could skip one.
+			// Its documented recovery is to read the list again from the start.
+			if next != "" && restarts < maxListRestarts && statusIs(err, http.StatusBadRequest) {
+				restarts++
+				all, values, seen, next = nil, nil, map[string]bool{}, ""
+				continue
+			}
 			return nil, nil, err
 		}
 		var list []map[string]any

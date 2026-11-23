@@ -30,7 +30,7 @@ func TestProviderSchema(t *testing.T) {
 		"uapi_wireless_device", "uapi_wireless_interface",
 		"uapi_dhcp_host", "uapi_system",
 		"uapi_authorized_key", "uapi_system_password",
-		"uapi_mwan3_interface", "uapi_mwan3_globals", "uapi_usteer_config", "uapi_openvpn_instance",
+		"uapi_mwan3_interface", "uapi_mwan3_globals", "uapi_usteer_config",
 	}
 	for _, name := range wantResources {
 		if _, ok := resp.ResourceSchemas[name]; !ok {

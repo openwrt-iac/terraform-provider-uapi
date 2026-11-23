@@ -417,7 +417,7 @@ func TestAccWirelessInterface_writeOnlyKey(t *testing.T) {
 			{
 				Config: providerHCL(m.URL) + `
 resource "uapi_wireless_interface" "w" {
-  device     = "radio0"
+  device     = ["radio0"]
   ssid       = "home"
   encryption = "psk2"
   key        = "supersecret"
@@ -470,7 +470,7 @@ resource "uapi_wireless_device" "radio0" {
 
 resource "uapi_wireless_interface" "home" {
   id     = "default_radio0"
-  device = "radio0"
+  device = ["radio0"]
   ssid   = "` + ssid + `"
   key    = "supersecret"
 }`
@@ -897,7 +897,7 @@ func TestAccWirelessInterface_mergePatch(t *testing.T) {
 		return providerHCL(m.URL) + `
 resource "uapi_wireless_interface" "wlan0" {
   id        = "wlan0"
-  device    = "radio0"
+  device    = ["radio0"]
   ssid      = "` + ssid + `"
   encryption = "psk2+ccmp"
   key       = "supersecret"
@@ -1181,6 +1181,121 @@ func TestAccNetworkInterface_protoSwitch(t *testing.T) {
 					resource.TestCheckNoResourceAttr(n, "addresses.#"),
 					resource.TestCheckNoResourceAttr(n, "listen_port"),
 					resource.TestCheckNoResourceAttr(n, "nohostroute"),
+				),
+			},
+		},
+	})
+}
+
+// Proto openvpn of uapi 4.0: a write-only secret keeps its stored value when the
+// configuration drops it, and "" removes it; a clear-on-omit integer and a list
+// field round-trip; a switch away from openvpn removes its fields. The tunnel
+// stays disabled, so netifd never runs it on a live target.
+func TestAccNetworkInterface_openvpn(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.ovpn"
+	iface := func(body string) string {
+		return providerCfg + "resource \"uapi_network_interface\" \"ovpn\" {\n  id           = \"uapiacc_ovpn\"\n  disabled     = true\n  defaultroute = false\n" + body + "}\n"
+	}
+	tunnel := `  proto        = "openvpn"
+  client       = true
+  dev          = "tun9"
+  ovpnproto    = "udp"
+  remote       = ["192.0.2.1 1194"]
+  data_ciphers = ["AES-256-GCM:CHACHA20-POLY1305"]
+  username     = "uapiacc"
+`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(tunnel + `  lport    = 1195
+  key      = "/etc/openvpn/uapiacc.key"
+  password = "uapiacc-secret"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "has_key", "true"),
+					resource.TestCheckResourceAttr(n, "has_password", "true"),
+					resource.TestCheckResourceAttr(n, "key", "/etc/openvpn/uapiacc.key"),
+					resource.TestCheckResourceAttr(n, "remote.0", "192.0.2.1 1194"),
+					resource.TestCheckResourceAttr(n, "data_ciphers.#", "1"),
+					resource.TestCheckResourceAttr(n, "lport", "1195"),
+					resource.TestCheckResourceAttr(n, "username", "uapiacc"),
+				),
+			},
+			{
+				// Dropped from the configuration: the integer clears, the secrets stay.
+				Config: iface(tunnel),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "lport"),
+					resource.TestCheckNoResourceAttr(n, "key"),
+					resource.TestCheckResourceAttr(n, "has_key", "true"),
+					resource.TestCheckResourceAttr(n, "has_password", "true"),
+				),
+			},
+			{
+				Config: iface(tunnel + `  key      = ""
+  password = ""
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "has_key", "false"),
+					resource.TestCheckResourceAttr(n, "has_password", "false"),
+				),
+			},
+			{
+				Config: iface(`  proto   = "static"
+  ipaddrs = ["192.0.2.30"]
+  netmask = "255.255.255.0"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "remote.#"),
+					resource.TestCheckNoResourceAttr(n, "username"),
+					resource.TestCheckNoResourceAttr(n, "client"),
+					resource.TestCheckResourceAttr(n, "has_key", "false"),
+				),
+			},
+		},
+	})
+}
+
+// uapi 4.0 models the login of pppoe, ppp and wwan, and a proto switch removes
+// it unless the write sends it. The interface stays disabled.
+func TestAccNetworkInterface_pppLogin(t *testing.T) {
+	providerCfg, closer := accTarget(t)
+	defer closer()
+	const n = "uapi_network_interface.ppp"
+	iface := func(body string) string {
+		return providerCfg + "resource \"uapi_network_interface\" \"ppp\" {\n  id       = \"uapiacc_ppp\"\n  disabled = true\n" + body + "}\n"
+	}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config: iface(`  proto    = "pppoe"
+  username = "uapiacc"
+  password = "uapiacc-secret"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "username", "uapiacc"),
+					resource.TestCheckResourceAttr(n, "has_password", "true"),
+				),
+			},
+			{
+				Config: iface(`  proto = "dhcp"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "username"),
+					resource.TestCheckResourceAttr(n, "has_password", "false"),
+				),
+			},
+			{
+				// The switch back stores no login: the switch away removed it.
+				Config: iface(`  proto = "pppoe"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(n, "username"),
+					resource.TestCheckResourceAttr(n, "has_password", "false"),
 				),
 			},
 		},

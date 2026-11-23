@@ -14,18 +14,10 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 
 ## Requirements
 
-- An OpenWrt router running **uapi >= 3.0.0** (OpenWrt 25.12+), reachable over HTTP(S).
-  `uapi_cron_job` and `uapi_dhcp_host.match_tag` need uapi >= 3.1.0. The
-  `uapi_network_interface` attributes `broadcast_flag`, `sourcefilter`, `ip6class` and
-  `ip6weight`, the list form of `ip6prefix`, and the new `uapi_wireless_device` and
-  `uapi_wireless_interface` attributes, such as `path` and the 802.11r settings, need
-  uapi >= 3.2.0. The `uapi_dhcp_server` odhcpd options (`dhcpv4`, `ra_flags`,
-  `ra_slaac`), the `uapi_network_rule` match options (`suppress_prefixlength`, `tos`,
-  `uidrange`, `ipproto`, `sport`, `dport`), a wireguard peer without `allowed_ips`,
-  the wireguard `runtime` block and the `uapi_wireguard_kernel_peers` data source,
-  and `uapi_diagnostics.state_dirs` need uapi >= 3.3.0. `uapi_diagnostics.limits` and
-  `interrupted_writes`, and `uapi_wireguard_kernel_peers.unread_interfaces`, need
-  uapi >= 3.5.0.
+- An OpenWrt router running **uapi >= 4.0.0**, reachable over HTTP(S). uapi 4.x runs on
+  OpenWrt main and on the next OpenWrt release cut from it. A router on OpenWrt 25.12 stays
+  on uapi 3.5.0, which provider 3.5 manages. To move from 3.x, read the
+  [migration guide](docs/guides/migration-v3-to-v4.md).
 - A bearer token created on the router: `uapi-token create --name terraform --scope '*:rw'`.
 - Terraform >= 1.0 (>= 1.10 for the `uapi_token` ephemeral resource) or OpenTofu >= 1.11.
 
@@ -35,16 +27,18 @@ stability promise across OpenWrt releases, which is a poor fit for managed Terra
 > a `dev_overrides` / mirror (see `examples/dev.tfrc`) covers the gap.
 
 > **Daemon packages first.** Resources whose daemon ships as a separate OpenWrt package
-> (`uapi_unbound_server`, `uapi_sqm_queue`, `uapi_snmpd_*`, `uapi_openvpn_instance`,
-> `uapi_mwan3_*`, `uapi_vnstat_config`, `uapi_lldpd_config`) need that package installed first, or
-> the write returns `503 init_script_missing`. Install it out of band, or manage it with
-> `uapi_package` and `depends_on = [uapi_package.<name>]`.
+> (`uapi_unbound_server`, `uapi_sqm_queue`, `uapi_snmpd_*`, `uapi_mwan3_*`,
+> `uapi_vnstat_config`, `uapi_lldpd_config`) need that package installed first, or the write
+> returns `503 init_script_missing`. Install it out of band, or manage it with `uapi_package` and
+> `depends_on = [uapi_package.<name>]`. A `uapi_network_interface` proto needs its netifd handler
+> package, such as `openvpn-openssl` for `openvpn`, and netifd loads a new handler only after a
+> reboot or `/etc/init.d/network restart`.
 
 ## Provider configuration
 
 ```hcl
 provider "uapi" {
-  endpoint = "https://192.168.1.1/api/v3" # or env UAPI_ENDPOINT / UAPI_BASE
+  endpoint = "https://192.168.1.1/api/v4" # or env UAPI_ENDPOINT / UAPI_BASE
   token    = var.uapi_token               # or env UAPI_TOKEN
   insecure = true                         # or env UAPI_INSECURE=1
 }
@@ -52,7 +46,7 @@ provider "uapi" {
 
 | Argument   | Env                          | Description                                                        |
 |------------|------------------------------|--------------------------------------------------------------------|
-| `endpoint` | `UAPI_ENDPOINT`, `UAPI_BASE` | API root including the `/api/v3` prefix.                            |
+| `endpoint` | `UAPI_ENDPOINT`, `UAPI_BASE` | API root including the `/api/v4` prefix.                            |
 | `token`    | `UAPI_TOKEN`                 | Bearer token. Sensitive.                                           |
 | `insecure` | `UAPI_INSECURE`              | Skip TLS verification. Needed for uapi's default self-signed cert. |
 
@@ -68,7 +62,9 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
 - **Firewall:** `uapi_firewall_rule`, `uapi_firewall_zone`, `uapi_firewall_redirect`,
   `uapi_firewall_nat` (source NAT / MASQUERADE), `uapi_firewall_forwarding`,
   `uapi_firewall_defaults` (singleton).
-- **Network:** `uapi_network_interface` (incl. WireGuard: write-only `private_key`),
+- **Network:** `uapi_network_interface` (incl. WireGuard: write-only `private_key`; OpenVPN:
+  proto `openvpn` with write-only `key`, `tls_auth`, `pkcs12`, `cert_password`; the login of
+  pppoe, ppp, wwan and openvpn: `username` and write-only `password`),
   `uapi_network_device`, `uapi_network_route`, `uapi_network_rule`, `uapi_network_bridge_vlan`,
   `uapi_network_wireguard_peer` (write-only `preshared_key`).
 - **Wireless:** `uapi_wireless_device`, `uapi_wireless_interface` (write-only `key`).
@@ -88,8 +84,9 @@ The provider covers the full curated uapi surface (no `/raw`). The per-resource 
   `uapi_prometheus_node_exporter_lua_config` (singleton).
 - **mwan3:** `uapi_mwan3_interface`, `uapi_mwan3_member`, `uapi_mwan3_policy`, `uapi_mwan3_rule`,
   `uapi_mwan3_globals` (singleton). Requires the `mwan3` package on the router.
-- **usteer / OpenVPN:** `uapi_usteer_config` (singleton), `uapi_openvpn_instance` (write-only
-  `key`/`tls_auth`/`pkcs12`). Require the `usteer` / `openvpn` packages respectively.
+- **usteer:** `uapi_usteer_config` (singleton). Requires the `usteer` package. An OpenVPN
+  tunnel is a `uapi_network_interface` with proto `openvpn` since provider 4.0, which removed
+  `uapi_openvpn_instance`.
 - **Packages:** `uapi_package` (apk install/remove), `uapi_package_feed`. These have no update
   endpoint, so changing an input forces replacement.
 
@@ -250,7 +247,7 @@ provider `1.2.*` targets the resources, fields, and endpoints of uapi `1.2.*`.
 
 This works because uapi keeps a version additive within its major: uapi `1.y` is a superset of
 `1.(y-1)` (new endpoints, optional fields, response fields, error codes, scope names, enum values),
-and only breaking changes bump the major (`/api/v3/`).
+and only breaking changes bump the major (`/api/v4/`).
 
 What that means in practice:
 
@@ -276,8 +273,9 @@ What that means in practice:
   a provider release (a provider release just documents them).
 - **Errors are handled by HTTP status, not by the `code` string.** New error codes are surfaced
   verbatim in diagnostics but never change behaviour.
-- **A breaking uapi major (`v3`, served at `/api/v3/`) maps to a provider `3.*`.** Point `endpoint`
-  at the matching `/api/vN` segment for the provider major you run.
+- **A breaking uapi major (`v4`, served at `/api/v4/`) maps to a provider `4.*`.** Point `endpoint`
+  at the matching `/api/vN` segment for the provider major you run. A router serves one major,
+  so provider 4 talks only to uapi 4, and provider 3 only to uapi 3.
 
 ## Building and local development
 
@@ -314,7 +312,7 @@ so combine the provider block with a resource snippet to get a runnable config:
 ```sh
 make install
 export TF_CLI_CONFIG_FILE=$PWD/examples/dev.tfrc   # edit the path inside first
-export UAPI_ENDPOINT=https://192.168.1.1/api/v3 UAPI_TOKEN=... UAPI_INSECURE=1
+export UAPI_ENDPOINT=https://192.168.1.1/api/v4 UAPI_TOKEN=... UAPI_INSECURE=1
 
 mkdir -p /tmp/uapi-dev
 cat examples/provider/provider.tf \

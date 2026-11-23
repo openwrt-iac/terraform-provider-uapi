@@ -34,7 +34,7 @@ func (d *firewallRuleDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 			"id":        dsIDAttribute(),
 			"managed":   dsManagedAttribute(),
 			"etag":      dsComputedString("Opaque ETag of the resource's current state."),
-			"enabled":   dsComputedBool("Whether the entry is active."),
+			"enabled":   dsComputedBool("Whether the rule is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it."),
 			"name":      dsComputedString("Optional section name."),
 			"set_dscp":  dsComputedString("DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or value 0-63 to set. Required by target DSCP."),
 			"set_mark":  dsComputedString("fwmark to set, as a value or value/mask (decimal or `0x` hex). Target MARK requires this or `set_xmark`."),

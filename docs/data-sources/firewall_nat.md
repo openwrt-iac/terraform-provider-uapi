@@ -27,7 +27,7 @@ data "uapi_firewall_nat" "example" {
 
 ### Read-Only
 
-- `enabled` (Boolean) Whether the entry is active.
+- `enabled` (Boolean) Whether the NAT rule is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 - `match` (Attributes) Match conditions. (see [below for nested schema](#nestedatt--match))
