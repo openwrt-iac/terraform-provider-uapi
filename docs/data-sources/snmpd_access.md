@@ -27,13 +27,13 @@ data "uapi_snmpd_access" "example" {
 
 ### Read-Only
 
-- `context` (String) uci option context.
+- `context` (String) SNMPv3 context. `none` is the empty context, which is the usual value: snmpd.init writes it as `""`.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `group` (String) uci option group.
-- `level` (String) uci option level.
+- `group` (String) snmpd group that this access binds to, as `uapi_snmpd_group.group`. The group must exist.
+- `level` (String) Security level: `noauth`, `auth` or `priv`.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `notify` (String) uci option notify.
-- `prefix` (String) uci option prefix.
-- `read` (String) uci option read.
-- `version` (String) uci option version.
-- `write` (String) uci option write.
+- `notify` (String) View that the group gets notifications for, or `none`.
+- `prefix` (String) How the context matches: `exact`, or `prefix` for every context that starts with it.
+- `read` (String) View that the group can read, such as `all`, or `none`.
+- `version` (String) Security model: `any`, `v1`, `v2c` or `usm`.
+- `write` (String) View that the group can write, or `none`.

@@ -359,13 +359,24 @@ var descriptors = []descriptor{
 		"maindhcp": "Whether odhcpd serves DHCPv4 in place of dnsmasq. dnsmasq.init reads only the section named `odhcpd`: dnsmasq stops serving DHCPv4 for a value above 0 there, while odhcpd is installed. From uapi 3.3.0, a read gives what dnsmasq.init reads: true only for `1` in that section. A write of true stores `1` and of false `0`, so a write that sends the field makes both daemons agree. A stored `true` or `2` reads false: odhcpd keeps its own value, which a reload does not reset. null removes the option, and odhcpd then keeps its value until it restarts.",
 	}},
 	// snmpd
-	{Type: "snmpd_access", Schema: "SnmpdAccesses", Collection: "snmpd/accesses", Kind: "collection", Label: "snmpd access", GenDataSource: true},
+	{Type: "snmpd_access", Schema: "SnmpdAccesses", Collection: "snmpd/accesses", Kind: "collection", Label: "snmpd access", GenDataSource: true, Descs: map[string]string{
+		"group":   "snmpd group that this access binds to, as `uapi_snmpd_group.group`. The group must exist.",
+		"context": "SNMPv3 context. `none` is the empty context, which is the usual value: snmpd.init writes it as `\"\"`.",
+		"version": "Security model: `any`, `v1`, `v2c` or `usm`.",
+		"level":   "Security level: `noauth`, `auth` or `priv`.",
+		"prefix":  "How the context matches: `exact`, or `prefix` for every context that starts with it.",
+		"read":    "View that the group can read, such as `all`, or `none`.",
+		"write":   "View that the group can write, or `none`.",
+		"notify":  "View that the group gets notifications for, or `none`.",
+	}},
 	{Type: "snmpd_agent", Schema: "SnmpdAgents", Collection: "snmpd/agents", Kind: "collection", Label: "snmpd agent", GenDataSource: true},
 	{Type: "snmpd_com2sec", Schema: "SnmpdCom2secs", Collection: "snmpd/com2secs", Kind: "collection", Label: "snmpd com2sec", GenDataSource: true},
 	{Type: "snmpd_group", Schema: "SnmpdGroups", Collection: "snmpd/groups", Kind: "collection", Label: "snmpd group", GenDataSource: true},
 	{Type: "snmpd_system", Schema: "SnmpdSystem", Collection: "snmpd/system", Kind: "singleton", Label: "snmpd system", GenDataSource: true},
 	// sqm / uhttpd / dropbear / system / vnstat / unbound / lldpd / prometheus
-	{Type: "sqm_queue", Schema: "SqmQueues", Collection: "sqm/queues", Kind: "collection", Label: "sqm queue", GenDataSource: true},
+	{Type: "sqm_queue", Schema: "SqmQueues", Collection: "sqm/queues", Kind: "collection", Label: "sqm queue", GenDataSource: true, Descs: map[string]string{
+		"interface": "Network device that sqm-scripts shapes, such as `eth1` or `pppoe-wan`: its hotplug starts the queue when this device comes up. The name of a network interface, such as `wan`, matches no device unless one has that name. The `runtime.l3_device` of `data.uapi_network_interface` gives the device of an interface. 1 to 15 characters without `/`, `:` or whitespace. uapi does not check that the device exists, because a device such as `pppoe-wan` exists only while its interface is up. One queue per device: uapi refuses a second one, which sqm-scripts would never run.",
+	}},
 	{Type: "uhttpd_cert", Schema: "UhttpdCerts", Collection: "uhttpd/certs", Kind: "collection", Label: "uhttpd cert", GenDataSource: true},
 	{Type: "uhttpd_instance", Schema: "UhttpdInstances", Collection: "uhttpd/instances", Kind: "collection", Label: "uhttpd instance", GenDataSource: true, Descs: map[string]string{
 		"key": "Path to the TLS private key file, not the key material itself.",

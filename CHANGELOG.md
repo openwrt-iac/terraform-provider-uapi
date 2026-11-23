@@ -41,6 +41,15 @@ and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new
   policy of `uapi_firewall_defaults`, and the read gives null. Removing one from the
   configuration now removes it from the router, so set each policy that a zone must
   keep. (#66)
+- **BREAKING: `uapi_snmpd_access` `context`, `version`, `level`, `prefix`, `read`, `write`
+  and `notify` are required.** snmpd.init skips an access without one of them, so uapi
+  refused such a write with 422, and uapi 4.0 now declares them in its spec. A
+  configuration without them fails at plan instead of at apply. A stock access holds
+  `context = "none"`, `version = "any"`, `level = "noauth"`, `prefix = "exact"`,
+  `read = "all"`, `write = "none"` and `notify = "none"`.
+- `uapi_sqm_queue.interface` is the network device that sqm-scripts shapes, such as
+  `eth1` or `pppoe-wan`. uapi 4.0 takes a device name and no longer checks it against
+  the network interfaces, which refused the stock queue on `eth1` (uapi #477).
 - **BREAKING: `uapi_mwan3_interface.family` is no longer required.** uapi 4.0 reads an
   unset family as `ipv4`, as mwan3 runs it.
 - A firewall bool that reads null for a value that firewall4 cannot parse

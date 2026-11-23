@@ -155,11 +155,13 @@ resource "uapi_snmpd_access" "t" {
 }`},
 		{typ: "uapi_uhttpd_instance", hcl: `resource "uapi_uhttpd_instance" "t" {}`},
 		{typ: "uapi_dropbear_instance", hcl: `resource "uapi_dropbear_instance" "t" {}`},
-		// `wan` exists on a stock OpenWrt where `eth1` does not, and enabled=false
-		// keeps sqm from actually shaping the interface a live run may be arriving
-		// over. Exercises create/read/destroy without touching traffic.
+		// `interface` is the device that sqm shapes, and uapi takes one queue per
+		// device, so a stock box with its queue on eth1 refuses a second one there.
+		// eth9 exists on no router, which uapi does not check, and enabled=false
+		// keeps sqm from shaping anything. Exercises create/read/destroy without
+		// touching traffic.
 		{typ: "uapi_sqm_queue", hcl: `resource "uapi_sqm_queue" "t" {
-  interface = "wan"
+  interface = "eth9"
   enabled   = false
 }`},
 		{typ: "uapi_system_timeserver", hcl: `resource "uapi_system_timeserver" "t" {}`},

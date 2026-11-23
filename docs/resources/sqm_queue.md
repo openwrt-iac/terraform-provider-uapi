@@ -23,7 +23,7 @@ resource "uapi_sqm_queue" "example" {
 
 ### Required
 
-- `interface` (String) Network interface this entry applies to.
+- `interface` (String) Network device that sqm-scripts shapes, such as `eth1` or `pppoe-wan`: its hotplug starts the queue when this device comes up. The name of a network interface, such as `wan`, matches no device unless one has that name. The `runtime.l3_device` of `data.uapi_network_interface` gives the device of an interface. 1 to 15 characters without `/`, `:` or whitespace. uapi does not check that the device exists, because a device such as `pppoe-wan` exists only while its interface is up. One queue per device: uapi refuses a second one, which sqm-scripts would never run.
 
 ### Optional
 
