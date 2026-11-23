@@ -29,10 +29,15 @@ func resAttr(f field) string {
 		}
 	case "optcomp":
 		if f.NullRefused {
-			if f.GoType != "types.Bool" {
-				fail("field %q reads null for a refused value and has type %q; only types.Bool has an emission (add a helper)", f.Name, f.GoType)
+			switch f.GoType {
+			case "types.Bool":
+				return fmt.Sprintf("%q: optionalComputedBoolNonNullState(%q),", f.Name, f.Desc)
+			case "types.Int64":
+				return fmt.Sprintf("%q: optionalComputedInt64NonNullState(%q),", f.Name, f.Desc)
+			case "types.String":
+				return fmt.Sprintf("%q: optionalComputedStringNonNullState(%q),", f.Name, f.Desc)
 			}
-			return fmt.Sprintf("%q: optionalComputedBoolNonNullState(%q),", f.Name, f.Desc)
+			fail("field %q reads null for a refused value and has type %q; only bool, integer and string have an emission (add a helper)", f.Name, f.GoType)
 		}
 		switch f.GoType {
 		case "types.List":

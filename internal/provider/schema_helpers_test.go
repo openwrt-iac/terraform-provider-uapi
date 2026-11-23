@@ -37,6 +37,32 @@ func TestUseNonNullStateForUnknown(t *testing.T) {
 	}
 }
 
+func TestUseNonNullStateForUnknownInt64AndString(t *testing.T) {
+	someState := tfsdk.State{Raw: tftypes.NewValue(tftypes.Object{}, map[string]tftypes.Value{})}
+	ctx := context.Background()
+	m := useNonNullStateForUnknown{}
+
+	ir := &planmodifier.Int64Response{PlanValue: types.Int64Unknown()}
+	m.PlanModifyInt64(ctx, planmodifier.Int64Request{State: someState, StateValue: types.Int64Null(),
+		PlanValue: types.Int64Unknown(), ConfigValue: types.Int64Null()}, ir)
+	if !ir.PlanValue.IsUnknown() {
+		t.Errorf("int64: a null prior planned %v, want unknown", ir.PlanValue)
+	}
+	ir = &planmodifier.Int64Response{PlanValue: types.Int64Unknown()}
+	m.PlanModifyInt64(ctx, planmodifier.Int64Request{State: someState, StateValue: types.Int64Value(14698),
+		PlanValue: types.Int64Unknown(), ConfigValue: types.Int64Null()}, ir)
+	if !ir.PlanValue.Equal(types.Int64Value(14698)) {
+		t.Errorf("int64: a known prior planned %v, want 14698", ir.PlanValue)
+	}
+
+	sr := &planmodifier.StringResponse{PlanValue: types.StringUnknown()}
+	m.PlanModifyString(ctx, planmodifier.StringRequest{State: someState, StateValue: types.StringNull(),
+		PlanValue: types.StringUnknown(), ConfigValue: types.StringNull()}, sr)
+	if !sr.PlanValue.IsUnknown() {
+		t.Errorf("string: a null prior planned %v, want unknown", sr.PlanValue)
+	}
+}
+
 // The generator gives the modifier to each bool that reads null for a refused
 // value and has a default, on a resource that updates with a PUT, and to no other.
 func TestNullRefusedBoolsGetTheModifier(t *testing.T) {

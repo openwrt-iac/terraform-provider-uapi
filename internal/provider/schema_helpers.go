@@ -125,16 +125,37 @@ func optionalComputedBool(desc string) schema.BoolAttribute {
 
 // optionalComputedBoolNonNullState is optionalComputedBool for a field whose
 // null read is a stored value that the daemon refuses, while an absent value
-// reads a default (a firewall `enabled` or `masq` that fw4 cannot parse).
-// UseStateForUnknown would plan that null, but the PUT leaves the field out,
-// which removes the refused value, and the read then gives the default:
-// Terraform would report an inconsistent result. So a null prior stays unknown.
+// reads a default (a firewall `enabled` or `masq` that fw4 cannot parse, an sqm
+// `download` that is no integer). UseStateForUnknown would plan that null, but
+// the PUT leaves the field out, which removes the refused value, and the read
+// then gives the default: Terraform would report an inconsistent result. So a
+// null prior stays unknown.
 func optionalComputedBoolNonNullState(desc string) schema.BoolAttribute {
 	return schema.BoolAttribute{
 		Optional:      true,
 		Computed:      true,
 		Description:   desc,
 		PlanModifiers: []planmodifier.Bool{useNonNullStateForUnknown{}},
+	}
+}
+
+// optionalComputedInt64NonNullState is the integer form of optionalComputedBoolNonNullState.
+func optionalComputedInt64NonNullState(desc string) schema.Int64Attribute {
+	return schema.Int64Attribute{
+		Optional:      true,
+		Computed:      true,
+		Description:   desc,
+		PlanModifiers: []planmodifier.Int64{useNonNullStateForUnknown{}},
+	}
+}
+
+// optionalComputedStringNonNullState is the string form of optionalComputedBoolNonNullState.
+func optionalComputedStringNonNullState(desc string) schema.StringAttribute {
+	return schema.StringAttribute{
+		Optional:      true,
+		Computed:      true,
+		Description:   desc,
+		PlanModifiers: []planmodifier.String{useNonNullStateForUnknown{}},
 	}
 }
 
@@ -149,6 +170,20 @@ func (m useNonNullStateForUnknown) MarkdownDescription(ctx context.Context) stri
 }
 
 func (useNonNullStateForUnknown) PlanModifyBool(_ context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
+	if req.StateValue.IsNull() || !req.PlanValue.IsUnknown() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	resp.PlanValue = req.StateValue
+}
+
+func (useNonNullStateForUnknown) PlanModifyInt64(_ context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
+	if req.StateValue.IsNull() || !req.PlanValue.IsUnknown() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	resp.PlanValue = req.StateValue
+}
+
+func (useNonNullStateForUnknown) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
 	if req.StateValue.IsNull() || !req.PlanValue.IsUnknown() || req.ConfigValue.IsUnknown() {
 		return
 	}

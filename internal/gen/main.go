@@ -98,7 +98,8 @@ type field struct {
 	Desc       string
 	Deprecated bool // spec `deprecated: true`: emit a DeprecationMessage
 	// NullRefused marks an optcomp field whose null read is a stored value that
-	// the daemon refuses, while an absent one reads the spec default. Its plan
+	// the daemon refuses or that uapi cannot read, while an absent one reads the
+	// spec default. Its plan
 	// must not copy a null prior: the PUT leaves the field out, which removes the
 	// refused value, and the read then gives the default.
 	NullRefused bool
