@@ -23,17 +23,37 @@ type sqmQueueResource struct{ client *client.Client }
 func NewSqmQueueResource() resource.Resource { return &sqmQueueResource{} }
 
 type sqmQueueModel struct {
-	ID        types.String `tfsdk:"id"`
-	Managed   types.Bool   `tfsdk:"managed"`
-	ETag      types.String `tfsdk:"etag"`
-	Download  types.Int64  `tfsdk:"download"`
-	Enabled   types.Bool   `tfsdk:"enabled"`
-	Interface types.String `tfsdk:"interface"`
-	Linklayer types.String `tfsdk:"linklayer"`
-	Overhead  types.Int64  `tfsdk:"overhead"`
-	Qdisc     types.String `tfsdk:"qdisc"`
-	Script    types.String `tfsdk:"script"`
-	Upload    types.Int64  `tfsdk:"upload"`
+	ID                           types.String `tfsdk:"id"`
+	Managed                      types.Bool   `tfsdk:"managed"`
+	ETag                         types.String `tfsdk:"etag"`
+	DebugLogging                 types.Bool   `tfsdk:"debug_logging"`
+	Download                     types.Int64  `tfsdk:"download"`
+	EgressEcn                    types.String `tfsdk:"egress_ecn"`
+	Elimit                       types.Int64  `tfsdk:"elimit"`
+	Enabled                      types.Bool   `tfsdk:"enabled"`
+	EqdiscOpts                   types.String `tfsdk:"eqdisc_opts"`
+	Etarget                      types.String `tfsdk:"etarget"`
+	Ilimit                       types.Int64  `tfsdk:"ilimit"`
+	IngressEcn                   types.String `tfsdk:"ingress_ecn"`
+	Interface                    types.String `tfsdk:"interface"`
+	IqdiscOpts                   types.String `tfsdk:"iqdisc_opts"`
+	Itarget                      types.String `tfsdk:"itarget"`
+	Linklayer                    types.String `tfsdk:"linklayer"`
+	LinklayerAdaptationMechanism types.String `tfsdk:"linklayer_adaptation_mechanism"`
+	LinklayerAdvanced            types.Bool   `tfsdk:"linklayer_advanced"`
+	Overhead                     types.Int64  `tfsdk:"overhead"`
+	Qdisc                        types.String `tfsdk:"qdisc"`
+	QdiscAdvanced                types.Bool   `tfsdk:"qdisc_advanced"`
+	QdiscReallyReallyAdvanced    types.Bool   `tfsdk:"qdisc_really_really_advanced"`
+	Script                       types.String `tfsdk:"script"`
+	SquashDscp                   types.Bool   `tfsdk:"squash_dscp"`
+	SquashIngress                types.Bool   `tfsdk:"squash_ingress"`
+	TcMpu                        types.Int64  `tfsdk:"tc_mpu"`
+	TcMtu                        types.Int64  `tfsdk:"tc_mtu"`
+	TcTsize                      types.Int64  `tfsdk:"tc_tsize"`
+	Upload                       types.Int64  `tfsdk:"upload"`
+	UseMq                        types.Bool   `tfsdk:"use_mq"`
+	Verbosity                    types.Int64  `tfsdk:"verbosity"`
 }
 
 func (r *sqmQueueResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -48,17 +68,37 @@ func (r *sqmQueueResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	resp.Schema = schema.Schema{
 		Description: "Sqm queue.",
 		Attributes: map[string]schema.Attribute{
-			"id":        optionalComputedIDAttribute(),
-			"managed":   managedAttribute(),
-			"etag":      etagAttribute(),
-			"download":  optionalComputedInt64("Download shaping rate in kbit/s."),
-			"enabled":   optionalComputedBool("Whether the entry is active."),
-			"interface": schema.StringAttribute{Required: true, Description: "Network device that sqm-scripts shapes, such as `eth1` or `pppoe-wan`: its hotplug starts the queue when this device comes up. The name of a network interface, such as `wan`, matches no device unless one has that name. The `runtime.l3_device` of `data.uapi_network_interface` gives the device of an interface. 1 to 15 characters without `/`, `:` or whitespace. uapi does not check that the device exists, because a device such as `pppoe-wan` exists only while its interface is up. One queue per device: uapi refuses a second one, which sqm-scripts would never run."},
-			"linklayer": optionalComputedString("uci option linklayer."),
-			"overhead":  optionalComputedInt64("uci option overhead."),
-			"qdisc":     optionalComputedString("uci option qdisc."),
-			"script":    optionalComputedString("uci option script."),
-			"upload":    optionalComputedInt64("Upload shaping rate in kbit/s."),
+			"id":                             optionalComputedIDAttribute(),
+			"managed":                        managedAttribute(),
+			"etag":                           etagAttribute(),
+			"debug_logging":                  optionalComputedBool("Whether sqm-scripts writes a log file of this queue under /var/run/sqm. Unset reads false."),
+			"download":                       optionalComputedInt64NonNullState("Download (ingress) rate in kbit/s, 0 to shape no ingress. Unset, sqm-scripts uses 14698."),
+			"egress_ecn":                     optionalComputedString("ECN on the egress queues of a codel, pie or red qdisc: `ECN` or `NOECN`. LuCI proposes `NOECN`, but unset reads `ECN`, which sqm-scripts applies."),
+			"elimit":                         optionalInt64("Hard limit of the egress queues (LuCI \"Hard queue limit\"). Unset uses the default limit of the qdisc."),
+			"enabled":                        optionalComputedBool("Whether sqm-scripts starts SQM on this device. It starts a queue only when `enabled` is 1, so an unset value, or a word such as `yes`, `on` or `true`, reads false."),
+			"eqdisc_opts":                    optionalString("Words that sqm-scripts appends to each tc qdisc command of the egress. uapi does not check them. When tc refuses them, sqm-scripts logs the error and does not set the queue up, while the apply still succeeds."),
+			"etarget":                        optionalString("Latency target of the egress queues, such as `5ms`, with the unit s, ms or us. `default` uses the default of the qdisc. Unset, sqm-scripts computes one from the rate."),
+			"ilimit":                         optionalInt64("Hard limit of the ingress queues (LuCI \"Hard queue limit\"). Unset uses the default limit of the qdisc."),
+			"ingress_ecn":                    optionalComputedString("ECN on the ingress queues of a codel, pie or red qdisc: `ECN` or `NOECN`. Unset reads `ECN`, which sqm-scripts applies."),
+			"interface":                      schema.StringAttribute{Required: true, Description: "Network device that sqm-scripts shapes, such as `eth1` or `pppoe-wan`: its hotplug starts the queue when this device comes up. The name of a network interface, such as `wan`, matches no device unless one has that name. The `runtime.l3_device` of `data.uapi_network_interface` gives the device of an interface. 1 to 15 characters without `/`, `:` or whitespace. uapi does not check that the device exists, because a device such as `pppoe-wan` exists only while its interface is up. One queue per device: uapi refuses a second one, which sqm-scripts would never run."},
+			"iqdisc_opts":                    optionalString("Words that sqm-scripts appends to each tc qdisc command of the ingress. uapi does not check them. When tc refuses them, sqm-scripts logs the error and does not set the queue up, while the apply still succeeds."),
+			"itarget":                        optionalString("Latency target of the ingress queues, such as `5ms`, with the unit s, ms or us. `default` uses the default of the qdisc. Unset, sqm-scripts computes one from the rate."),
+			"linklayer":                      optionalComputedStringNonNullState("Link layer that the shaper accounts for: `none`, `ethernet` or `atm`. Unset reads `none`."),
+			"linklayer_adaptation_mechanism": optionalComputedString("How the shaper accounts for the link layer: `default`, `cake`, `htb_private` or `tc_stab`. `default` uses the accounting of cake for qdisc cake, and tc_stab for the others. Unset reads `default`."),
+			"linklayer_advanced":             optionalComputedBool("LuCI's \"Advanced Linklayer Options\" flag. sqm-scripts does not read it, and applies `tc_mtu`, `tc_tsize`, `tc_mpu` and `linklayer_adaptation_mechanism` whatever it holds. LuCI shows those fields only while it is true."),
+			"overhead":                       optionalComputedInt64NonNullState("Per-packet overhead in bytes for the link-layer accounting. Unset reads 0."),
+			"qdisc":                          optionalComputedStringNonNullState("Queueing discipline, such as `cake` or `fq_codel`. Unset, sqm-scripts uses fq_codel."),
+			"qdisc_advanced":                 optionalComputedBool("LuCI's \"Advanced Configuration\" flag. sqm-scripts does not read it, and applies `squash_dscp`, `squash_ingress`, `ingress_ecn` and `egress_ecn` whatever it holds. LuCI shows those fields only while it is true, so set it with them for a LuCI user to see them."),
+			"qdisc_really_really_advanced":   optionalComputedBool("LuCI's \"Dangerous Configuration\" flag. sqm-scripts does not read it, and applies `ilimit`, `elimit`, `itarget`, `etarget`, `iqdisc_opts` and `eqdisc_opts` whatever it holds. LuCI shows those fields only while it and `qdisc_advanced` are true."),
+			"script":                         optionalComputedString("Shaper script in /usr/lib/sqm, such as `piece_of_cake.qos`, `simple.qos`, `simplest.qos`, `layer_cake.qos` or `simplest_tbf.qos`."),
+			"squash_dscp":                    optionalComputedBool("Whether the ingress shaper clears the DSCP marks (LuCI \"Squash DSCP\"). Unset reads true, as sqm-scripts applies it."),
+			"squash_ingress":                 optionalComputedBool("Whether the ingress shaper ignores the DSCP marks (LuCI \"Ignore DSCP\"). Unset reads true, as sqm-scripts applies it."),
+			"tc_mpu":                         optionalComputedInt64NonNullState("uci option `tcMPU`, LuCI \"Minimum packet size\", in bytes. Unset reads 0."),
+			"tc_mtu":                         optionalComputedInt64NonNullState("uci option `tcMTU`, LuCI \"Maximum packet size\": the largest size for the size and rate tables, in bytes. Unset reads 2047."),
+			"tc_tsize":                       optionalComputedInt64NonNullState("uci option `tcTSIZE`, LuCI \"Rate table size\": the number of entries of the size and rate tables. LuCI proposes 128, but unset reads 512, which sqm-scripts applies."),
+			"upload":                         optionalComputedInt64NonNullState("Upload (egress) rate in kbit/s, 0 to shape no egress. Unset, sqm-scripts uses 2302."),
+			"use_mq":                         optionalComputedBool("Whether sqm-scripts sets up one queue for each hardware queue of the device, where the device has several. LuCI does not show it. Unset reads false."),
+			"verbosity":                      optionalComputedInt64NonNullState("Log level of sqm-scripts in the system log: 0 silent, 1 error, 2 warning, 5 info, 8 debug, 10 trace. Unset reads 5."),
 		},
 	}
 }
@@ -68,28 +108,68 @@ func (r *sqmQueueResource) body(ctx context.Context, m sqmQueueModel, diags *dia
 	if create {
 		putStr(out, "id", m.ID)
 	}
+	putBool(out, "debug_logging", m.DebugLogging)
 	putInt64(out, "download", m.Download)
+	putStr(out, "egress_ecn", m.EgressEcn)
+	putInt64(out, "elimit", m.Elimit)
 	putBool(out, "enabled", m.Enabled)
+	putStr(out, "eqdisc_opts", m.EqdiscOpts)
+	putStr(out, "etarget", m.Etarget)
+	putInt64(out, "ilimit", m.Ilimit)
+	putStr(out, "ingress_ecn", m.IngressEcn)
 	putStr(out, "interface", m.Interface)
+	putStr(out, "iqdisc_opts", m.IqdiscOpts)
+	putStr(out, "itarget", m.Itarget)
 	putStr(out, "linklayer", m.Linklayer)
+	putStr(out, "linklayer_adaptation_mechanism", m.LinklayerAdaptationMechanism)
+	putBool(out, "linklayer_advanced", m.LinklayerAdvanced)
 	putInt64(out, "overhead", m.Overhead)
 	putStr(out, "qdisc", m.Qdisc)
+	putBool(out, "qdisc_advanced", m.QdiscAdvanced)
+	putBool(out, "qdisc_really_really_advanced", m.QdiscReallyReallyAdvanced)
 	putStr(out, "script", m.Script)
+	putBool(out, "squash_dscp", m.SquashDscp)
+	putBool(out, "squash_ingress", m.SquashIngress)
+	putInt64(out, "tc_mpu", m.TcMpu)
+	putInt64(out, "tc_mtu", m.TcMtu)
+	putInt64(out, "tc_tsize", m.TcTsize)
 	putInt64(out, "upload", m.Upload)
+	putBool(out, "use_mq", m.UseMq)
+	putInt64(out, "verbosity", m.Verbosity)
 	return out
 }
 
 func (r *sqmQueueResource) read(ctx context.Context, obj map[string]any, m *sqmQueueModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
+	m.DebugLogging = boolVal(obj, "debug_logging")
 	m.Download = int64Val(obj, "download")
+	m.EgressEcn = strVal(obj, "egress_ecn")
+	m.Elimit = int64Val(obj, "elimit")
 	m.Enabled = boolVal(obj, "enabled")
+	m.EqdiscOpts = strVal(obj, "eqdisc_opts")
+	m.Etarget = strVal(obj, "etarget")
+	m.Ilimit = int64Val(obj, "ilimit")
+	m.IngressEcn = strVal(obj, "ingress_ecn")
 	m.Interface = strVal(obj, "interface")
+	m.IqdiscOpts = strVal(obj, "iqdisc_opts")
+	m.Itarget = strVal(obj, "itarget")
 	m.Linklayer = strVal(obj, "linklayer")
+	m.LinklayerAdaptationMechanism = strVal(obj, "linklayer_adaptation_mechanism")
+	m.LinklayerAdvanced = boolVal(obj, "linklayer_advanced")
 	m.Overhead = int64Val(obj, "overhead")
 	m.Qdisc = strVal(obj, "qdisc")
+	m.QdiscAdvanced = boolVal(obj, "qdisc_advanced")
+	m.QdiscReallyReallyAdvanced = boolVal(obj, "qdisc_really_really_advanced")
 	m.Script = strVal(obj, "script")
+	m.SquashDscp = boolVal(obj, "squash_dscp")
+	m.SquashIngress = boolVal(obj, "squash_ingress")
+	m.TcMpu = int64Val(obj, "tc_mpu")
+	m.TcMtu = int64Val(obj, "tc_mtu")
+	m.TcTsize = int64Val(obj, "tc_tsize")
 	m.Upload = int64Val(obj, "upload")
+	m.UseMq = boolVal(obj, "use_mq")
+	m.Verbosity = int64Val(obj, "verbosity")
 }
 
 func (r *sqmQueueResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

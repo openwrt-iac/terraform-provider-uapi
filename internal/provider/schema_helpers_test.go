@@ -94,3 +94,20 @@ func TestNullRefusedBoolsGetTheModifier(t *testing.T) {
 		}
 	}
 }
+
+// An sqm integer reads null when uapi cannot read the stored value, and its
+// default when the option is absent, so it gets the modifier too.
+func TestNullRefusedIntegerGetsTheModifier(t *testing.T) {
+	resp := &resource.SchemaResponse{}
+	(&sqmQueueResource{}).Schema(context.Background(), resource.SchemaRequest{}, resp)
+	a, ok := resp.Schema.Attributes["download"].(schema.Int64Attribute)
+	if !ok {
+		t.Fatal("sqm_queue.download is not an integer attribute")
+	}
+	for _, m := range a.PlanModifiers {
+		if _, ok := m.(useNonNullStateForUnknown); ok {
+			return
+		}
+	}
+	t.Error("sqm_queue.download has no useNonNullStateForUnknown")
+}

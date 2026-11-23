@@ -22,6 +22,14 @@ and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new
   `has_password`, on proto `pppoe`, `ppp`, `wwan` and `openvpn` (uapi #469). Removing
   `password` from the configuration keeps the stored one, `password = ""` removes it,
   and a switch to another proto removes both unless the configuration sets them.
+- **`uapi_sqm_queue` models the options that LuCI's sqm form writes** (uapi #480):
+  `squash_dscp`, `squash_ingress`, `ingress_ecn`, `egress_ecn`, `ilimit`, `elimit`,
+  `itarget`, `etarget`, `iqdisc_opts`, `eqdisc_opts`, `linklayer_adaptation_mechanism`,
+  `tc_mtu`, `tc_tsize`, `tc_mpu`, `debug_logging`, `use_mq`, `verbosity`, and the three
+  LuCI form flags. An update removed all of them before, because a PUT removes each option
+  that uapi does not model. `ilimit`, `elimit`, `itarget`, `etarget`, `iqdisc_opts` and
+  `eqdisc_opts` are plain Optional: removing one from the configuration removes it from the
+  router.
 - The new guide "Migrating from provider 3.x to 4.0".
 
 ### Changed
@@ -47,6 +55,9 @@ and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new
   configuration without them fails at plan instead of at apply. A stock access holds
   `context = "none"`, `version = "any"`, `level = "noauth"`, `prefix = "exact"`,
   `read = "all"`, `write = "none"` and `notify = "none"`.
+- `uapi_sqm_queue` `download`, `upload`, `qdisc`, `linklayer` and `overhead` read the
+  default of sqm-scripts when unset (14698, 2302, `fq_codel`, `none`, 0), where they read
+  null before.
 - `uapi_sqm_queue.interface` is the network device that sqm-scripts shapes, such as
   `eth1` or `pppoe-wan`. uapi 4.0 takes a device name and no longer checks it against
   the network interfaces, which refused the stock queue on `eth1` (uapi #477).
@@ -54,8 +65,8 @@ and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new
   unset family as `ipv4`, as mwan3 runs it.
 - A firewall bool that reads null for a value that firewall4 cannot parse
   (`enabled` of rules, redirects, NAT rules and forwardings, and `masq` and `mtu_fix`
-  of zones) plans as unknown when its prior state is null and the configuration does
-  not set it. The PUT then removes the refused value, and the read gives the default.
+  of zones), or an sqm value that uapi cannot read, plans as unknown when its prior state
+  is null and the configuration does not set it. The PUT then removes the refused value, and the read gives the default.
   With the usual plan, Terraform would report an inconsistent result after the apply.
 - A listing that answers 400 to a cursor after the first page starts again from the
   first page, at most three times. uapi 4.0 answers so when an item up to an anonymous
