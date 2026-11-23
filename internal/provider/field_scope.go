@@ -18,7 +18,6 @@ import (
 // a value for such a field and leaves it out of a read.
 type fieldScope struct {
 	Field string
-	Known []string // the request enum: the values that uapi models
 	Rules []scopeRule
 }
 
@@ -41,13 +40,13 @@ func (s fieldScope) excluded(v string) []string {
 }
 
 // patches reports whether an update is a merge PATCH rather than a PUT: the
-// value stays the same, and uapi does not model it. uapi refuses a PUT with
-// such a value, and a PUT would drop the options of its handler, such as the
-// `peeraddr` of a 6in4 tunnel. A switch keeps the PUT: uapi refuses a switch to
-// such a value whatever the method, and a switch away replaces those options.
+// value stays the same. A PUT removes each uci option that uapi does not model,
+// such as the `service` of a pppoe wan, the `reqopts` of a dhcp client or the
+// `peeraddr` of a 6in4 tunnel, and uapi refuses a PUT that names a proto that
+// it does not model. A switch keeps the PUT: the options of the old handler do
+// not apply to the new one, and the plan nulls the fields that it does not take.
 func (s fieldScope) patches(planned, prior types.String) bool {
-	return !planned.IsNull() && !planned.IsUnknown() && planned.Equal(prior) &&
-		!slices.Contains(s.Known, planned.ValueString())
+	return !planned.IsNull() && !planned.IsUnknown() && planned.Equal(prior)
 }
 
 func (s fieldScope) scoped() []string {

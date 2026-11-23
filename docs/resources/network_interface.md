@@ -23,7 +23,7 @@ resource "uapi_network_interface" "example" {
 
 ### Required
 
-- `proto` (String) Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard`, `openvpn` or `none`. A proto needs its handler package on the router, such as `openvpn-openssl` for `openvpn`. netifd loads a handler that is installed later only after a reboot or `/etc/init.d/network restart`, and until then `runtime.effective_proto` reads `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto.
+- `proto` (String) Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard`, `openvpn` or `none`. A proto needs its handler package on the router, such as `openvpn-openssl` for `openvpn`. netifd loads a handler that is installed later only after a reboot or `/etc/init.d/network restart`, and until then `runtime.effective_proto` reads `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI, and refuses a switch to such a proto. An update that keeps the proto is a merge PATCH of the changed attributes, which keeps the uci options that uapi does not model, such as the `service` of a pppoe wan or the options of a 6in4 handler. A switch of proto is a PUT, which removes them.
 
 ### Optional
 

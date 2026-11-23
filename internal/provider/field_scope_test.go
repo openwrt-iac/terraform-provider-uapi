@@ -8,14 +8,15 @@ import (
 )
 
 func TestFieldScopePatches(t *testing.T) {
-	s := fieldScope{Field: "proto", Known: []string{"static", "dhcp"}}
+	s := fieldScope{Field: "proto"}
 	cases := []struct {
 		name           string
 		planned, prior types.String
 		want           bool
 	}{
 		{"unmodelled and unchanged", types.StringValue("6in4"), types.StringValue("6in4"), true},
-		{"modelled", types.StringValue("static"), types.StringValue("static"), false},
+		{"modelled and unchanged", types.StringValue("pppoe"), types.StringValue("pppoe"), true},
+		{"switch between modelled", types.StringValue("dhcp"), types.StringValue("pppoe"), false},
 		{"switch to unmodelled", types.StringValue("6in4"), types.StringValue("static"), false},
 		{"switch away from unmodelled", types.StringValue("static"), types.StringValue("6in4"), false},
 		{"unknown", types.StringUnknown(), types.StringValue("6in4"), false},

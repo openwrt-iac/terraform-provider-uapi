@@ -381,9 +381,9 @@ func crudCollection(r resModel) string {
 		write = fmt.Sprintf("obj, etag, err := r.client.Patch(ctx, \"/\"+%s+\"/\"+plan.ID.ValueString(), mergeDelta(body, r.body(ctx, state, ds%s)), state.ETag.ValueString())", coll, updateArg)
 	}
 	if r.Scope != nil {
-		// uapi refuses a PUT with a discriminator outside the request enum, such as
-		// a proto it does not model, and a PUT would drop the options of that
-		// proto's handler. A merge PATCH of the changes keeps them.
+		// An update that keeps the discriminator is a merge PATCH of the changes,
+		// which keeps the uci options that uapi does not model, where a PUT
+		// removes them. A switch is a PUT (see fieldScope.patches).
 		write = fmt.Sprintf(`itemPath := "/"+%[1]s+"/"+plan.ID.ValueString()
 	var obj map[string]any
 	var etag string

@@ -1479,6 +1479,58 @@ func TestAccNetworkInterface_ip6prefixList(t *testing.T) {
 // LuCI created, imports and updates (#35). uapi refuses a PUT there, and a PUT
 // would drop the options of the proto's handler, so an update is a merge PATCH
 // of the changes. A switch to a modelled proto is a PUT, which replaces them.
+// An update that keeps the proto is a merge PATCH, so the uci options that uapi
+// does not model survive, such as a pppoe login and service that LuCI wrote. A
+// PUT removed them, and the wan lost its PPPoE session with nothing in the plan.
+// A proto switch stays a PUT, which removes them.
+func TestAccNetworkInterface_sameProtoKeepsUnmodelledOptions(t *testing.T) {
+	m := newMockUAPI()
+	defer m.Close()
+	m.seedUnmanaged("/network/interfaces", "wan", map[string]any{
+		"proto": "pppoe", "device": "eth1", "service": "isp", "ac": "isp-ac",
+	})
+	const n = "uapi_network_interface.wan"
+	wan := func(body string) string {
+		return providerHCL(m.URL) + "resource \"uapi_network_interface\" \"wan\" {\n  id     = \"wan\"\n  device = \"eth1\"\n" + body + "}\n"
+	}
+	stored := func(key string, want any) resource.TestCheckFunc {
+		return m.checkStored("/network/interfaces", "wan", key, want)
+	}
+	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction(n, plancheck.ResourceActionUpdate),
+	}}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: accProviders(),
+		Steps: []resource.TestStep{
+			{
+				Config:             wan("  proto = \"pppoe\"\n"),
+				ResourceName:       n,
+				ImportState:        true,
+				ImportStateId:      "wan",
+				ImportStatePersist: true,
+			},
+			{
+				Config:           wan("  proto = \"pppoe\"\n  mtu   = 1492\n"),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(n, "mtu", "1492"),
+					stored("service", "isp"),
+					stored("ac", "isp-ac"),
+				),
+			},
+			{
+				Config:           wan("  proto = \"dhcp\"\n"),
+				ConfigPlanChecks: inPlace,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					stored("proto", "dhcp"),
+					stored("service", nil),
+					stored("ac", nil),
+				),
+			},
+		},
+	})
+}
+
 func TestAccNetworkInterface_unmodelledProto(t *testing.T) {
 	m := newMockUAPI()
 	defer m.Close()
