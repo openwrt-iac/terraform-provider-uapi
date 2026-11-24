@@ -16,7 +16,7 @@ does not install on OpenWrt 25.12. A router that stays on 25.12 stays on uapi
 3.5.0, and provider 3.5 keeps managing it.
 
 The uapi project lists every change of the wire surface in
-[docs/migration-v3-to-v4.md](https://github.com/openwrt-iac/uapi/blob/main/docs/migration-v3-to-v4.md).
+[docs/migration-v3-to-v4.md](https://github.com/openwrt-iac/uapi/blob/v4.0.0/docs/migration-v3-to-v4.md).
 This guide covers what a Terraform user does about them.
 
 Do it in this order. Steps 1 and 2 are on the old versions.
