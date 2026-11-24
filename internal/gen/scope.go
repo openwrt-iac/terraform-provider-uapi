@@ -149,7 +149,7 @@ func goStrings(xs []string) string {
 func renderScope(r resModel) string {
 	var b strings.Builder
 	p := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
-	p("var %sScope = fieldScope{Field: %q, Known: %s, Rules: []scopeRule{", r.Camel, r.Scope.Field, goStrings(r.Scope.Known))
+	p("var %sScope = fieldScope{Field: %q, Rules: []scopeRule{", r.Camel, r.Scope.Field)
 	for _, rule := range r.Scope.Rules {
 		p("\t{Values: %s, Fields: %s},", goStrings(rule.Values), goStrings(rule.Fields))
 	}

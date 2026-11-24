@@ -87,6 +87,16 @@ and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new
   proto `openvpn`. Take each instance out of state on provider 3.5, then import the
   tunnel as `uapi_network_interface` on provider 4.0. The guide shows the steps. (#67)
 
+### Fixed
+- **An update of `uapi_network_interface` that keeps the proto no longer removes the uci
+  options that uapi does not model.** It sent a PUT, and a uapi PUT removes each option
+  that the resource does not emit, such as the `username`, `password` and `service` of a
+  pppoe wan, the `reqopts` or `vendorid` of a dhcp client, or the `apn` of a wwan modem.
+  The read showed nothing, so the plan was clean, and the apply cut the wan. Such an
+  update is now a merge PATCH of the changed attributes, as for the wireless resources
+  since 3.3.0 and for an interface on a proto that uapi does not model. A proto switch
+  stays a PUT: the options of the old handler do not apply to the new one. (#67)
+
 ## [3.5.0] - 2026-11-21
 
 Tracks uapi 3.5.0. There is no provider 3.4: uapi 3.4 published only the v4
