@@ -6,6 +6,8 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-11-24
+
 Tracks uapi 4.0.0. A router serves one uapi major, so provider 4 talks only to uapi 4,
 at `/api/v4`. uapi 4.x runs on OpenWrt main and on the next OpenWrt release cut from it,
 and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new guide
