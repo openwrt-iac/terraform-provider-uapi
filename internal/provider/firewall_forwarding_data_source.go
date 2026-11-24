@@ -35,7 +35,7 @@ func (d *firewallForwardingDataSource) Schema(_ context.Context, _ datasource.Sc
 			"managed": dsManagedAttribute(),
 			"etag":    dsComputedString("Opaque ETag of the resource's current state."),
 			"dest":    dsComputedString("uci option dest."),
-			"enabled": dsComputedBool("Whether the entry is active."),
+			"enabled": dsComputedBool("Whether the forwarding is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it."),
 			"family":  dsComputedString("Address family: any, ipv4, or ipv6."),
 			"src":     dsComputedString("uci option src."),
 		},

@@ -91,6 +91,17 @@ func wordsOfString(m map[string]any, key string) {
 	m[key] = out
 }
 
+// wordsOfPrintedList is wordsOfString for a key that a list may have reached
+// as a string printed by Go: an older provider that refreshed against a newer
+// uapi formatted the array it got with %v, as "[a b]". No value it holds
+// carries brackets of its own.
+func wordsOfPrintedList(m map[string]any, key string) {
+	if s, ok := m[key].(string); ok {
+		m[key] = strings.TrimSuffix(strings.TrimPrefix(s, "["), "]")
+	}
+	wordsOfString(m, key)
+}
+
 // redirectMatchScalars are the match selectors that became scalars. `proto` is
 // deliberately absent: it stays a list.
 var redirectMatchScalars = []string{"src_ip", "src_port", "src_dip", "src_dport", "dest_ip", "dest_port"}
@@ -160,13 +171,8 @@ func (r *networkInterfaceResource) UpgradeState(context.Context) map[int64]resou
 					return
 				}
 				// `ip6prefix` was a string through 3.1.x and became a list in 3.2.0,
-				// because netifd reads it as one. A 3.1 refresh against uapi 3.2
-				// formatted the array it got with %v, so the string can carry Go's
-				// brackets: "[2001:db8::/48 2001:db8:1::/48]". No prefix holds one.
-				if s, ok := raw["ip6prefix"].(string); ok {
-					raw["ip6prefix"] = strings.TrimSuffix(strings.TrimPrefix(s, "["), "]")
-				}
-				wordsOfString(raw, "ip6prefix")
+				// because netifd reads it as one.
+				wordsOfPrintedList(raw, "ip6prefix")
 				var m networkInterfaceModel
 				ds := newDiagsink(&resp.Diagnostics)
 				r.read(ctx, raw, &m, ds)
@@ -175,6 +181,35 @@ func (r *networkInterfaceResource) UpgradeState(context.Context) map[int64]resou
 				// empty here. Without this, every wireguard interface would plan a
 				// change to set its key again.
 				m.PrivateKey = strVal(raw, "private_key")
+				resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+			},
+		},
+	}
+}
+
+func (r *wirelessInterfaceResource) UpgradeState(context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				raw, ok := rawPriorState(req, resp)
+				if !ok {
+					return
+				}
+				// `device` and `network` were strings through 3.x and became lists
+				// in 4.0.0, because uapi 4.0 reads them as the words that netifd
+				// splits.
+				wordsOfPrintedList(raw, "device")
+				wordsOfPrintedList(raw, "network")
+				var m wirelessInterfaceModel
+				ds := newDiagsink(&resp.Diagnostics)
+				r.read(ctx, raw, &m, ds)
+				m.ETag = strVal(raw, "etag")
+				// read() keeps the write-only secrets from the model, which starts
+				// empty here. Without this, every SSID would plan a change to set
+				// its key and key holders again.
+				m.Key = strVal(raw, "key")
+				m.R0kh = ds.list(listVal(ctx, raw, "r0kh"))
+				m.R1kh = ds.list(listVal(ctx, raw, "r1kh"))
 				resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 			},
 		},

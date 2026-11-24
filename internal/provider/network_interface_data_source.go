@@ -12,46 +12,102 @@ import (
 )
 
 type networkInterfaceDSModel struct {
-	ID            types.String                  `tfsdk:"id"`
-	Managed       types.Bool                    `tfsdk:"managed"`
-	ETag          types.String                  `tfsdk:"etag"`
-	Addresses     types.List                    `tfsdk:"addresses"`
-	Auto          types.Bool                    `tfsdk:"auto"`
-	Broadcast     types.String                  `tfsdk:"broadcast"`
-	BroadcastFlag types.Bool                    `tfsdk:"broadcast_flag"`
-	Clientid      types.String                  `tfsdk:"clientid"`
-	Defaultroute  types.Bool                    `tfsdk:"defaultroute"`
-	Delegate      types.Bool                    `tfsdk:"delegate"`
-	Device        types.String                  `tfsdk:"device"`
-	Disabled      types.Bool                    `tfsdk:"disabled"`
-	Dns           types.List                    `tfsdk:"dns"`
-	Gateway       types.String                  `tfsdk:"gateway"`
-	HasPrivateKey types.Bool                    `tfsdk:"has_private_key"`
-	Hostname      types.String                  `tfsdk:"hostname"`
-	Ip4table      types.String                  `tfsdk:"ip4table"`
-	Ip6addrs      types.List                    `tfsdk:"ip6addrs"`
-	Ip6assign     types.Int64                   `tfsdk:"ip6assign"`
-	Ip6class      types.List                    `tfsdk:"ip6class"`
-	Ip6gw         types.String                  `tfsdk:"ip6gw"`
-	Ip6hint       types.String                  `tfsdk:"ip6hint"`
-	Ip6ifaceid    types.String                  `tfsdk:"ip6ifaceid"`
-	Ip6prefix     types.List                    `tfsdk:"ip6prefix"`
-	Ip6table      types.String                  `tfsdk:"ip6table"`
-	Ip6weight     types.Int64                   `tfsdk:"ip6weight"`
-	Ipaddr        types.String                  `tfsdk:"ipaddr"`
-	Ipaddrs       types.List                    `tfsdk:"ipaddrs"`
-	ListenPort    types.Int64                   `tfsdk:"listen_port"`
-	Metric        types.Int64                   `tfsdk:"metric"`
-	Mtu           types.Int64                   `tfsdk:"mtu"`
-	Netmask       types.String                  `tfsdk:"netmask"`
-	Nohostroute   types.Bool                    `tfsdk:"nohostroute"`
-	Peerdns       types.Bool                    `tfsdk:"peerdns"`
-	PrivateKey    types.String                  `tfsdk:"private_key"`
-	Proto         types.String                  `tfsdk:"proto"`
-	Reqaddress    types.String                  `tfsdk:"reqaddress"`
-	Reqprefix     types.String                  `tfsdk:"reqprefix"`
-	Sourcefilter  types.Bool                    `tfsdk:"sourcefilter"`
-	Runtime       *networkInterfaceRuntimeModel `tfsdk:"runtime"`
+	ID              types.String                  `tfsdk:"id"`
+	Managed         types.Bool                    `tfsdk:"managed"`
+	ETag            types.String                  `tfsdk:"etag"`
+	Addresses       types.List                    `tfsdk:"addresses"`
+	Auth            types.String                  `tfsdk:"auth"`
+	Auto            types.Bool                    `tfsdk:"auto"`
+	Broadcast       types.String                  `tfsdk:"broadcast"`
+	BroadcastFlag   types.Bool                    `tfsdk:"broadcast_flag"`
+	Ca              types.String                  `tfsdk:"ca"`
+	Cert            types.String                  `tfsdk:"cert"`
+	CertPassword    types.String                  `tfsdk:"cert_password"`
+	Cipher          types.String                  `tfsdk:"cipher"`
+	Client          types.Bool                    `tfsdk:"client"`
+	ClientToClient  types.Bool                    `tfsdk:"client_to_client"`
+	Clientid        types.String                  `tfsdk:"clientid"`
+	Config          types.String                  `tfsdk:"config"`
+	CrlVerify       types.String                  `tfsdk:"crl_verify"`
+	DataCiphers     types.List                    `tfsdk:"data_ciphers"`
+	Defaultroute    types.Bool                    `tfsdk:"defaultroute"`
+	Delegate        types.Bool                    `tfsdk:"delegate"`
+	Dev             types.String                  `tfsdk:"dev"`
+	DevType         types.String                  `tfsdk:"dev_type"`
+	Device          types.String                  `tfsdk:"device"`
+	Dh              types.String                  `tfsdk:"dh"`
+	Disabled        types.Bool                    `tfsdk:"disabled"`
+	Dns             types.List                    `tfsdk:"dns"`
+	DuplicateCn     types.Bool                    `tfsdk:"duplicate_cn"`
+	Float           types.Bool                    `tfsdk:"float"`
+	Gateway         types.String                  `tfsdk:"gateway"`
+	Group           types.String                  `tfsdk:"group"`
+	HasCertPassword types.Bool                    `tfsdk:"has_cert_password"`
+	HasKey          types.Bool                    `tfsdk:"has_key"`
+	HasPassword     types.Bool                    `tfsdk:"has_password"`
+	HasPkcs12       types.Bool                    `tfsdk:"has_pkcs12"`
+	HasPrivateKey   types.Bool                    `tfsdk:"has_private_key"`
+	HasTlsAuth      types.Bool                    `tfsdk:"has_tls_auth"`
+	Hostname        types.String                  `tfsdk:"hostname"`
+	Ifconfig        types.String                  `tfsdk:"ifconfig"`
+	IfconfigPool    types.String                  `tfsdk:"ifconfig_pool"`
+	Ip4table        types.String                  `tfsdk:"ip4table"`
+	Ip6addrs        types.List                    `tfsdk:"ip6addrs"`
+	Ip6assign       types.Int64                   `tfsdk:"ip6assign"`
+	Ip6class        types.List                    `tfsdk:"ip6class"`
+	Ip6gw           types.String                  `tfsdk:"ip6gw"`
+	Ip6hint         types.String                  `tfsdk:"ip6hint"`
+	Ip6ifaceid      types.String                  `tfsdk:"ip6ifaceid"`
+	Ip6prefix       types.List                    `tfsdk:"ip6prefix"`
+	Ip6table        types.String                  `tfsdk:"ip6table"`
+	Ip6weight       types.Int64                   `tfsdk:"ip6weight"`
+	Ipaddr          types.String                  `tfsdk:"ipaddr"`
+	Ipaddrs         types.List                    `tfsdk:"ipaddrs"`
+	Keepalive       types.String                  `tfsdk:"keepalive"`
+	Key             types.String                  `tfsdk:"key"`
+	ListenPort      types.Int64                   `tfsdk:"listen_port"`
+	Local           types.String                  `tfsdk:"local"`
+	Log             types.String                  `tfsdk:"log"`
+	LogAppend       types.String                  `tfsdk:"log_append"`
+	Lport           types.Int64                   `tfsdk:"lport"`
+	Metric          types.Int64                   `tfsdk:"metric"`
+	Mtu             types.Int64                   `tfsdk:"mtu"`
+	Mute            types.Int64                   `tfsdk:"mute"`
+	Netmask         types.String                  `tfsdk:"netmask"`
+	Nobind          types.Bool                    `tfsdk:"nobind"`
+	Nohostroute     types.Bool                    `tfsdk:"nohostroute"`
+	Ovpnproto       types.String                  `tfsdk:"ovpnproto"`
+	Password        types.String                  `tfsdk:"password"`
+	Peerdns         types.Bool                    `tfsdk:"peerdns"`
+	PersistKey      types.Bool                    `tfsdk:"persist_key"`
+	PersistTun      types.Bool                    `tfsdk:"persist_tun"`
+	Ping            types.Int64                   `tfsdk:"ping"`
+	PingRestart     types.Int64                   `tfsdk:"ping_restart"`
+	Pkcs12          types.String                  `tfsdk:"pkcs12"`
+	Port            types.Int64                   `tfsdk:"port"`
+	PrivateKey      types.String                  `tfsdk:"private_key"`
+	Proto           types.String                  `tfsdk:"proto"`
+	Push            types.List                    `tfsdk:"push"`
+	Remote          types.List                    `tfsdk:"remote"`
+	RemoteCertTls   types.String                  `tfsdk:"remote_cert_tls"`
+	Reqaddress      types.String                  `tfsdk:"reqaddress"`
+	Reqprefix       types.String                  `tfsdk:"reqprefix"`
+	Route           types.List                    `tfsdk:"route"`
+	RouteGateway    types.String                  `tfsdk:"route_gateway"`
+	Rport           types.Int64                   `tfsdk:"rport"`
+	Server          types.String                  `tfsdk:"server"`
+	ServerBridge    types.String                  `tfsdk:"server_bridge"`
+	Sourcefilter    types.Bool                    `tfsdk:"sourcefilter"`
+	TlsAuth         types.String                  `tfsdk:"tls_auth"`
+	TlsClient       types.Bool                    `tfsdk:"tls_client"`
+	TlsCrypt        types.String                  `tfsdk:"tls_crypt"`
+	TlsServer       types.Bool                    `tfsdk:"tls_server"`
+	Topology        types.String                  `tfsdk:"topology"`
+	User            types.String                  `tfsdk:"user"`
+	Username        types.String                  `tfsdk:"username"`
+	Verb            types.Int64                   `tfsdk:"verb"`
+	VerifyX509Name  types.String                  `tfsdk:"verify_x509_name"`
+	Runtime         *networkInterfaceRuntimeModel `tfsdk:"runtime"`
 }
 
 var (
@@ -75,46 +131,102 @@ func (d *networkInterfaceDataSource) Schema(_ context.Context, _ datasource.Sche
 	resp.Schema = dsschema.Schema{
 		Description: "Look up the network interface.",
 		Attributes: map[string]dsschema.Attribute{
-			"id":              dsIDAttribute(),
-			"managed":         dsManagedAttribute(),
-			"etag":            dsComputedString("Opaque ETag of the resource's current state."),
-			"addresses":       dsComputedStringList("uci option addresses. Applies only to proto `wireguard`."),
-			"auto":            dsComputedBool("uci option auto."),
-			"broadcast":       dsComputedString("IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`. Applies only to proto `static`."),
-			"broadcast_flag":  dsComputedBool("Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's \"Use broadcast flag\". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later. Applies only to proto `dhcp`."),
-			"clientid":        dsComputedString("Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`. Applies only to proto `dhcp` and `dhcpv6`."),
-			"defaultroute":    dsComputedBool("Whether to install the default route that the protocol provides. Unset means true. Applies to every proto."),
-			"delegate":        dsComputedBool("Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto."),
-			"device":          dsComputedString("Underlying device."),
-			"disabled":        dsComputedBool("Whether the entry is disabled."),
-			"dns":             dsComputedStringList("uci option dns."),
-			"gateway":         dsComputedString("uci option gateway. Applies only to proto `static`."),
-			"has_private_key": dsComputedBool("Whether a private key is configured."),
-			"hostname":        dsComputedString("uci option hostname. Applies only to proto `dhcp`."),
-			"ip4table":        dsComputedString("Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto."),
-			"ip6addrs":        dsComputedStringList("uci option ip6addrs. Applies only to proto `static`."),
-			"ip6assign":       dsComputedInt64("Length of the prefix that this interface takes from a delegated or ULA prefix, such as `64`. Applies to every proto."),
-			"ip6class":        dsComputedStringList("Prefix classes that this interface can take its subnet from: `local` for the ULA prefix, or the name of the interface that received the prefix. Unset means any. Needs uapi 3.2.0 or later."),
-			"ip6gw":           dsComputedString("uci option ip6gw. Applies only to proto `static`."),
-			"ip6hint":         dsComputedString("Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto."),
-			"ip6ifaceid":      dsComputedString("uci option ip6ifaceid."),
-			"ip6prefix":       dsComputedStringList("IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later. Applies only to proto `static`, `dhcpv6` and `wireguard`."),
-			"ip6table":        dsComputedString("Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto."),
-			"ip6weight":       dsComputedInt64("Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later."),
-			"ipaddr":          dsComputedString("Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address."),
-			"ipaddrs":         dsComputedStringList("Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`."),
-			"listen_port":     dsComputedInt64("UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port. Applies only to proto `wireguard`."),
-			"metric":          dsComputedInt64("Metric of the routes that this interface installs without a metric of their own. Applies to every proto."),
-			"mtu":             dsComputedInt64("MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384."),
-			"netmask":         dsComputedString("uci option netmask. Applies only to proto `static`."),
-			"nohostroute":     dsComputedBool("uci option nohostroute. Applies only to proto `wireguard`."),
-			"peerdns":         dsComputedBool("uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`."),
-			"private_key":     dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
-			"proto":           dsComputedString("Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto."),
-			"reqaddress":      dsComputedString("uci option reqaddress. Applies only to proto `dhcpv6`."),
-			"reqprefix":       dsComputedString("Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. From uapi 3.5.0, a prefix length or a prefix can carry a `:IAID` suffix of up to 8 hex digits, as odhcp6c reads it. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
-			"sourcefilter":    dsComputedBool("Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
-			"runtime":         networkInterfaceRuntimeAttribute(),
+			"id":                dsIDAttribute(),
+			"managed":           dsManagedAttribute(),
+			"etag":              dsComputedString("Opaque ETag of the resource's current state."),
+			"addresses":         dsComputedStringList("uci option addresses. Applies only to proto `wireguard`."),
+			"auth":              dsComputedString("HMAC digest, such as `SHA256` (`--auth`). Applies only to proto `openvpn`."),
+			"auto":              dsComputedBool("uci option auto."),
+			"broadcast":         dsComputedString("IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`. Applies only to proto `static`."),
+			"broadcast_flag":    dsComputedBool("Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's \"Use broadcast flag\". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later. Applies only to proto `dhcp`."),
+			"ca":                dsComputedString("Absolute path of the CA certificate PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`."),
+			"cert":              dsComputedString("Absolute path of the local certificate PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`."),
+			"cert_password":     dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
+			"cipher":            dsComputedString("Data cipher for a peer that negotiates none, such as `AES-256-CBC` (`--cipher`). Applies only to proto `openvpn`."),
+			"client":            dsComputedBool("Run in client mode (`--client`), which takes the options that the server pushes. Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"client_to_client":  dsComputedBool("Server mode: route traffic between clients inside openvpn (`--client-to-client`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"clientid":          dsComputedString("Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`. Applies only to proto `dhcp` and `dhcpv6`."),
+			"config":            dsComputedString("Absolute path of an openvpn config file, which openvpn reads beside these options (`--config`). LuCI's raw config tab stores `/etc/openvpn/<id>/<id>_config.cfg`. The handler runs openvpn in the directory of this file, so a relative path in it resolves there. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`."),
+			"crl_verify":        dsComputedString("Absolute path of the certificate revocation list PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`."),
+			"data_ciphers":      dsComputedStringList("Ciphers that openvpn negotiates, as one entry of names joined by colons, such as `AES-256-GCM:CHACHA20-POLY1305`. It replaces `ncp_ciphers`. Set one entry: the handler gives openvpn each entry as a `--data-ciphers` of its own, openvpn keeps only the last, and uapi refuses several entries. Applies only to proto `openvpn`."),
+			"defaultroute":      dsComputedBool("Whether to install the default route that the protocol provides. Unset means true. Applies to every proto. On proto `openvpn`, openvpn-hotplug provides one each time openvpn knows a route gateway, which a `topology subnet` server always pushes, also without `redirect-gateway`. netifd then replaces the default route of wan, and when the tunnel goes down, the main table has no IPv4 default route until wan restarts. Set it to false on an openvpn client that must not carry the default route."),
+			"delegate":          dsComputedBool("Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto."),
+			"dev":               dsComputedString("tun or tap device name, such as `tun0`. openvpn needs a device, from this field or from `config`. Applies only to proto `openvpn`."),
+			"dev_type":          dsComputedString("`tun` or `tap`. Unset, the handler passes `--dev-type tun`. openvpn also takes `null`, a device that carries no traffic, which a read gives and uapi refuses in a write. Applies only to proto `openvpn`."),
+			"device":            dsComputedString("Underlying device."),
+			"dh":                dsComputedString("Absolute path of the Diffie-Hellman parameters PEM, for server mode. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`."),
+			"disabled":          dsComputedBool("Whether netifd ignores this interface. A disabled interface has no ubus object, and netifd installs none of its addresses and routes. A stored `1` or `true` reads true."),
+			"dns":               dsComputedStringList("uci option dns."),
+			"duplicate_cn":      dsComputedBool("Server mode: let several clients connect with one common name (`--duplicate-cn`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"float":             dsComputedBool("Let the peer change its address or port (`--float`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"gateway":           dsComputedString("uci option gateway. Applies only to proto `static`."),
+			"group":             dsComputedString("Group that openvpn drops its privileges to. Applies only to proto `openvpn`."),
+			"has_cert_password": dsComputedBool("Whether uci holds `cert_password` (the value is never returned)."),
+			"has_key":           dsComputedBool("Whether uci holds `key` (the path is never returned)."),
+			"has_password":      dsComputedBool("Whether uci holds `password` (the value is never returned)."),
+			"has_pkcs12":        dsComputedBool("Whether uci holds `pkcs12` (the path is never returned)."),
+			"has_private_key":   dsComputedBool("Whether a private key is configured."),
+			"has_tls_auth":      dsComputedBool("Whether uci holds `tls_auth` (the path is never returned)."),
+			"hostname":          dsComputedString("uci option hostname. Applies only to proto `dhcp`."),
+			"ifconfig":          dsComputedString("Tunnel addresses: `local remote` on a point-to-point tun, `address netmask` otherwise. Applies only to proto `openvpn`."),
+			"ifconfig_pool":     dsComputedString("Server-mode address pool: `start end [netmask]`. Applies only to proto `openvpn`."),
+			"ip4table":          dsComputedString("Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto."),
+			"ip6addrs":          dsComputedStringList("uci option ip6addrs. Applies only to proto `static`."),
+			"ip6assign":         dsComputedInt64("Length of the prefix that this interface takes from a delegated or ULA prefix, such as `64`. Applies to every proto."),
+			"ip6class":          dsComputedStringList("Prefix classes that this interface can take its subnet from: `local` for the ULA prefix, or the name of the interface that received the prefix. Unset means any. Needs uapi 3.2.0 or later."),
+			"ip6gw":             dsComputedString("uci option ip6gw. Applies only to proto `static`."),
+			"ip6hint":           dsComputedString("Hexadecimal subnet id that selects the part of a delegated or ULA prefix that this interface gets, such as `1` or `0x1f`. netifd uses it only when `ip6assign` is set. Applies to every proto."),
+			"ip6ifaceid":        dsComputedString("uci option ip6ifaceid."),
+			"ip6prefix":         dsComputedStringList("IPv6 prefixes routed to this device, for delegation to clients. uapi stores one prefix as a uci option and several as a uci list. A list since provider 3.2.0, which needs uapi 3.2.0 or later. Applies only to proto `static`, `dhcpv6` and `wireguard`."),
+			"ip6table":          dsComputedString("Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto."),
+			"ip6weight":         dsComputedInt64("Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later."),
+			"ipaddr":            dsComputedString("Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address."),
+			"ipaddrs":           dsComputedStringList("Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`."),
+			"keepalive":         dsComputedString("`interval timeout` pair, such as `10 60`. Applies only to proto `openvpn`."),
+			"key":               dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
+			"listen_port":       dsComputedInt64("UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A read gives the number that the wireguard handler gives wg: a service name that uci holds, such as `openvpn`, reads null, and wg then listens on a port that the kernel picks. A stored number outside 0 to 65535 reads -1: wg refuses the whole interface, and uapi refuses every write of the interface until one sets a port. Applies only to proto `wireguard`."),
+			"local":             dsComputedString("Local IP address or host name to bind to (`--local`), as LuCI's form takes it. Applies only to proto `openvpn`."),
+			"log":               dsComputedString("Absolute path of a log file, which openvpn truncates at each start (`--log`). Applies only to proto `openvpn`."),
+			"log_append":        dsComputedString("Absolute path of a log file that openvpn appends to (`--log-append`). Applies only to proto `openvpn`."),
+			"lport":             dsComputedInt64("Local port (`--lport`). Applies only to proto `openvpn`."),
+			"metric":            dsComputedInt64("Metric of the routes that this interface installs without a metric of their own. Applies to every proto."),
+			"mtu":               dsComputedInt64("MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384. On proto `wireguard`, the handler applies it to the tunnel."),
+			"mute":              dsComputedInt64("Log at most this many messages of one category in a row (`--mute`). Applies only to proto `openvpn`."),
+			"netmask":           dsComputedString("uci option netmask. Applies only to proto `static`."),
+			"nobind":            dsComputedBool("Bind to no local address and port (`--nobind`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"nohostroute":       dsComputedBool("uci option nohostroute. Applies only to proto `wireguard` and `openvpn`."),
+			"ovpnproto":         dsComputedString("Transport protocol, openvpn's `--proto`, such as `udp` or `tcp-client`. uci names it `ovpnproto` because `proto` is the netifd protocol. It is the `proto` of the 3.x `uapi_openvpn_instance`. Unset, openvpn uses udp. Applies only to proto `openvpn`."),
+			"password":          dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
+			"peerdns":           dsComputedBool("uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan` and `openvpn`."),
+			"persist_key":       dsComputedBool("Keep the keys across a restart (`--persist-key`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"persist_tun":       dsComputedBool("Keep the tun or tap device across a restart (`--persist-tun`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"ping":              dsComputedInt64("Seconds between pings when no other traffic passes (`--ping`). Applies only to proto `openvpn`."),
+			"ping_restart":      dsComputedInt64("Seconds without traffic from the peer before openvpn restarts (`--ping-restart`). Applies only to proto `openvpn`."),
+			"pkcs12":            dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
+			"port":              dsComputedInt64("Local and remote port (`--port`). Applies only to proto `openvpn`."),
+			"private_key":       dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
+			"proto":             dsComputedString("Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard`, `openvpn` or `none`. A proto needs its handler package on the router, such as `openvpn-openssl` for `openvpn`. netifd loads a handler that is installed later only after a reboot or `/etc/init.d/network restart`, and until then `runtime.effective_proto` reads `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto."),
+			"push":              dsComputedStringList("Server-mode directives pushed to clients, such as `route 10.0.0.0 255.255.255.0`. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words. Applies only to proto `openvpn`."),
+			"remote":            dsComputedStringList("Servers that a client connects to, each `host [port [proto]]`, tried in order. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words. Applies only to proto `openvpn`."),
+			"remote_cert_tls":   dsComputedString("Require that the peer certificate carries the key usage of a client or of a server. Applies only to proto `openvpn`."),
+			"reqaddress":        dsComputedString("uci option reqaddress. Applies only to proto `dhcpv6`."),
+			"reqprefix":         dsComputedString("Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. From uapi 3.5.0, a prefix length or a prefix can carry a `:IAID` suffix of up to 8 hex digits, as odhcp6c reads it. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
+			"route":             dsComputedStringList("Routes of the tunnel, each `network [netmask [gateway [metric]]]`, which openvpn-hotplug hands to netifd. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words. Applies only to proto `openvpn`."),
+			"route_gateway":     dsComputedString("Gateway of the `route` entries that name none. Applies only to proto `openvpn`."),
+			"rport":             dsComputedInt64("Remote port (`--rport`). Applies only to proto `openvpn`."),
+			"server":            dsComputedString("Server-mode subnet, such as `10.8.0.0 255.255.255.0`. Applies only to proto `openvpn`."),
+			"server_bridge":     dsComputedString("Bridged server mode: `gateway netmask pool-start pool-end`. Applies only to proto `openvpn`."),
+			"sourcefilter":      dsComputedBool("Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`."),
+			"tls_auth":          dsschema.StringAttribute{Computed: true, Sensitive: true, Description: "Always null; never returned by the API."},
+			"tls_client":        dsComputedBool("Take the TLS client role (`--tls-client`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"tls_crypt":         dsComputedString("Absolute path of the tls-crypt key file. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`."),
+			"tls_server":        dsComputedBool("Take the TLS server role (`--tls-server`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`."),
+			"topology":          dsComputedString("Server-mode topology. Applies only to proto `openvpn`."),
+			"user":              dsComputedString("User that openvpn drops its privileges to. Applies only to proto `openvpn`."),
+			"username":          dsComputedString("User name that the interface logs in with. ppp.sh gives it and `password` to pppd, and gives neither when it is unset. wwan hands both to the handler of the modem that it finds, such as qmi or mbim. The openvpn handler writes both to a file that it gives openvpn as `--auth-user-pass`. Removing it from the configuration removes it from the router, and so does a switch to another proto. Applies only to proto `pppoe`, `ppp`, `wwan` and `openvpn`."),
+			"verb":              dsComputedInt64("Log verbosity. uapi takes 0 to 11. Applies only to proto `openvpn`."),
+			"verify_x509_name":  dsComputedString("Accept only a peer certificate of this name: `name [type]`. Applies only to proto `openvpn`."),
+			"runtime":           networkInterfaceRuntimeAttribute(),
 		},
 	}
 }
@@ -140,43 +252,99 @@ func (d *networkInterfaceDataSource) Read(ctx context.Context, req datasource.Re
 	base.ETag = types.StringValue(etag)
 	m := networkInterfaceDSModel{
 		ID: base.ID, Managed: base.Managed, ETag: base.ETag,
-		Addresses:     base.Addresses,
-		Auto:          base.Auto,
-		Broadcast:     base.Broadcast,
-		BroadcastFlag: base.BroadcastFlag,
-		Clientid:      base.Clientid,
-		Defaultroute:  base.Defaultroute,
-		Delegate:      base.Delegate,
-		Device:        base.Device,
-		Disabled:      base.Disabled,
-		Dns:           base.Dns,
-		Gateway:       base.Gateway,
-		HasPrivateKey: base.HasPrivateKey,
-		Hostname:      base.Hostname,
-		Ip4table:      base.Ip4table,
-		Ip6addrs:      base.Ip6addrs,
-		Ip6assign:     base.Ip6assign,
-		Ip6class:      base.Ip6class,
-		Ip6gw:         base.Ip6gw,
-		Ip6hint:       base.Ip6hint,
-		Ip6ifaceid:    base.Ip6ifaceid,
-		Ip6prefix:     base.Ip6prefix,
-		Ip6table:      base.Ip6table,
-		Ip6weight:     base.Ip6weight,
-		Ipaddr:        base.Ipaddr,
-		Ipaddrs:       base.Ipaddrs,
-		ListenPort:    base.ListenPort,
-		Metric:        base.Metric,
-		Mtu:           base.Mtu,
-		Netmask:       base.Netmask,
-		Nohostroute:   base.Nohostroute,
-		Peerdns:       base.Peerdns,
-		PrivateKey:    base.PrivateKey,
-		Proto:         base.Proto,
-		Reqaddress:    base.Reqaddress,
-		Reqprefix:     base.Reqprefix,
-		Sourcefilter:  base.Sourcefilter,
-		Runtime:       parseNetworkInterfaceRuntime(obj),
+		Addresses:       base.Addresses,
+		Auth:            base.Auth,
+		Auto:            base.Auto,
+		Broadcast:       base.Broadcast,
+		BroadcastFlag:   base.BroadcastFlag,
+		Ca:              base.Ca,
+		Cert:            base.Cert,
+		CertPassword:    base.CertPassword,
+		Cipher:          base.Cipher,
+		Client:          base.Client,
+		ClientToClient:  base.ClientToClient,
+		Clientid:        base.Clientid,
+		Config:          base.Config,
+		CrlVerify:       base.CrlVerify,
+		DataCiphers:     base.DataCiphers,
+		Defaultroute:    base.Defaultroute,
+		Delegate:        base.Delegate,
+		Dev:             base.Dev,
+		DevType:         base.DevType,
+		Device:          base.Device,
+		Dh:              base.Dh,
+		Disabled:        base.Disabled,
+		Dns:             base.Dns,
+		DuplicateCn:     base.DuplicateCn,
+		Float:           base.Float,
+		Gateway:         base.Gateway,
+		Group:           base.Group,
+		HasCertPassword: base.HasCertPassword,
+		HasKey:          base.HasKey,
+		HasPassword:     base.HasPassword,
+		HasPkcs12:       base.HasPkcs12,
+		HasPrivateKey:   base.HasPrivateKey,
+		HasTlsAuth:      base.HasTlsAuth,
+		Hostname:        base.Hostname,
+		Ifconfig:        base.Ifconfig,
+		IfconfigPool:    base.IfconfigPool,
+		Ip4table:        base.Ip4table,
+		Ip6addrs:        base.Ip6addrs,
+		Ip6assign:       base.Ip6assign,
+		Ip6class:        base.Ip6class,
+		Ip6gw:           base.Ip6gw,
+		Ip6hint:         base.Ip6hint,
+		Ip6ifaceid:      base.Ip6ifaceid,
+		Ip6prefix:       base.Ip6prefix,
+		Ip6table:        base.Ip6table,
+		Ip6weight:       base.Ip6weight,
+		Ipaddr:          base.Ipaddr,
+		Ipaddrs:         base.Ipaddrs,
+		Keepalive:       base.Keepalive,
+		Key:             base.Key,
+		ListenPort:      base.ListenPort,
+		Local:           base.Local,
+		Log:             base.Log,
+		LogAppend:       base.LogAppend,
+		Lport:           base.Lport,
+		Metric:          base.Metric,
+		Mtu:             base.Mtu,
+		Mute:            base.Mute,
+		Netmask:         base.Netmask,
+		Nobind:          base.Nobind,
+		Nohostroute:     base.Nohostroute,
+		Ovpnproto:       base.Ovpnproto,
+		Password:        base.Password,
+		Peerdns:         base.Peerdns,
+		PersistKey:      base.PersistKey,
+		PersistTun:      base.PersistTun,
+		Ping:            base.Ping,
+		PingRestart:     base.PingRestart,
+		Pkcs12:          base.Pkcs12,
+		Port:            base.Port,
+		PrivateKey:      base.PrivateKey,
+		Proto:           base.Proto,
+		Push:            base.Push,
+		Remote:          base.Remote,
+		RemoteCertTls:   base.RemoteCertTls,
+		Reqaddress:      base.Reqaddress,
+		Reqprefix:       base.Reqprefix,
+		Route:           base.Route,
+		RouteGateway:    base.RouteGateway,
+		Rport:           base.Rport,
+		Server:          base.Server,
+		ServerBridge:    base.ServerBridge,
+		Sourcefilter:    base.Sourcefilter,
+		TlsAuth:         base.TlsAuth,
+		TlsClient:       base.TlsClient,
+		TlsCrypt:        base.TlsCrypt,
+		TlsServer:       base.TlsServer,
+		Topology:        base.Topology,
+		User:            base.User,
+		Username:        base.Username,
+		Verb:            base.Verb,
+		VerifyX509Name:  base.VerifyX509Name,
+		Runtime:         parseNetworkInterfaceRuntime(obj),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }

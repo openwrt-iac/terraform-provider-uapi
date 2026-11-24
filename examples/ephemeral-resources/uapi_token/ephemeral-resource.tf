@@ -8,6 +8,6 @@ ephemeral "uapi_token" "deploy" {
 # Use the minted token to configure a second provider instance, scoped to the run.
 provider "uapi" {
   alias    = "scoped"
-  endpoint = "https://router.example.com/api/v3"
+  endpoint = "https://router.example.com/api/v4"
   token    = ephemeral.uapi_token.deploy.token
 }

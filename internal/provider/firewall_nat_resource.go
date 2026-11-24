@@ -61,7 +61,7 @@ func (r *firewallNatResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"id":        optionalComputedIDAttribute(),
 			"managed":   managedAttribute(),
 			"etag":      etagAttribute(),
-			"enabled":   optionalComputedBool("Whether the entry is active."),
+			"enabled":   optionalComputedBoolNonNullState("Whether the NAT rule is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it."),
 			"name":      optionalComputedString("Human-readable label for this NAT rule."),
 			"snat_ip":   optionalComputedString("IPv4 address to rewrite the source to. Requires target `SNAT`. On a stored `NPT` rule, the prefix that firewall4 maps `match.src_ip` to."),
 			"snat_port": optionalComputedString("Port or port range to rewrite the source port to. Requires target SNAT."),

@@ -27,13 +27,33 @@ data "uapi_sqm_queue" "example" {
 
 ### Read-Only
 
-- `download` (Number) Download shaping rate in kbit/s.
-- `enabled` (Boolean) Whether the entry is active.
+- `debug_logging` (Boolean) Whether sqm-scripts writes a log file of this queue under /var/run/sqm. Unset reads false.
+- `download` (Number) Download (ingress) rate in kbit/s, 0 to shape no ingress. Unset, sqm-scripts uses 14698.
+- `egress_ecn` (String) ECN on the egress queues of a codel, pie or red qdisc: `ECN` or `NOECN`. LuCI proposes `NOECN`, but unset reads `ECN`, which sqm-scripts applies.
+- `elimit` (Number) Hard limit of the egress queues (LuCI "Hard queue limit"). Unset uses the default limit of the qdisc.
+- `enabled` (Boolean) Whether sqm-scripts starts SQM on this device. It starts a queue only when `enabled` is 1, so an unset value, or a word such as `yes`, `on` or `true`, reads false.
+- `eqdisc_opts` (String) Words that sqm-scripts appends to each tc qdisc command of the egress. uapi does not check them. When tc refuses them, sqm-scripts logs the error and does not set the queue up, while the apply still succeeds.
 - `etag` (String) Opaque ETag of the resource's current state.
-- `interface` (String) Network interface this entry applies to.
-- `linklayer` (String) uci option linklayer.
+- `etarget` (String) Latency target of the egress queues, such as `5ms`, with the unit s, ms or us. `default` uses the default of the qdisc. Unset, sqm-scripts computes one from the rate.
+- `ilimit` (Number) Hard limit of the ingress queues (LuCI "Hard queue limit"). Unset uses the default limit of the qdisc.
+- `ingress_ecn` (String) ECN on the ingress queues of a codel, pie or red qdisc: `ECN` or `NOECN`. Unset reads `ECN`, which sqm-scripts applies.
+- `interface` (String) Network device that sqm-scripts shapes, such as `eth1` or `pppoe-wan`: its hotplug starts the queue when this device comes up. The name of a network interface, such as `wan`, matches no device unless one has that name. The `runtime.l3_device` of `data.uapi_network_interface` gives the device of an interface. 1 to 15 characters without `/`, `:` or whitespace. uapi does not check that the device exists, because a device such as `pppoe-wan` exists only while its interface is up. One queue per device: uapi refuses a second one, which sqm-scripts would never run.
+- `iqdisc_opts` (String) Words that sqm-scripts appends to each tc qdisc command of the ingress. uapi does not check them. When tc refuses them, sqm-scripts logs the error and does not set the queue up, while the apply still succeeds.
+- `itarget` (String) Latency target of the ingress queues, such as `5ms`, with the unit s, ms or us. `default` uses the default of the qdisc. Unset, sqm-scripts computes one from the rate.
+- `linklayer` (String) Link layer that the shaper accounts for: `none`, `ethernet` or `atm`. Unset reads `none`.
+- `linklayer_adaptation_mechanism` (String) How the shaper accounts for the link layer: `default`, `cake`, `htb_private` or `tc_stab`. `default` uses the accounting of cake for qdisc cake, and tc_stab for the others. Unset reads `default`.
+- `linklayer_advanced` (Boolean) LuCI's "Advanced Linklayer Options" flag. sqm-scripts does not read it, and applies `tc_mtu`, `tc_tsize`, `tc_mpu` and `linklayer_adaptation_mechanism` whatever it holds. LuCI shows those fields only while it is true.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `overhead` (Number) uci option overhead.
-- `qdisc` (String) uci option qdisc.
-- `script` (String) uci option script.
-- `upload` (Number) Upload shaping rate in kbit/s.
+- `overhead` (Number) Per-packet overhead in bytes for the link-layer accounting. Unset reads 0.
+- `qdisc` (String) Queueing discipline, such as `cake` or `fq_codel`. Unset, sqm-scripts uses fq_codel.
+- `qdisc_advanced` (Boolean) LuCI's "Advanced Configuration" flag. sqm-scripts does not read it, and applies `squash_dscp`, `squash_ingress`, `ingress_ecn` and `egress_ecn` whatever it holds. LuCI shows those fields only while it is true, so set it with them for a LuCI user to see them.
+- `qdisc_really_really_advanced` (Boolean) LuCI's "Dangerous Configuration" flag. sqm-scripts does not read it, and applies `ilimit`, `elimit`, `itarget`, `etarget`, `iqdisc_opts` and `eqdisc_opts` whatever it holds. LuCI shows those fields only while it and `qdisc_advanced` are true.
+- `script` (String) Shaper script in /usr/lib/sqm, such as `piece_of_cake.qos`, `simple.qos`, `simplest.qos`, `layer_cake.qos` or `simplest_tbf.qos`.
+- `squash_dscp` (Boolean) Whether the ingress shaper clears the DSCP marks (LuCI "Squash DSCP"). Unset reads true, as sqm-scripts applies it.
+- `squash_ingress` (Boolean) Whether the ingress shaper ignores the DSCP marks (LuCI "Ignore DSCP"). Unset reads true, as sqm-scripts applies it.
+- `tc_mpu` (Number) uci option `tcMPU`, LuCI "Minimum packet size", in bytes. Unset reads 0.
+- `tc_mtu` (Number) uci option `tcMTU`, LuCI "Maximum packet size": the largest size for the size and rate tables, in bytes. Unset reads 2047.
+- `tc_tsize` (Number) uci option `tcTSIZE`, LuCI "Rate table size": the number of entries of the size and rate tables. LuCI proposes 128, but unset reads 512, which sqm-scripts applies.
+- `upload` (Number) Upload (egress) rate in kbit/s, 0 to shape no egress. Unset, sqm-scripts uses 2302.
+- `use_mq` (Boolean) Whether sqm-scripts sets up one queue for each hardware queue of the device, where the device has several. LuCI does not show it. Unset reads false.
+- `verbosity` (Number) Log level of sqm-scripts in the system log: 0 silent, 1 error, 2 warning, 5 info, 8 debug, 10 trace. Unset reads 5.

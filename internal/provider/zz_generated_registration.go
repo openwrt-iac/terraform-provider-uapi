@@ -50,7 +50,6 @@ func generatedResources() []func() resource.Resource {
 		NewMwan3RuleResource,
 		NewMwan3GlobalsResource,
 		NewUsteerConfigResource,
-		NewOpenvpnInstanceResource,
 	}
 }
 
@@ -97,6 +96,5 @@ func generatedDataSources() []func() datasource.DataSource {
 		NewMwan3RuleDataSource,
 		NewMwan3GlobalsDataSource,
 		NewUsteerConfigDataSource,
-		NewOpenvpnInstanceDataSource,
 	}
 }

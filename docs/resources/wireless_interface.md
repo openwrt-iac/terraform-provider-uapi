@@ -14,7 +14,7 @@ Wireless interface.
 
 ```terraform
 resource "uapi_wireless_interface" "example" {
-  device = "example"
+  device = ["example"]
 }
 ```
 
@@ -23,7 +23,7 @@ resource "uapi_wireless_interface" "example" {
 
 ### Required
 
-- `device` (String) Underlying device.
+- `device` (List of String) Radios of this SSID, as `uapi_wireless_device` ids. A read gives a list, also for one radio that uci holds as a string. A list since provider 4.0.
 
 ### Optional
 
@@ -37,16 +37,16 @@ resource "uapi_wireless_interface" "example" {
 - `isolate` (Boolean) uci option isolate.
 - `key` (String, Sensitive) Encryption passphrase. Write-only: never returned by the API.
 - `mobility_domain` (String) 802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later.
-- `mode` (String) uci option mode.
+- `mode` (String) Operating mode: `ap`, `sta`, `adhoc`, `monitor` or `mesh`. A section without a mode reads null, and wifi-scripts sets up nothing for it. uapi stores no mode when the configuration sets none, so set `ap` for an access point. A read also gives `wds` or `ahdemo`, which wifi-scripts skips and uapi refuses in a write.
 - `nasid` (String) 802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later.
-- `network` (String) uci option network.
+- `network` (List of String) Network interfaces that this SSID joins. A read gives a list, also for one network that uci holds as a string. A list since provider 4.0.
 - `pmk_r1_push` (Boolean) Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later.
 - `r0_key_lifetime` (Number) 802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. Needs uapi 3.2.0 or later.
 - `r0kh` (List of String, Sensitive) 802.11r R0 key holders, as `<MAC>,<NAS id>,<key>` entries. Write-only: never returned by the API, see `has_r0kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later.
 - `r1_key_holder` (String) 802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later.
 - `r1kh` (List of String, Sensitive) 802.11r R1 key holders, as `<MAC>,<R1KH id>,<key>` entries. Write-only: never returned by the API, see `has_r1kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later.
 - `reassociation_deadline` (Number) 802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, OpenWrt uses 20000. Needs uapi 3.2.0 or later.
-- `ssid` (String) uci option ssid.
+- `ssid` (String) Network name that the access point broadcasts. A list that uci holds reads as its JSON text, such as `[ "home", "net" ]`, which hostapd broadcasts.
 
 ### Read-Only
 

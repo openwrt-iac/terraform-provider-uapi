@@ -53,7 +53,7 @@ func (d *whoamiDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 }
 
 func (d *whoamiDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
-	obj, _, found, err := d.client.GetObject(ctx, "/auth/whoami")
+	obj, _, found, err := d.client.GetObject(ctx, "/uapi/whoami")
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading whoami", err.Error())
 		return

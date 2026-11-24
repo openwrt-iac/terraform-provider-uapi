@@ -6,6 +6,87 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+Tracks uapi 4.0.0. A router serves one uapi major, so provider 4 talks only to uapi 4,
+at `/api/v4`. uapi 4.x runs on OpenWrt main and on the next OpenWrt release cut from it,
+and a router on OpenWrt 25.12 stays on uapi 3.5.0 and provider 3.5. Read the new guide
+"Migrating from provider 3.x to 4.0" before you upgrade.
+
+### Added
+- **`uapi_network_interface` proto `openvpn`**, with the options of the netifd handler of
+  OpenWrt main as attributes that apply to that proto only: `ovpnproto` (the transport),
+  `client`, `dev`, `remote`, `route`, `push`, `data_ciphers` and the others, and the
+  write-only `key`, `tls_auth`, `pkcs12` and `cert_password` with their `has_*` flags.
+  `peerdns` and `nohostroute` apply to openvpn too. Set `defaultroute = false` on a
+  client that must not take the default route. (#67)
+- **`uapi_network_interface.username` and the write-only `password`** with
+  `has_password`, on proto `pppoe`, `ppp`, `wwan` and `openvpn` (uapi #469). Removing
+  `password` from the configuration keeps the stored one, `password = ""` removes it,
+  and a switch to another proto removes both unless the configuration sets them.
+- **`uapi_sqm_queue` models the options that LuCI's sqm form writes** (uapi #480):
+  `squash_dscp`, `squash_ingress`, `ingress_ecn`, `egress_ecn`, `ilimit`, `elimit`,
+  `itarget`, `etarget`, `iqdisc_opts`, `eqdisc_opts`, `linklayer_adaptation_mechanism`,
+  `tc_mtu`, `tc_tsize`, `tc_mpu`, `debug_logging`, `use_mq`, `verbosity`, and the three
+  LuCI form flags. An update removed all of them before, because a PUT removes each option
+  that uapi does not model. `ilimit`, `elimit`, `itarget`, `etarget`, `iqdisc_opts` and
+  `eqdisc_opts` are plain Optional: removing one from the configuration removes it from the
+  router.
+- The new guide "Migrating from provider 3.x to 4.0".
+
+### Changed
+- **BREAKING: the endpoint is `/api/v4`.** uapi 4.0 moves its own endpoints under
+  `/uapi/`, and the provider follows: the `uapi_token` ephemeral resource mints at
+  `/uapi/tokens`, `data.uapi_whoami` reads `/uapi/whoami`, `data.uapi_diagnostics` reads
+  `/uapi/diagnostics`, and `data.uapi_dhcp_leases6` reads `/dhcp/leases?family=v6`. (#66)
+- **BREAKING: `uapi_wireless_interface.device` and `network` are lists.** uapi 4.0 reads
+  them as the words that netifd splits, so a stored `radio0` reads `["radio0"]`. The
+  state migrates on the first plan, also state that a 3.x provider refreshed against
+  uapi 4.0. Write `device = ["radio0"]`. (#66)
+- **BREAKING: `uapi_firewall_defaults.synflood_rate` is a string**, such as
+  `"25/second"`: uapi 4.0 reads the rate with its whole unit. uapi refuses a bare
+  number and a unit prefix, so write the whole unit. The state needs no migration. (#66)
+- **BREAKING: the `uapi_firewall_zone` policies `input`, `output_policy` and `forward`
+  are plain Optional.** uapi 4.0 marks them clear-on-omit: unset, firewall4 applies the
+  policy of `uapi_firewall_defaults`, and the read gives null. Removing one from the
+  configuration now removes it from the router, so set each policy that a zone must
+  keep. (#66)
+- **BREAKING: `uapi_snmpd_access` `context`, `version`, `level`, `prefix`, `read`, `write`
+  and `notify` are required.** snmpd.init skips an access without one of them, so uapi
+  refused such a write with 422, and uapi 4.0 now declares them in its spec. A
+  configuration without them fails at plan instead of at apply. A stock access holds
+  `context = "none"`, `version = "any"`, `level = "noauth"`, `prefix = "exact"`,
+  `read = "all"`, `write = "none"` and `notify = "none"`.
+- `uapi_sqm_queue` `download`, `upload`, `qdisc`, `linklayer` and `overhead` read the
+  default of sqm-scripts when unset (14698, 2302, `fq_codel`, `none`, 0), where they read
+  null before.
+- `uapi_sqm_queue.interface` is the network device that sqm-scripts shapes, such as
+  `eth1` or `pppoe-wan`. uapi 4.0 takes a device name and no longer checks it against
+  the network interfaces, which refused the stock queue on `eth1` (uapi #477).
+- **BREAKING: `uapi_mwan3_interface.family` is no longer required.** uapi 4.0 reads an
+  unset family as `ipv4`, as mwan3 runs it.
+- A firewall bool that reads null for a value that firewall4 cannot parse
+  (`enabled` of rules, redirects, NAT rules and forwardings, and `masq` and `mtu_fix`
+  of zones), or an sqm value that uapi cannot read, plans as unknown when its prior state
+  is null and the configuration does not set it. The PUT then removes the refused value, and the read gives the default.
+  With the usual plan, Terraform would report an inconsistent result after the apply.
+- A listing that answers 400 to a cursor after the first page starts again from the
+  first page, at most three times. uapi 4.0 answers so when an item up to an anonymous
+  section changed between two pages. (#66)
+- Descriptions for uapi 4.0: the zone name pattern, `uapi_network_rule.ipproto` (a write
+  takes a number from 1 to 255), `uapi_wireless_interface.mode` (a new access point
+  needs `mode = "ap"`), `uapi_mwan3_globals.loglevel`, `uapi_dhcp_server.dhcpv4`,
+  `uapi_network_interface.listen_port`, `mtu`, `disabled` and `defaultroute`, the
+  wireguard peer `endpoint_port` and `persistent_keepalive`, the `uapi_token` scopes
+  (an unknown scope answers 422), and the lease data sources (`expires_at` null for a
+  lease that does not expire, the hostname escape, and the IPv6 leases from ubus).
+- The descriptions of the firewall zone, defaults, rule, redirect, NAT and forwarding
+  bools and policies, which read "uci option X." before.
+
+### Removed
+- **BREAKING: `uapi_openvpn_instance` and its data source.** uapi 4.0 removes
+  `openvpn/instances`: on OpenWrt main, an OpenVPN tunnel is a network interface with
+  proto `openvpn`. Take each instance out of state on provider 3.5, then import the
+  tunnel as `uapi_network_interface` on provider 4.0. The guide shows the steps. (#67)
+
 ## [3.5.0] - 2026-11-21
 
 Tracks uapi 3.5.0. There is no provider 3.4: uapi 3.4 published only the v4

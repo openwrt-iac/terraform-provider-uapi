@@ -14,7 +14,14 @@ Snmpd access.
 
 ```terraform
 resource "uapi_snmpd_access" "example" {
+  context = "example"
   group = "example"
+  level = "example"
+  notify = "example"
+  prefix = "example"
+  read = "example"
+  version = "example"
+  write = "example"
 }
 ```
 
@@ -23,18 +30,18 @@ resource "uapi_snmpd_access" "example" {
 
 ### Required
 
-- `group` (String) uci option group.
+- `context` (String) SNMPv3 context. `none` is the empty context, which is the usual value: snmpd.init writes it as `""`.
+- `group` (String) snmpd group that this access binds to, as `uapi_snmpd_group.group`. The group must exist.
+- `level` (String) Security level: `noauth`, `auth` or `priv`.
+- `notify` (String) View that the group gets notifications for, or `none`.
+- `prefix` (String) How the context matches: `exact`, or `prefix` for every context that starts with it.
+- `read` (String) View that the group can read, such as `all`, or `none`.
+- `version` (String) Security model: `any`, `v1`, `v2c` or `usm`.
+- `write` (String) View that the group can write, or `none`.
 
 ### Optional
 
-- `context` (String) uci option context.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
-- `level` (String) uci option level.
-- `notify` (String) uci option notify.
-- `prefix` (String) uci option prefix.
-- `read` (String) uci option read.
-- `version` (String) uci option version.
-- `write` (String) uci option write.
 
 ### Read-Only
 

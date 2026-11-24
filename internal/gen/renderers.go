@@ -28,6 +28,17 @@ func resAttr(f field) string {
 			return fmt.Sprintf("%q: schema.StringAttribute{Required: true, Description: %q},", f.Name, f.Desc)
 		}
 	case "optcomp":
+		if f.NullRefused {
+			switch f.GoType {
+			case "types.Bool":
+				return fmt.Sprintf("%q: optionalComputedBoolNonNullState(%q),", f.Name, f.Desc)
+			case "types.Int64":
+				return fmt.Sprintf("%q: optionalComputedInt64NonNullState(%q),", f.Name, f.Desc)
+			case "types.String":
+				return fmt.Sprintf("%q: optionalComputedStringNonNullState(%q),", f.Name, f.Desc)
+			}
+			fail("field %q reads null for a refused value and has type %q; only bool, integer and string have an emission (add a helper)", f.Name, f.GoType)
+		}
 		switch f.GoType {
 		case "types.List":
 			return fmt.Sprintf("%q: optionalComputedStringList(%q),", f.Name, f.Desc)
@@ -43,16 +54,18 @@ func resAttr(f field) string {
 		// putIntOrStr sends a numeric value back as a number.
 		return fmt.Sprintf("%q: optionalComputedString(%q),", f.Name, f.Desc)
 	case "optclear":
-		// Plain Optional (clear-on-omit): a string, or a list since uapi 3.2.0 made
-		// network_interface.ip6prefix one. Fail loudly on another type rather than
-		// emit a wrong shape.
+		// Plain Optional (clear-on-omit): a string, a list (network_interface.ip6prefix)
+		// or an integer (the openvpn ports and timers of uapi 4.0). Fail loudly on
+		// another type rather than emit a wrong shape.
 		switch f.GoType {
 		case "types.String":
 			return fmt.Sprintf("%q: optionalString(%q),", f.Name, f.Desc)
 		case "types.List":
 			return fmt.Sprintf("%q: optionalStringList(%q),", f.Name, f.Desc)
+		case "types.Int64":
+			return fmt.Sprintf("%q: optionalInt64(%q),", f.Name, f.Desc)
 		}
-		fail("optclear field %q has type %q; only types.String and types.List are supported (add a helper)", f.Name, f.GoType)
+		fail("optclear field %q has type %q; only types.String, types.List and types.Int64 are supported (add a helper)", f.Name, f.GoType)
 		return ""
 	case "writeonly":
 		switch f.GoType {

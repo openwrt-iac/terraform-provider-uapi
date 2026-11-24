@@ -277,6 +277,49 @@ func TestGetListPaginates(t *testing.T) {
 	}
 }
 
+// A cursor that went stale between two pages answers 400 invalid_cursor on
+// uapi 4.0. The listing starts again from the first page, without duplicates.
+func TestGetListRestartsOnStaleCursor(t *testing.T) {
+	stale := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("cursor") {
+		case "":
+			w.Header().Set("X-Next-Cursor", "c_cfg01.abc")
+			_, _ = w.Write([]byte(`[{"id":"a"}]`))
+		default:
+			if stale {
+				stale = false
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"code":"invalid_cursor","message":"the list changed"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`[{"id":"b"}]`))
+		}
+	}))
+	defer srv.Close()
+
+	list, err := testClient(srv.URL).GetList(context.Background(), "/firewall/rules")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(list) != 2 || list[0]["id"] != "a" || list[1]["id"] != "b" {
+		t.Errorf("want [a b] after one restart, got %+v", list)
+	}
+}
+
+// A 400 on the first page is no stale cursor: it is returned as it is.
+func TestGetListFirstPage400IsAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"code":"bad_request","message":"family must be v4 or v6"}`))
+	}))
+	defer srv.Close()
+
+	if _, err := testClient(srv.URL).GetList(context.Background(), "/dhcp/leases?family=v5"); err == nil {
+		t.Fatal("want the 400 of the first page as an error")
+	}
+}
+
 // uapi computes a report header such as X-Kernel-Unread for the whole
 // collection and repeats it on every page, so an element seen twice is kept once.
 func TestGetListHeaderGathersPages(t *testing.T) {

@@ -92,8 +92,34 @@ func mirrorIpaddr(obj map[string]any) {
 	delete(obj, "ipaddrs")
 }
 
+// ovpnFields are the fields of proto openvpn (uapi 4.0), the write-only ones and
+// their has_* flags included.
+var ovpnFields = []string{"auth", "ca", "cert", "cert_password", "cipher", "client", "client_to_client",
+	"config", "crl_verify", "data_ciphers", "dev", "dev_type", "dh", "duplicate_cn", "float", "group",
+	"ifconfig", "ifconfig_pool", "keepalive", "key", "local", "log", "log_append", "lport", "mute", "nobind",
+	"ovpnproto", "persist_key", "persist_tun", "ping", "ping_restart", "pkcs12", "port", "push", "remote",
+	"remote_cert_tls", "route", "route_gateway", "rport", "server", "server_bridge", "tls_auth", "tls_client",
+	"tls_crypt", "tls_server", "topology", "user", "verb", "verify_x509_name",
+	"has_key", "has_tls_auth", "has_pkcs12", "has_cert_password"}
+
+// loginProtos take username and password (uapi 4.0).
+var loginProtos = []string{"pppoe", "ppp", "wwan", "openvpn"}
+
+// ifaceWriteOnly are the write-only secrets of network/interfaces besides
+// private_key, which the older cases cover on their own terms.
+var ifaceWriteOnly = []string{"key", "tls_auth", "pkcs12", "cert_password", "password"}
+
+func init() {
+	for _, f := range ovpnFields {
+		ifaceFieldProtos[f] = []string{"openvpn"}
+	}
+	for _, f := range []string{"username", "password", "has_password"} {
+		ifaceFieldProtos[f] = loginProtos
+	}
+}
+
 // ifaceFieldProtos copies uapi's FIELD_PROTOS (src/resources/network.interfaces.uc
-// as of 3.2.0): the protos that take each field, every other field applying to
+// as of 4.0.0): the protos that take each field, every other field applying to
 // every proto. It is written out here rather than taken from the generated table,
 // so that a misread of the spec's allOf entries fails the suite.
 var ifaceFieldProtos = map[string][]string{
@@ -105,12 +131,12 @@ var ifaceFieldProtos = map[string][]string{
 	"reqaddress":   {"dhcpv6"},
 	"reqprefix":    {"dhcpv6", "pppoe", "ppp"},
 	"sourcefilter": {"dhcpv6", "pppoe", "ppp"},
-	"peerdns":      {"dhcp", "dhcpv6", "pppoe", "ppp", "wwan"},
+	"peerdns":      {"dhcp", "dhcpv6", "pppoe", "ppp", "wwan", "openvpn"},
 	"private_key":  {"wireguard"}, "has_private_key": {"wireguard"}, "listen_port": {"wireguard"},
-	"addresses": {"wireguard"}, "nohostroute": {"wireguard"},
+	"addresses": {"wireguard"}, "nohostroute": {"wireguard", "openvpn"},
 }
 
-var ifaceProtos = []string{"static", "dhcp", "dhcpv6", "pppoe", "none", "ppp", "wwan", "wireguard"}
+var ifaceProtos = []string{"static", "dhcp", "dhcpv6", "pppoe", "none", "ppp", "wwan", "wireguard", "openvpn"}
 
 // ifaceApplies is uapi's applies(). On a proto that uapi does not model, every
 // field applies except `broadcast_flag` and `has_private_key`, which are the
@@ -128,7 +154,7 @@ func ifaceApplies(field, proto string) bool {
 func ifaceScopeErrors(named map[string]any, proto string) []any {
 	var errs []any
 	for k, v := range named {
-		if v == nil || v == "" || k == "ipaddr" || k == "has_private_key" || ifaceApplies(k, proto) {
+		if v == nil || v == "" || k == "ipaddr" || strings.HasPrefix(k, "has_") || ifaceApplies(k, proto) {
 			continue
 		}
 		if list, ok := v.([]any); ok && len(list) == 0 {
@@ -169,14 +195,40 @@ func scopeRefused(w http.ResponseWriter, coll string, named map[string]any, prot
 var wirelessWriteOnly = []string{"key", "r0kh", "r1kh"}
 
 // keepWriteOnly mirrors uapi keeping a stored secret that a PUT leaves out, since
-// a read never returns it.
+// a read never returns it. On network/interfaces, a write that changes proto
+// removes the secrets and username that it does not send (uapi 4.0).
 func keepWriteOnly(coll string, stored, body map[string]any) {
-	if coll != "/wireless/interfaces" {
+	switch coll {
+	case "/wireless/interfaces":
+		for _, k := range wirelessWriteOnly {
+			if _, sent := body[k]; !sent && stored[k] != nil {
+				body[k] = stored[k]
+			}
+		}
+	case "/network/interfaces":
+		if p, ok := body["proto"]; ok && p != stored["proto"] {
+			return
+		}
+		for _, k := range ifaceWriteOnly {
+			if v, sent := body[k]; (!sent || v == nil) && stored[k] != nil {
+				body[k] = stored[k]
+			}
+		}
+	}
+}
+
+// dropOnProtoSwitch is the PATCH form of the proto-switch rule of uapi 4.0: the
+// login and the secrets go unless the request sends them.
+func dropOnProtoSwitch(coll string, stored, body map[string]any) {
+	if coll != "/network/interfaces" {
 		return
 	}
-	for _, k := range wirelessWriteOnly {
-		if _, sent := body[k]; !sent && stored[k] != nil {
-			body[k] = stored[k]
+	if p, ok := body["proto"]; !ok || p == stored["proto"] {
+		return
+	}
+	for _, k := range append([]string{"username"}, ifaceWriteOnly...) {
+		if _, sent := body[k]; !sent {
+			delete(stored, k)
 		}
 	}
 }
@@ -194,6 +246,12 @@ func normalizeStored(coll string, obj map[string]any) {
 		}
 	}
 	if coll == "/network/interfaces" {
+		// An empty string removes a write-only secret.
+		for _, k := range ifaceWriteOnly {
+			if obj[k] == "" {
+				delete(obj, k)
+			}
+		}
 		// toUci drops what the proto does not take, so a read leaves it out.
 		proto, _ := obj["proto"].(string)
 		for k := range obj {
@@ -292,16 +350,16 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(m.kernelPeers)
 		return
+	case path == "/dhcp/leases" && r.Method == http.MethodGet && r.URL.Query().Get("family") == "v6":
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"duid": "00010203", "iaid": "abcd", "interface": "br-lan", "ia_type": "IA_PD", "ip": "2001:db8::", "prefix_length": 60, "expires_at": 1893456000, "hostname": nil, "runtime": map[string]any{}},
+		})
+		return
 	case path == "/dhcp/leases" && r.Method == http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]map[string]any{
-			{"mac": "aa:bb:cc:dd:ee:ff", "ip": "192.168.1.50", "hostname": "nuc", "expires_at": 1893456000, "duid": nil},
-		})
-		return
-	case path == "/dhcp/leases6" && r.Method == http.MethodGet:
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]map[string]any{
-			{"duid": "00010203", "iaid": "abcd", "ia_type": "IA_PD", "ip": "2001:db8::", "prefix_length": 60, "expires_at": 1893456000},
+			{"mac": "aa:bb:cc:dd:ee:ff", "ip": "192.168.1.50", "hostname": "nuc", "expires_at": 1893456000, "duid": nil, "runtime": map[string]any{}},
 		})
 		return
 	case path == "/system/authorized_keys":
@@ -316,7 +374,7 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(path, "/system/cron_jobs/"):
 		m.handleCronJobs(w, r, strings.TrimPrefix(path, "/system/cron_jobs/"))
 		return
-	case path == "/tokens" && r.Method == http.MethodPost:
+	case path == "/uapi/tokens" && r.Method == http.MethodPost:
 		body := m.decode(r)
 		m.lastTokenCreate = body
 		name, _ := body["name"].(string)
@@ -328,10 +386,10 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"name": name, "bearer": "deadbeefdeadbeefdeadbeefdeadbeef"}, "")
 		return
-	case strings.HasPrefix(path, "/tokens/") && r.Method == http.MethodDelete:
+	case strings.HasPrefix(path, "/uapi/tokens/") && r.Method == http.MethodDelete:
 		w.WriteHeader(http.StatusNoContent)
 		return
-	case path == "/auth/whoami" && r.Method == http.MethodGet:
+	case path == "/uapi/whoami" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, map[string]any{
 			"token_id":      "acc",
 			"scopes":        []any{"network:write", "firewall:write"},
@@ -349,7 +407,7 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 			"checks":  map[string]any{"ubus": "ok", "uci": "ok", "lock_dir": "ok", "time_sync": "ok"},
 		}, "")
 		return
-	case path == "/diagnostics" && r.Method == http.MethodGet:
+	case path == "/uapi/diagnostics" && r.Method == http.MethodGet:
 		body := map[string]any{
 			"version":          "2.0.0",
 			"uptime_seconds":   12345,
@@ -363,7 +421,7 @@ func (m *mockUAPI) handle(w http.ResponseWriter, r *http.Request) {
 			},
 			"recent_errors": []any{map[string]any{
 				"ts": 1893456000, "request_id": "req-err-1", "code": "validation_failed",
-				"status": 422, "method": "POST", "path": "/api/v3/firewall/rules", "message": "bad",
+				"status": 422, "method": "POST", "path": "/api/v4/firewall/rules", "message": "bad",
 			}},
 			// Always present, unlike the sweep below.
 			"management_path": map[string]any{
@@ -516,9 +574,11 @@ func (m *mockUAPI) handleItem(w http.ResponseWriter, r *http.Request, coll, id s
 			// RFC 7396: null removes the key. A write-only secret is the one
 			// exception: uapi keeps the stored secret for an absent key and
 			// for null, with both methods.
+			dropOnProtoSwitch(coll, obj, body)
 			for k, v := range body {
 				if v == nil {
-					if coll == "/wireless/interfaces" && slices.Contains(wirelessWriteOnly, k) {
+					if coll == "/wireless/interfaces" && slices.Contains(wirelessWriteOnly, k) ||
+						coll == "/network/interfaces" && slices.Contains(ifaceWriteOnly, k) {
 						continue
 					}
 					delete(obj, k)
@@ -685,6 +745,14 @@ func (m *mockUAPI) withRuntime(coll string, obj map[string]any) map[string]any {
 		if _, ok := out["private_key"]; ok {
 			out["has_private_key"] = true
 			delete(out, "private_key")
+		}
+		proto, _ := out["proto"].(string)
+		for _, k := range ifaceWriteOnly {
+			if ifaceApplies(k, proto) {
+				_, ok := out[k]
+				out["has_"+k] = ok
+			}
+			delete(out, k)
 		}
 		out["runtime"] = map[string]any{
 			"up": true, "pending": false, "available": true,

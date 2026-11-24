@@ -26,7 +26,7 @@ type wirelessInterfaceModel struct {
 	ID                    types.String `tfsdk:"id"`
 	Managed               types.Bool   `tfsdk:"managed"`
 	ETag                  types.String `tfsdk:"etag"`
-	Device                types.String `tfsdk:"device"`
+	Device                types.List   `tfsdk:"device"`
 	Disabled              types.Bool   `tfsdk:"disabled"`
 	Encryption            types.String `tfsdk:"encryption"`
 	FtOverDs              types.Bool   `tfsdk:"ft_over_ds"`
@@ -41,7 +41,7 @@ type wirelessInterfaceModel struct {
 	MobilityDomain        types.String `tfsdk:"mobility_domain"`
 	Mode                  types.String `tfsdk:"mode"`
 	Nasid                 types.String `tfsdk:"nasid"`
-	Network               types.String `tfsdk:"network"`
+	Network               types.List   `tfsdk:"network"`
 	PmkR1Push             types.Bool   `tfsdk:"pmk_r1_push"`
 	R0KeyLifetime         types.Int64  `tfsdk:"r0_key_lifetime"`
 	R0kh                  types.List   `tfsdk:"r0kh"`
@@ -62,11 +62,12 @@ func (r *wirelessInterfaceResource) Configure(_ context.Context, req resource.Co
 func (r *wirelessInterfaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Wireless interface.",
+		Version:     1,
 		Attributes: map[string]schema.Attribute{
 			"id":                     optionalComputedIDAttribute(),
 			"managed":                managedAttribute(),
 			"etag":                   etagAttribute(),
-			"device":                 schema.StringAttribute{Required: true, Description: "Underlying device."},
+			"device":                 schema.ListAttribute{ElementType: types.StringType, Required: true, Description: "Radios of this SSID, as `uapi_wireless_device` ids. A read gives a list, also for one radio that uci holds as a string. A list since provider 4.0."},
 			"disabled":               optionalComputedBool("Whether the entry is disabled."),
 			"encryption":             optionalComputedString("Encryption mode, such as `psk2`, `sae` or `owe`. A forced cipher follows a `+`, as LuCI writes it: `psk2+ccmp`. From uapi 3.5.0, a write of a WEP value (`wep`, `wep-open`, `wep-shared`) answers 422 unless the router sets WEP up, which needs the shell wifi-scripts. A stock image builds the ucode wifi-scripts, which give the daemon no WEP key, so the SSID would run without encryption."),
 			"ft_over_ds":             optionalComputedBool("Whether 802.11r runs over the distribution system instead of over the air. Defaults to false. Needs uapi 3.2.0 or later."),
@@ -79,16 +80,16 @@ func (r *wirelessInterfaceResource) Schema(_ context.Context, _ resource.SchemaR
 			"isolate":                optionalComputedBool("uci option isolate."),
 			"key":                    schema.StringAttribute{Optional: true, Sensitive: true, Description: "Encryption passphrase. Write-only: never returned by the API."},
 			"mobility_domain":        optionalComputedString("802.11r mobility domain, 4 hex digits. Unset, OpenWrt derives it from the SSID. Needs uapi 3.2.0 or later."),
-			"mode":                   optionalComputedString("uci option mode."),
+			"mode":                   optionalComputedString("Operating mode: `ap`, `sta`, `adhoc`, `monitor` or `mesh`. A section without a mode reads null, and wifi-scripts sets up nothing for it. uapi stores no mode when the configuration sets none, so set `ap` for an access point. A read also gives `wds` or `ahdemo`, which wifi-scripts skips and uapi refuses in a write."),
 			"nasid":                  optionalComputedString("802.11r NAS identifier of this access point. Needs uapi 3.2.0 or later."),
-			"network":                optionalComputedString("uci option network."),
+			"network":                optionalComputedStringList("Network interfaces that this SSID joins. A read gives a list, also for one network that uci holds as a string. A list since provider 4.0."),
 			"pmk_r1_push":            optionalComputedBool("Whether the PMK-R1 is pushed to the other key holders instead of being pulled by them. Defaults to false. Needs uapi 3.2.0 or later."),
 			"r0_key_lifetime":        optionalComputedInt64("802.11r lifetime of the PMK-R0 in minutes. Unset, hostapd uses 14 days (20160 minutes). 0 turns the timeout off. Needs uapi 3.2.0 or later."),
 			"r0kh":                   schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: "802.11r R0 key holders, as `<MAC>,<NAS id>,<key>` entries. Write-only: never returned by the API, see `has_r0kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later."},
 			"r1_key_holder":          optionalComputedString("802.11r R1 key holder id, 12 hex digits. Unset, hostapd derives it from the BSSID. Needs uapi 3.2.0 or later."),
 			"r1kh":                   schema.ListAttribute{ElementType: types.StringType, Optional: true, Sensitive: true, Description: "802.11r R1 key holders, as `<MAC>,<R1KH id>,<key>` entries. Write-only: never returned by the API, see `has_r1kh`. Removing it from the configuration keeps the entries on the router, as with `key`; set it to `[]` to remove them. Needs uapi 3.2.0 or later."},
 			"reassociation_deadline": optionalComputedInt64("802.11r reassociation deadline in time units of 1.024 ms, from 1000 to 65535. Unset, OpenWrt uses 20000. Needs uapi 3.2.0 or later."),
-			"ssid":                   optionalComputedString("uci option ssid."),
+			"ssid":                   optionalComputedString("Network name that the access point broadcasts. A list that uci holds reads as its JSON text, such as `[ \"home\", \"net\" ]`, which hostapd broadcasts."),
 		},
 	}
 }
@@ -98,7 +99,7 @@ func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfac
 	if create {
 		putStr(out, "id", m.ID)
 	}
-	putStr(out, "device", m.Device)
+	putList(ctx, out, "device", m.Device, diags.d)
 	putBool(out, "disabled", m.Disabled)
 	putStr(out, "encryption", m.Encryption)
 	putBool(out, "ft_over_ds", m.FtOverDs)
@@ -110,7 +111,7 @@ func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfac
 	putStr(out, "mobility_domain", m.MobilityDomain)
 	putStr(out, "mode", m.Mode)
 	putStr(out, "nasid", m.Nasid)
-	putStr(out, "network", m.Network)
+	putList(ctx, out, "network", m.Network, diags.d)
 	putBool(out, "pmk_r1_push", m.PmkR1Push)
 	putInt64(out, "r0_key_lifetime", m.R0KeyLifetime)
 	putList(ctx, out, "r0kh", m.R0kh, diags.d)
@@ -124,7 +125,7 @@ func (r *wirelessInterfaceResource) body(ctx context.Context, m wirelessInterfac
 func (r *wirelessInterfaceResource) read(ctx context.Context, obj map[string]any, m *wirelessInterfaceModel, diags *diagsink) {
 	m.ID = strVal(obj, "id")
 	m.Managed = boolVal(obj, "managed")
-	m.Device = strVal(obj, "device")
+	m.Device = diags.list(listValKeepEmpty(ctx, obj, "device", m.Device))
 	m.Disabled = boolVal(obj, "disabled")
 	m.Encryption = strVal(obj, "encryption")
 	m.FtOverDs = boolVal(obj, "ft_over_ds")
@@ -139,7 +140,7 @@ func (r *wirelessInterfaceResource) read(ctx context.Context, obj map[string]any
 	m.MobilityDomain = strVal(obj, "mobility_domain")
 	m.Mode = strVal(obj, "mode")
 	m.Nasid = strVal(obj, "nasid")
-	m.Network = strVal(obj, "network")
+	m.Network = diags.list(listValKeepEmpty(ctx, obj, "network", m.Network))
 	m.PmkR1Push = boolVal(obj, "pmk_r1_push")
 	m.R0KeyLifetime = int64Val(obj, "r0_key_lifetime")
 	// r0kh is write-only: preserve the planned value (the API never returns it).

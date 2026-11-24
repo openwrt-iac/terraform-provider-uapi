@@ -28,7 +28,7 @@ resource "uapi_firewall_nat" "example" {
 
 ### Optional
 
-- `enabled` (Boolean) Whether the entry is active.
+- `enabled` (Boolean) Whether the NAT rule is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `name` (String) Human-readable label for this NAT rule.
 - `snat_ip` (String) IPv4 address to rewrite the source to. Requires target `SNAT`. On a stored `NPT` rule, the prefix that firewall4 maps `match.src_ip` to.

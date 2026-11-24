@@ -30,7 +30,7 @@ resource "uapi_firewall_rule" "example" {
 
 ### Optional
 
-- `enabled` (Boolean) Whether the entry is active.
+- `enabled` (Boolean) Whether the rule is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `name` (String) Optional section name.
 - `set_dscp` (String) DSCP class (`CS0` to `CS7`, `BE`, `LE`, `AF11` to `AF43`, `EF`, case-insensitive) or value 0-63 to set. Required by target DSCP.

@@ -23,7 +23,7 @@ ephemeral "uapi_token" "deploy" {
 # Use the minted token to configure a second provider instance, scoped to the run.
 provider "uapi" {
   alias    = "scoped"
-  endpoint = "https://router.example.com/api/v3"
+  endpoint = "https://router.example.com/api/v4"
   token    = ephemeral.uapi_token.deploy.token
 }
 ```
@@ -34,7 +34,7 @@ provider "uapi" {
 ### Required
 
 - `name` (String) Token name: letters, digits and underscores, 1 to 63 characters; the server refuses a hyphen with 422. Doubles as the token id.
-- `scopes` (List of String) Scopes for the new token, in the form `<segment>[:<segment>...]:(rw|ro)`, such as `firewall:rules:rw`. The caller's own scopes must cover each one, equal or narrower: a `*:rw` caller can mint `firewall:ro`. A scope that they do not cover answers 403 `scope_escalation_blocked`. uapi 3.x also mints a scope that it does not know, and such a scope grants nothing.
+- `scopes` (List of String) Scopes for the new token, in the form `<segment>[:<segment>...]:(rw|ro)`, such as `firewall:rules:rw`. The caller's own scopes must cover each one, equal or narrower: a `*:rw` caller can mint `firewall:ro`. A scope that they do not cover answers 403 `scope_escalation_blocked`. A scope that uapi does not know, such as a typo or a path that uapi 4.0 removed, answers 422 `validation_failed`. A scope on a uci package that is not installed answers 422 too, so mint it after the install.
 
 ### Optional
 

@@ -30,7 +30,7 @@ resource "uapi_network_rule" "example" {
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `in` (String) uci option in.
 - `invert` (Boolean) uci option invert.
-- `ipproto` (String) Match this IP protocol, as an integer from 1 to 255 that LuCI writes, or as the spelling that uci holds, such as a protocol name. A decimal reads as an integer. Needs uapi 3.3.0 or later.
+- `ipproto` (String) Match this IP protocol, as an integer from 1 to 255, which LuCI writes. A read also gives another spelling that uci holds and netifd takes, such as `tcp` or `06`. An update that keeps such a value passes, but uapi refuses a change to one, so write the number. A decimal reads as an integer.
 - `lookup` (Number) uci option lookup.
 - `mark` (String) uci option mark.
 - `out` (String) uci option out.

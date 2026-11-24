@@ -27,16 +27,16 @@ data "uapi_network_wireguard_peer" "example" {
 
 ### Read-Only
 
-- `allowed_ips` (List of String) Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list, and a peer without it needs uapi 3.3.0 or later, which made it optional.
+- `allowed_ips` (List of String) Routes that go through the peer. A peer without allowed IPs is valid: wg sets it with none. Leaving the field out or setting it to `[]` removes the list.
 - `description` (String) uci option description.
 - `disabled` (Boolean) Whether the entry is disabled.
 - `endpoint_host` (String) uci option endpoint_host.
-- `endpoint_port` (Number) UDP port of the endpoint. From uapi 3.2.0, a service name that uci holds, such as `https`, reads as its port from /etc/services, as wg resolves it. A name that does not resolve reads 0: wireguard.sh then cannot bring the interface up, and the proto handler of OpenWrt main leaves the endpoint out. uapi refuses a write of 0, so an update of such a peer fails until a port is set.
+- `endpoint_port` (Number) UDP port of the endpoint. A service name that uci holds, such as `https`, reads as its port from /etc/services, as the proto handler resolves it. A name that does not resolve reads 0, and the handler then leaves the endpoint out. uapi refuses every write of the peer while the port reads 0, so set a port. A peer with an `endpoint_host` and no port reads null, and the handler gives wg port 51820 for it.
 - `etag` (String) Opaque ETag of the resource's current state.
 - `has_preshared_key` (Boolean) Whether a preshared key is configured.
 - `interface` (String) Network interface this entry applies to.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `persistent_keepalive` (Number) Seconds between keepalive packets. 0 or unset turns them off. From uapi 3.2.0, a stored value that wg cannot read, such as `25x`, reads -1: wireguard.sh then cannot bring the interface up, and the proto handler of OpenWrt main leaves the keepalive out. An update that keeps -1 stores it in place of the old text. uapi refuses to change a keepalive to -1, and to enable a peer that holds -1.
+- `persistent_keepalive` (Number) Seconds between keepalive packets. 0 or unset turns them off. A stored value that the proto handler cannot read, such as `25x`, reads -1, and the handler then leaves the keepalive out. uapi refuses every write of the peer while the keepalive reads -1, so set a value.
 - `preshared_key` (String, Sensitive) Always null; never returned by the API.
 - `public_key` (String) uci option public_key.
 - `route_allowed_ips` (Boolean) uci option route_allowed_ips.

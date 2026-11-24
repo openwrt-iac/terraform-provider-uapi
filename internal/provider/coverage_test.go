@@ -104,7 +104,7 @@ resource "uapi_network_wireguard_peer" "t" {
   type = "mac80211"
 }`},
 		{typ: "uapi_wireless_interface", hcl: `resource "uapi_wireless_interface" "t" {
-  device = "radio0"
+  device = ["radio0"]
 }`},
 		// dhcp / dns
 		{typ: "uapi_dhcp_host", hcl: `resource "uapi_dhcp_host" "t" {
@@ -122,13 +122,22 @@ resource "uapi_network_wireguard_peer" "t" {
 		// snmpd
 		// Creates the group it references. Referencing a bare name assumed a group
 		// already existed, which is true of the fake and of no real router, so this
-		// case failed every live run and had to be triaged as known-noise.
+		// case failed every live run and had to be triaged as known-noise. uapi also
+		// refuses an access without the seven fields that snmpd.init needs, though
+		// its spec requires only `group`.
 		{typ: "uapi_snmpd_access", hcl: `resource "uapi_snmpd_group" "for_access" {
   group = "acc_group"
 }
 
 resource "uapi_snmpd_access" "t" {
-  group = uapi_snmpd_group.for_access.group
+  group   = uapi_snmpd_group.for_access.group
+  context = "none"
+  version = "any"
+  level   = "noauth"
+  prefix  = "exact"
+  read    = "all"
+  write   = "none"
+  notify  = "none"
 }`},
 		{typ: "uapi_snmpd_agent", hcl: `resource "uapi_snmpd_agent" "t" {}`},
 		{typ: "uapi_snmpd_com2sec", hcl: `resource "uapi_snmpd_com2sec" "t" {
@@ -146,11 +155,13 @@ resource "uapi_snmpd_access" "t" {
 }`},
 		{typ: "uapi_uhttpd_instance", hcl: `resource "uapi_uhttpd_instance" "t" {}`},
 		{typ: "uapi_dropbear_instance", hcl: `resource "uapi_dropbear_instance" "t" {}`},
-		// `wan` exists on a stock OpenWrt where `eth1` does not, and enabled=false
-		// keeps sqm from actually shaping the interface a live run may be arriving
-		// over. Exercises create/read/destroy without touching traffic.
+		// `interface` is the device that sqm shapes, and uapi takes one queue per
+		// device, so a stock box with its queue on eth1 refuses a second one there.
+		// eth9 exists on no router, which uapi does not check, and enabled=false
+		// keeps sqm from shaping anything. Exercises create/read/destroy without
+		// touching traffic.
 		{typ: "uapi_sqm_queue", hcl: `resource "uapi_sqm_queue" "t" {
-  interface = "wan"
+  interface = "eth9"
   enabled   = false
 }`},
 		{typ: "uapi_system_timeserver", hcl: `resource "uapi_system_timeserver" "t" {}`},
@@ -173,13 +184,6 @@ resource "uapi_snmpd_access" "t" {
 }`},
 		{typ: "uapi_mwan3_globals", singleton: true, hcl: `resource "uapi_mwan3_globals" "t" {}`},
 		{typ: "uapi_usteer_config", singleton: true, hcl: `resource "uapi_usteer_config" "t" {}`},
-		// `key` is a path on the router, not key material. The fixture used to pass
-		// a PEM header, which the fake accepted and a real router rejects with
-		// "must be an absolute filesystem path".
-		{typ: "uapi_openvpn_instance", hcl: `resource "uapi_openvpn_instance" "t" {
-  client = true
-  key    = "/etc/openvpn/client.key"
-}`},
 		// packages (no etag)
 		{typ: "uapi_package", noEtag: true, hcl: `resource "uapi_package" "t" {
   name = "curl"

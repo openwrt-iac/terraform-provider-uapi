@@ -29,7 +29,7 @@ resource "uapi_firewall_forwarding" "example" {
 
 ### Optional
 
-- `enabled` (Boolean) Whether the entry is active.
+- `enabled` (Boolean) Whether the forwarding is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
 - `family` (String) Address family: any, ipv4, or ipv6.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 

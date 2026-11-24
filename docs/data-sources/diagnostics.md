@@ -37,16 +37,16 @@ check "no_interrupted_writes" {
 
 ### Read-Only
 
-- `interrupted_writes` (Attributes List) Writes whose request process stopped after the commit and before the write finished: uhttpd killed it (a client disconnect or `script_timeout`), or the write threw. The commit can be in uci with no check, no restore and no answer to the client. Report only: uapi corrects nothing, and the records stay until a reboot. Empty when no write was interrupted. Needs uapi 3.5.0 or later; reads as null against an older server. (see [below for nested schema](#nestedatt--interrupted_writes))
+- `interrupted_writes` (Attributes List) Writes whose request process stopped after the commit and before the write finished: uhttpd killed it (a client disconnect or `script_timeout`), or the write threw. The commit can be in uci with no check, no restore and no answer to the client. Report only: uapi corrects nothing, and the records stay until a reboot. Empty when no write was interrupted. (see [below for nested schema](#nestedatt--interrupted_writes))
 - `invalid_sections` (Attributes List) Sections a write would reject today, whether or not Terraform manages them. Populated only when `validate` is set. An empty list next to a non-empty `skipped_for_scope` means the token was not allowed to look, not that nothing is wrong. (see [below for nested schema](#nestedatt--invalid_sections))
-- `limits` (Attributes) The request bounds that uapi applies: the `config limits` options of /etc/config/uapi, with the compiled default where an option is absent or out of bounds. An option can lower a bound, not raise it. Needs uapi 3.5.0 or later; reads as null against an older server. (see [below for nested schema](#nestedatt--limits))
+- `limits` (Attributes) The request bounds that uapi applies: the `config limits` options of /etc/config/uapi, with the compiled default where an option is absent or out of bounds. An option can lower a bound, not raise it. (see [below for nested schema](#nestedatt--limits))
 - `lock_state` (Attributes) Current advisory lock holders. (see [below for nested schema](#nestedatt--lock_state))
 - `management_path` (Attributes) Which interface this request arrived through. Absent when the inbound address or its route could not be determined. (see [below for nested schema](#nestedatt--management_path))
 - `recent_errors` (Attributes List) Best-effort sliding window of recent error responses (newest last). (see [below for nested schema](#nestedatt--recent_errors))
 - `request_id` (String) Request id assigned to this diagnostics call.
 - `resources_loaded` (List of String) Curated resource keys the server has loaded.
 - `skipped_for_scope` (List of String) Resources left out because the token lacks `:ro` on them. Populated only when `validate` is set.
-- `state_dirs` (Map of Boolean) State directories under /var/run, keyed by path, as uapi finds them; the read creates and changes nothing. `true`: a directory owned by uapi's request uid, mode 0700, which uapi uses. `false`: the path holds anything else, and uapi does not use it as it stands. `null`: the path does not exist yet, and uapi creates it at its first write there. Needs uapi 3.3.0 or later; reads as null against an older server.
+- `state_dirs` (Map of Boolean) State directories under /var/run, keyed by path, as uapi finds them; the read creates and changes nothing. `true`: a directory owned by uapi's request uid, mode 0700, which uapi uses. `false`: the path holds anything else, and uapi does not use it as it stands. `null`: the path does not exist yet, and uapi creates it at its first write there.
 - `swept_resources` (List of String) Resources the sweep checked, in colon form. Populated only when `validate` is set.
 - `uptime_seconds` (Number) Seconds since the router booted.
 - `version` (String) uapi version string.

@@ -3,12 +3,12 @@
 page_title: "uapi_dhcp_leases Data Source - uapi"
 subcategory: ""
 description: |-
-  Active IPv4 DHCP leases reported by the router at runtime.
+  Active IPv4 DHCP leases reported by the router at runtime, from the lease file of dnsmasq.
 ---
 
 # uapi_dhcp_leases (Data Source)
 
-Active IPv4 DHCP leases reported by the router at runtime.
+Active IPv4 DHCP leases reported by the router at runtime, from the lease file of dnsmasq.
 
 ## Example Usage
 
@@ -32,8 +32,8 @@ output "active_leases" {
 
 Read-Only:
 
-- `duid` (String) Client DUID, if known.
-- `expires_at` (Number) Unix epoch seconds when the lease expires.
-- `hostname` (String) Client hostname, if known.
+- `duid` (String) Client id that dnsmasq records; null when the client sent none.
+- `expires_at` (Number) Unix epoch seconds when the lease expires; null for a lease that does not expire, for which dnsmasq writes 0.
+- `hostname` (String) Client hostname, as dnsmasq writes it; null when the client sent none. A control byte, the backslash and each byte that is not valid UTF-8 read as `\x` and two lowercase hex digits, so `\x5c` is a backslash.
 - `ip` (String) Assigned IP address.
 - `mac` (String) Client MAC address.

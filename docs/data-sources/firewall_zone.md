@@ -29,11 +29,11 @@ data "uapi_firewall_zone" "example" {
 
 - `etag` (String) Opaque ETag of the resource's current state.
 - `family` (String) Address family: any, ipv4, or ipv6.
-- `forward` (String) uci option forward.
-- `input` (String) uci option input.
+- `forward` (String) Policy for traffic that the router forwards from this zone when no forwarding or rule matches: `ACCEPT`, `REJECT` or `DROP`. Unset, firewall4 applies the policy of `uapi_firewall_defaults`, and the attribute reads null. Removing it from the configuration removes the policy from the router, so the zone takes the policy of `uapi_firewall_defaults` again.
+- `input` (String) Policy for traffic from this zone to the router: `ACCEPT`, `REJECT` or `DROP`. Unset, firewall4 applies the policy of `uapi_firewall_defaults`, and the attribute reads null. Removing it from the configuration removes the policy from the router, so the zone takes the policy of `uapi_firewall_defaults` again.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
-- `masq` (Boolean) uci option masq.
-- `mtu_fix` (Boolean) uci option mtu_fix.
-- `name` (String) Zone name, referenced by rules and forwardings. Alphanumerics, dashes and underscores.
+- `masq` (Boolean) Whether firewall4 masquerades IPv4 traffic that leaves through this zone. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
+- `mtu_fix` (Boolean) Whether firewall4 clamps the TCP MSS of traffic that leaves through this zone to the path MTU. Unset means false. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
+- `name` (String) Zone name, referenced by rules and forwardings: a letter or an underscore, then letters, digits, dashes and underscores. firewall4 skips a zone whose name starts with a digit or a dash, so uapi refuses it.
 - `network` (List of String) uci option network.
-- `output_policy` (String) uci option output_policy.
+- `output_policy` (String) Policy for traffic from the router to this zone: `ACCEPT`, `REJECT` or `DROP`. Unset, firewall4 applies the policy of `uapi_firewall_defaults`, and the attribute reads null. Removing it from the configuration removes the policy from the router, so the zone takes the policy of `uapi_firewall_defaults` again.

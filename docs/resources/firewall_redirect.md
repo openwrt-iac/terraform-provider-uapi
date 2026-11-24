@@ -29,10 +29,10 @@ resource "uapi_firewall_redirect" "example" {
 
 ### Optional
 
-- `enabled` (Boolean) Whether the entry is active.
+- `enabled` (Boolean) Whether the redirect is active. Unset means true. A stored value that firewall4 cannot parse, such as `YES` or a list, reads null, and firewall4 skips the section. The next apply then removes that value, and the attribute reads its default, unless the configuration sets it.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
 - `name` (String) Optional section name.
-- `reflection` (Boolean) uci option reflection.
+- `reflection` (Boolean) Whether firewall4 adds NAT reflection rules, so that internal hosts reach the redirect through the external address. Unset, firewall4 adds them. A stored value that firewall4 cannot parse, such as `YES`, reads null too, and firewall4 then skips the section.
 - `reflection_src` (String) uci option reflection_src.
 - `reflection_zone` (List of String) uci option reflection_zone.
 - `target` (String) Target / action.

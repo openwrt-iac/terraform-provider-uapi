@@ -23,23 +23,41 @@ resource "uapi_network_interface" "example" {
 
 ### Required
 
-- `proto` (String) Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard` or `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto.
+- `proto` (String) Interface protocol: `static`, `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan`, `wireguard`, `openvpn` or `none`. A proto needs its handler package on the router, such as `openvpn-openssl` for `openvpn`. netifd loads a handler that is installed later only after a reboot or `/etc/init.d/network restart`, and until then `runtime.effective_proto` reads `none`. When it changes, the plan sets to null each attribute that the new proto does not take. uapi also reads a proto that it does not model, such as a `6in4` tunnel from LuCI. An update of such an interface is a PATCH of the changed attributes, which keeps the options of its handler. uapi refuses a switch to such a proto.
 
 ### Optional
 
 - `addresses` (List of String) uci option addresses. Applies only to proto `wireguard`.
+- `auth` (String) HMAC digest, such as `SHA256` (`--auth`). Applies only to proto `openvpn`.
 - `auto` (Boolean) uci option auto.
 - `broadcast` (String) IPv4 broadcast address. On proto `dhcp`, the same uci option is a flag: `broadcast_flag`. Applies only to proto `static`.
 - `broadcast_flag` (Boolean) Whether udhcpc asks the DHCP server to broadcast its replies (`-B`), as LuCI's "Use broadcast flag". uci stores it as `broadcast`, which is the broadcast address on proto `static`. Unset means false. Needs uapi 3.2.0 or later. Applies only to proto `dhcp`.
+- `ca` (String) Absolute path of the CA certificate PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`.
+- `cert` (String) Absolute path of the local certificate PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`.
+- `cert_password` (String, Sensitive) Passphrase of the private key, which the handler writes to a file that it gives openvpn as `--askpass`. Write-only: a read gives `has_cert_password`. Removing it from the configuration keeps the stored value, and `""` removes it. A switch to another proto removes it, unless the configuration sets it. Applies only to proto `openvpn`.
+- `cipher` (String) Data cipher for a peer that negotiates none, such as `AES-256-CBC` (`--cipher`). Applies only to proto `openvpn`.
+- `client` (Boolean) Run in client mode (`--client`), which takes the options that the server pushes. Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
+- `client_to_client` (Boolean) Server mode: route traffic between clients inside openvpn (`--client-to-client`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
 - `clientid` (String) Client identifier: DHCP option 61 on proto `dhcp`, a DUID on proto `dhcpv6`. Applies only to proto `dhcp` and `dhcpv6`.
-- `defaultroute` (Boolean) Whether to install the default route that the protocol provides. Unset means true. Applies to every proto.
+- `config` (String) Absolute path of an openvpn config file, which openvpn reads beside these options (`--config`). LuCI's raw config tab stores `/etc/openvpn/<id>/<id>_config.cfg`. The handler runs openvpn in the directory of this file, so a relative path in it resolves there. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`.
+- `crl_verify` (String) Absolute path of the certificate revocation list PEM. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`.
+- `data_ciphers` (List of String) Ciphers that openvpn negotiates, as one entry of names joined by colons, such as `AES-256-GCM:CHACHA20-POLY1305`. It replaces `ncp_ciphers`. Set one entry: the handler gives openvpn each entry as a `--data-ciphers` of its own, openvpn keeps only the last, and uapi refuses several entries. Applies only to proto `openvpn`.
+- `defaultroute` (Boolean) Whether to install the default route that the protocol provides. Unset means true. Applies to every proto. On proto `openvpn`, openvpn-hotplug provides one each time openvpn knows a route gateway, which a `topology subnet` server always pushes, also without `redirect-gateway`. netifd then replaces the default route of wan, and when the tunnel goes down, the main table has no IPv4 default route until wan restarts. Set it to false on an openvpn client that must not carry the default route.
 - `delegate` (Boolean) Whether to hand the IPv6 prefixes of this interface on to downstream interfaces. Unset means true. Applies to every proto.
+- `dev` (String) tun or tap device name, such as `tun0`. openvpn needs a device, from this field or from `config`. Applies only to proto `openvpn`.
+- `dev_type` (String) `tun` or `tap`. Unset, the handler passes `--dev-type tun`. openvpn also takes `null`, a device that carries no traffic, which a read gives and uapi refuses in a write. Applies only to proto `openvpn`.
 - `device` (String) Underlying device.
-- `disabled` (Boolean) Whether the entry is disabled.
+- `dh` (String) Absolute path of the Diffie-Hellman parameters PEM, for server mode. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`.
+- `disabled` (Boolean) Whether netifd ignores this interface. A disabled interface has no ubus object, and netifd installs none of its addresses and routes. A stored `1` or `true` reads true.
 - `dns` (List of String) uci option dns.
+- `duplicate_cn` (Boolean) Server mode: let several clients connect with one common name (`--duplicate-cn`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
+- `float` (Boolean) Let the peer change its address or port (`--float`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
 - `gateway` (String) uci option gateway. Applies only to proto `static`.
+- `group` (String) Group that openvpn drops its privileges to. Applies only to proto `openvpn`.
 - `hostname` (String) uci option hostname. Applies only to proto `dhcp`.
 - `id` (String) Resource id. Set it at create to choose the uci section name (e.g. `lan`); omit it to let uapi assign a prefixed ULID. Create-only: changing it forces replacement.
+- `ifconfig` (String) Tunnel addresses: `local remote` on a point-to-point tun, `address netmask` otherwise. Applies only to proto `openvpn`.
+- `ifconfig_pool` (String) Server-mode address pool: `start end [netmask]`. Applies only to proto `openvpn`.
 - `ip4table` (String) Routing table for the IPv4 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.
 - `ip6addrs` (List of String) uci option ip6addrs. Applies only to proto `static`.
 - `ip6assign` (Number) Length of the prefix that this interface takes from a delegated or ULA prefix, such as `64`. Applies to every proto.
@@ -51,21 +69,59 @@ resource "uapi_network_interface" "example" {
 - `ip6table` (String) Routing table for the IPv6 routes that this interface installs: a number, or a name from `/etc/iproute2/rt_tables`. Applies to every proto.
 - `ip6weight` (Number) Assignment preference: when interfaces share a prefix, the interfaces with a higher weight get their subnet first. Needs uapi 3.2.0 or later.
 - `ipaddrs` (List of String) Static IPv4 addresses (uci `list ipaddr`). The only writable form as of uapi 3.0; `ipaddr` is a read-only view of the first entry. Applies only to proto `static`.
-- `listen_port` (Number) UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A service name stored in uci reads as its port, and -1 reads when the name does not resolve. uapi refuses a write of -1, so set a port. Applies only to proto `wireguard`.
+- `keepalive` (String) `interval timeout` pair, such as `10 60`. Applies only to proto `openvpn`.
+- `key` (String, Sensitive) Absolute path of the private key PEM on the router, not the key material itself. The handler leaves the option out when the file does not exist at ifup. Write-only: a read gives `has_key`. Removing it from the configuration keeps the stored value, and `""` removes it. A switch to another proto removes it, unless the configuration sets it. Applies only to proto `openvpn`.
+- `listen_port` (Number) UDP port that WireGuard listens on. Null or 0 lets the kernel pick one. A read gives the number that the wireguard handler gives wg: a service name that uci holds, such as `openvpn`, reads null, and wg then listens on a port that the kernel picks. A stored number outside 0 to 65535 reads -1: wg refuses the whole interface, and uapi refuses every write of the interface until one sets a port. Applies only to proto `wireguard`.
+- `local` (String) Local IP address or host name to bind to (`--local`), as LuCI's form takes it. Applies only to proto `openvpn`.
+- `log` (String) Absolute path of a log file, which openvpn truncates at each start (`--log`). Applies only to proto `openvpn`.
+- `log_append` (String) Absolute path of a log file that openvpn appends to (`--log-append`). Applies only to proto `openvpn`.
+- `lport` (Number) Local port (`--lport`). Applies only to proto `openvpn`.
 - `metric` (Number) Metric of the routes that this interface installs without a metric of their own. Applies to every proto.
-- `mtu` (Number) MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384.
+- `mtu` (Number) MTU that netifd applies to the devices of this interface, from 68. A device with its own `config device` section keeps its own MTU: set it on `uapi_network_device`. On proto `ppp` and `pppoe`, pppd takes 128 to 16384. On proto `wireguard`, the handler applies it to the tunnel.
+- `mute` (Number) Log at most this many messages of one category in a row (`--mute`). Applies only to proto `openvpn`.
 - `netmask` (String) uci option netmask. Applies only to proto `static`.
-- `nohostroute` (Boolean) uci option nohostroute. Applies only to proto `wireguard`.
-- `peerdns` (Boolean) uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp` and `wwan`.
+- `nobind` (Boolean) Bind to no local address and port (`--nobind`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
+- `nohostroute` (Boolean) uci option nohostroute. Applies only to proto `wireguard` and `openvpn`.
+- `ovpnproto` (String) Transport protocol, openvpn's `--proto`, such as `udp` or `tcp-client`. uci names it `ovpnproto` because `proto` is the netifd protocol. It is the `proto` of the 3.x `uapi_openvpn_instance`. Unset, openvpn uses udp. Applies only to proto `openvpn`.
+- `password` (String, Sensitive) Password that the interface logs in with, beside `username`. On proto `pppoe` and `ppp`, a password without `username` does nothing, because ppp.sh then gives pppd neither. Write-only: a read gives `has_password`. Removing it from the configuration keeps the stored value, and `""` removes it. A switch to another proto removes it, unless the configuration sets it. Applies only to proto `pppoe`, `ppp`, `wwan` and `openvpn`.
+- `peerdns` (Boolean) uci option peerdns. Applies only to proto `dhcp`, `dhcpv6`, `pppoe`, `ppp`, `wwan` and `openvpn`.
+- `persist_key` (Boolean) Keep the keys across a restart (`--persist-key`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
+- `persist_tun` (Boolean) Keep the tun or tap device across a restart (`--persist-tun`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
+- `ping` (Number) Seconds between pings when no other traffic passes (`--ping`). Applies only to proto `openvpn`.
+- `ping_restart` (Number) Seconds without traffic from the peer before openvpn restarts (`--ping-restart`). Applies only to proto `openvpn`.
+- `pkcs12` (String, Sensitive) Absolute path of the PKCS#12 bundle on the router, not the bundle itself. The handler leaves the option out when the file does not exist at ifup. Write-only: a read gives `has_pkcs12`. Removing it from the configuration keeps the stored value, and `""` removes it. A switch to another proto removes it, unless the configuration sets it. Applies only to proto `openvpn`.
+- `port` (Number) Local and remote port (`--port`). Applies only to proto `openvpn`.
 - `private_key` (String, Sensitive) WireGuard private key. Write-only: never returned by the API. Applies only to proto `wireguard`.
+- `push` (List of String) Server-mode directives pushed to clients, such as `route 10.0.0.0 255.255.255.0`. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words. Applies only to proto `openvpn`.
+- `remote` (List of String) Servers that a client connects to, each `host [port [proto]]`, tried in order. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words. Applies only to proto `openvpn`.
+- `remote_cert_tls` (String) Require that the peer certificate carries the key usage of a client or of a server. Applies only to proto `openvpn`.
 - `reqaddress` (String) uci option reqaddress. Applies only to proto `dhcpv6`.
 - `reqprefix` (String) Prefix delegation request: `auto`, `no`, a prefix length such as `56`, or a prefix with its length such as `2001:db8::/56`. From uapi 3.5.0, a prefix length or a prefix can carry a `:IAID` suffix of up to 8 hex digits, as odhcp6c reads it. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
+- `route` (List of String) Routes of the tunnel, each `network [netmask [gateway [metric]]]`, which openvpn-hotplug hands to netifd. netifd splits an option that is not a uci list into its words, and the handler gives openvpn each as an entry of its own, so such an option reads as its words. Applies only to proto `openvpn`.
+- `route_gateway` (String) Gateway of the `route` entries that name none. Applies only to proto `openvpn`.
+- `rport` (Number) Remote port (`--rport`). Applies only to proto `openvpn`.
+- `server` (String) Server-mode subnet, such as `10.8.0.0 255.255.255.0`. Applies only to proto `openvpn`.
+- `server_bridge` (String) Bridged server mode: `gateway netmask pool-start pool-end`. Applies only to proto `openvpn`.
 - `sourcefilter` (Boolean) Whether the default route from upstream is source-specific. Unset means true. A routed `ip6prefix` needs false: otherwise traffic from its downstream subnets matches no default route. Needs uapi 3.2.0 or later. Applies only to proto `dhcpv6`, `pppoe` and `ppp`.
+- `tls_auth` (String, Sensitive) Absolute path of the tls-auth key file on the router, not the key material itself. Write-only: a read gives `has_tls_auth`. Removing it from the configuration keeps the stored value, and `""` removes it. A switch to another proto removes it, unless the configuration sets it. Applies only to proto `openvpn`.
+- `tls_client` (Boolean) Take the TLS client role (`--tls-client`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
+- `tls_crypt` (String) Absolute path of the tls-crypt key file. The handler leaves the option out when the file does not exist at ifup, so openvpn then runs as if it were unset. A write does not check that the file exists. Applies only to proto `openvpn`.
+- `tls_server` (Boolean) Take the TLS server role (`--tls-server`). Only a stored `1` or `true` reads true: netifd drops another value, and the handler then passes no flag. Applies only to proto `openvpn`.
+- `topology` (String) Server-mode topology. Applies only to proto `openvpn`.
+- `user` (String) User that openvpn drops its privileges to. Applies only to proto `openvpn`.
+- `username` (String) User name that the interface logs in with. ppp.sh gives it and `password` to pppd, and gives neither when it is unset. wwan hands both to the handler of the modem that it finds, such as qmi or mbim. The openvpn handler writes both to a file that it gives openvpn as `--auth-user-pass`. Removing it from the configuration removes it from the router, and so does a switch to another proto. Applies only to proto `pppoe`, `ppp`, `wwan` and `openvpn`.
+- `verb` (Number) Log verbosity. uapi takes 0 to 11. Applies only to proto `openvpn`.
+- `verify_x509_name` (String) Accept only a peer certificate of this name: `name [type]`. Applies only to proto `openvpn`.
 
 ### Read-Only
 
 - `etag` (String) Opaque ETag of the resource's current state, used for If-Match optimistic concurrency.
+- `has_cert_password` (Boolean) Whether uci holds `cert_password` (the value is never returned).
+- `has_key` (Boolean) Whether uci holds `key` (the path is never returned).
+- `has_password` (Boolean) Whether uci holds `password` (the value is never returned).
+- `has_pkcs12` (Boolean) Whether uci holds `pkcs12` (the path is never returned).
 - `has_private_key` (Boolean) Whether a private key is configured.
+- `has_tls_auth` (Boolean) Whether uci holds `tls_auth` (the path is never returned).
 - `ipaddr` (String) Static IPv4 address, read-only: the single-address view of the first `ipaddrs` entry. Both names are one uci option (`list ipaddr`), and as of uapi 3.0 only `ipaddrs` is writable. Set `ipaddrs` even for a single address.
 - `managed` (Boolean) Whether the underlying uci section is uapi-managed.
 
