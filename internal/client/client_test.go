@@ -541,3 +541,49 @@ func TestPutDoesNotRetryTransportError(t *testing.T) {
 		t.Errorf("PUT must fail at once, got %d calls", n)
 	}
 }
+
+// uapi 4.0 answers a committed write that did not take full effect with a 2xx
+// and advisory headers. Each becomes a warning, never an error.
+func TestCommittedWriteWarnings(t *testing.T) {
+	cases := []struct {
+		name    string
+		headers map[string]string
+		want    []string
+	}{
+		{"ok", map[string]string{"X-Reload-Status": "ok", "X-Kernel-Status": "ok"}, nil},
+		{"daemon stopped", map[string]string{"X-Reload-Status": "stopped", "X-Reload-Stopped": "dnsmasq/cfg01411c"},
+			[]string{"dnsmasq/cfg01411c"}},
+		{"unverified with a stopped instance", map[string]string{"X-Reload-Status": "unverified", "X-Reload-Services": "dnsmasq", "X-Reload-Stopped": "dnsmasq/cfg01411c"},
+			[]string{"did not confirm"}},
+		{"blocked peer", map[string]string{"X-Kernel-Status": "blocked", "X-Kernel-Blocked": "wg0/cfg0a3b7c"},
+			[]string{"wg0/cfg0a3b7c"}},
+		{"blocked beside partial", map[string]string{"X-Kernel-Status": "partial", "X-Kernel-Blocked": "wg1/peer1"},
+			[]string{"wg1/peer1"}},
+		{"endpoint omitted", map[string]string{"X-Kernel-Status": "omitted"}, []string{"without its endpoint"}},
+		{"skipped is normal", map[string]string{"X-Kernel-Status": "skipped"}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				for k, v := range c.headers {
+					w.Header().Set(k, v)
+				}
+				_, _ = w.Write([]byte(`{"id":"x"}`))
+			}))
+			defer srv.Close()
+			rec := &warnRecorder{}
+			ctx := WithWarner(context.Background(), rec)
+			if _, _, err := testClient(srv.URL).Put(ctx, "/network/wireguard_peers/x", map[string]any{}, ""); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(rec.summaries) != len(c.want) {
+				t.Fatalf("warnings = %q, want %d", rec.summaries, len(c.want))
+			}
+			for i, w := range c.want {
+				if got := rec.summaries[i] + ": " + rec.details[i]; !strings.Contains(got, w) {
+					t.Errorf("warning %d = %q, want it to contain %q", i, got, w)
+				}
+			}
+		})
+	}
+}

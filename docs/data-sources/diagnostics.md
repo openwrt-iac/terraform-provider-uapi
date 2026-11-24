@@ -47,6 +47,7 @@ check "no_interrupted_writes" {
 - `resources_loaded` (List of String) Curated resource keys the server has loaded.
 - `skipped_for_scope` (List of String) Resources left out because the token lacks `:ro` on them. Populated only when `validate` is set.
 - `state_dirs` (Map of Boolean) State directories under /var/run, keyed by path, as uapi finds them; the read creates and changes nothing. `true`: a directory owned by uapi's request uid, mode 0700, which uapi uses. `false`: the path holds anything else, and uapi does not use it as it stands. `null`: the path does not exist yet, and uapi creates it at its first write there.
+- `stopped_instances` (Attributes List) Daemon instances that procd gave up on after too many deaths soon after a start, and that it does not start again on its own, of the services that the `uapi_service_recover` action takes. A write that leaves dnsmasq so warns. The `uapi_service_recover` action, or a start or a reload of the service, starts it again. Empty when every such instance runs. (see [below for nested schema](#nestedatt--stopped_instances))
 - `swept_resources` (List of String) Resources the sweep checked, in colon form. Populated only when `validate` is set.
 - `uptime_seconds` (Number) Seconds since the router booted.
 - `version` (String) uapi version string.
@@ -127,3 +128,12 @@ Read-Only:
 - `request_id` (String) Request id of the failed request.
 - `status` (Number) HTTP status.
 - `ts` (Number) Unix epoch seconds when the error occurred.
+
+
+<a id="nestedatt--stopped_instances"></a>
+### Nested Schema for `stopped_instances`
+
+Read-Only:
+
+- `instance` (String) Instance name in `service list`, such as `cfg01411c`.
+- `service` (String) Service of the instance, such as `dnsmasq`.

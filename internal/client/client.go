@@ -228,18 +228,56 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 				w.APIWarning("This write affects the interface uapi was reached through", mp)
 			}
 		}
-		// X-Reload-Status is uapi's "did the init-script reload run" signal (ok |
-		// no_reload). 2xx means the write committed, not that the daemon converged;
-		// surface it at debug for "applied but nothing changed" diagnosis.
+		// X-Reload-Status is uapi's "did the init-script reload run" signal. 2xx
+		// means the write committed, not that the daemon converged; surface it at
+		// debug for "applied but nothing changed" diagnosis.
 		tflog.Debug(ctx, "uapi response", map[string]any{
 			"method": method, "path": path, "status": resp.StatusCode, "etag": etag,
 			"reload_status":   resp.Header.Get("X-Reload-Status"),
 			"reload_services": resp.Header.Get("X-Reload-Services"),
 		})
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if w := warnerFrom(ctx); w != nil {
+				warnCommitted(w, resp.Header)
+			}
 			return raw, resp.StatusCode, resp.Header, nil
 		}
 		return nil, resp.StatusCode, resp.Header, decodeError(resp.StatusCode, raw)
+	}
+}
+
+// warnCommitted reports what uapi 4.0 says, beside a 2xx, about a write that it
+// committed but that did not take full effect: a daemon that procd gave up on, a
+// reload that uapi could not confirm, and a WireGuard interface that a stored
+// peer keeps down or that runs a peer without its endpoint. An error would be
+// wrong: the write is in uci, and an error after a create taints the resource.
+func warnCommitted(w Warner, h http.Header) {
+	stopped := h.Get("X-Reload-Stopped")
+	switch h.Get("X-Reload-Status") {
+	case "stopped":
+		w.APIWarning("A daemon that this write reloaded is down",
+			"uapi committed the write, but procd gave up on "+stopped+" and does not start it again on its own. "+
+				"Run the uapi_service_recover action for the service, or restart it on the router. "+
+				"data.uapi_diagnostics lists it under stopped_instances until then.")
+	case "unverified":
+		detail := "uapi committed the write, but a reload of " + h.Get("X-Reload-Services") +
+			", or its check, did not end in time. The daemon can still take the new configuration."
+		if stopped != "" {
+			detail += " procd also gave up on " + stopped + ": run the uapi_service_recover action for the service."
+		}
+		w.APIWarning("uapi did not confirm the reload of this write", detail)
+	}
+	if blocked := h.Get("X-Kernel-Blocked"); blocked != "" {
+		w.APIWarning("A stored WireGuard peer keeps an interface down",
+			"uapi committed the write, but wg refuses the configuration of the whole interface for these enabled "+
+				"peers, as <interface>/<peer id>: "+blocked+". The interface does not come up until each of them is "+
+				"fixed, disabled or deleted. data.uapi_diagnostics with validate = true lists them.")
+	}
+	if h.Get("X-Kernel-Status") == "omitted" {
+		w.APIWarning("WireGuard set a peer without its endpoint",
+			"The proto handler left out the endpoint of a peer of this write, because its host does not resolve or "+
+				"its port cannot be read. The peer runs without an endpoint until the next setup of the interface "+
+				"finds one, and its runtime.endpoint reads null.")
 	}
 }
 

@@ -55,4 +55,7 @@ func TestProviderSchema(t *testing.T) {
 	if _, ok := resp.EphemeralResourceSchemas["uapi_token"]; !ok {
 		t.Errorf("missing ephemeral resource schema %q", "uapi_token")
 	}
+	if _, ok := resp.ActionSchemas["uapi_service_recover"]; !ok {
+		t.Errorf("missing action schema %q", "uapi_service_recover")
+	}
 }
