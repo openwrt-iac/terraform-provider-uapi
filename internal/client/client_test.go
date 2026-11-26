@@ -619,3 +619,84 @@ func TestCommittedWriteWarnings(t *testing.T) {
 		})
 	}
 }
+
+// A cancelled context must not close the connection of a write in flight:
+// uhttpd kills the request process on a close, also after uapi's commit.
+func TestWriteInFlightOutlivesCancel(t *testing.T) {
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			var aborted atomic.Bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case <-r.Context().Done():
+					aborted.Store(true)
+					return
+				case <-time.After(300 * time.Millisecond):
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":"r_1"}`))
+			}))
+			defer srv.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+			c := testClient(srv.URL)
+			var err error
+			switch method {
+			case http.MethodPost:
+				_, _, err = c.Post(ctx, "/firewall/rules", map[string]any{"name": "r"}, "")
+			case http.MethodPut:
+				_, _, err = c.Put(ctx, "/firewall/rules/r_1", map[string]any{"name": "r"}, "")
+			case http.MethodPatch:
+				_, _, err = c.Patch(ctx, "/system", map[string]any{"hostname": "r"}, "")
+			case http.MethodDelete:
+				err = c.Delete(ctx, "/firewall/rules/r_1", "")
+			}
+			if err != nil {
+				t.Fatalf("write in flight failed after cancel: %v", err)
+			}
+			if aborted.Load() {
+				t.Error("server saw the connection close before it answered")
+			}
+		})
+	}
+}
+
+func TestReadInFlightEndsWithCancel(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, _, _, err := testClient(srv.URL).GetObject(ctx, "/firewall/rules/r_1"); err == nil {
+		t.Fatal("expected the cancelled read to fail")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("read outlived its context: %v", elapsed)
+	}
+}
+
+func TestWriteNotSentAfterCancel(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := testClient(srv.URL).Put(ctx, "/firewall/rules/r_1", map[string]any{"name": "r"}, ""); err == nil {
+		t.Fatal("expected a write with a cancelled context to fail")
+	}
+	if n := atomic.LoadInt32(&calls); n != 0 {
+		t.Errorf("write was sent after cancel: %d calls", n)
+	}
+}

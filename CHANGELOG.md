@@ -12,6 +12,13 @@ line). Format follows Keep a Changelog.
   the last 20 errors of uapi with the same id. The provider does not print the
   `reload_error` and `restore_error` of a failed reload: they can quote the output of a
   daemon, and with it a write-only key. (#73)
+- **A Terraform interrupt no longer leaves a uapi write half done.** The provider closed
+  the connection of a write in flight when Terraform cancelled the request, and uhttpd
+  then kills the request process, also after uapi's commit, so uapi ran no check and no
+  restore. A POST, PUT, PATCH or DELETE that is on the wire now runs to its answer; the
+  interrupt still stops the next attempt and the retry waits, and a read still ends at
+  once. The client timeout is 90 s, above uhttpd's default `script_timeout` of 60 s, so
+  the client no longer closes a slow write at the same moment the server would answer.
 
 ## [4.0.0] - 2026-11-24
 
