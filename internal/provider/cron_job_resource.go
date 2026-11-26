@@ -105,7 +105,7 @@ func (r *cronJobResource) Create(ctx context.Context, req resource.CreateRequest
 	if client.IsConflict(err) {
 		resp.Diagnostics.AddError("Error creating cron job",
 			"The root crontab already holds this schedule and command, from another uapi_cron_job or from outside Terraform. "+
-				"To manage the existing line, `terraform import` it by the id in the message below.\n\n"+err.Error())
+				"To manage the existing line, `terraform import` it by the id that the uapi message below names, not by its request_id.\n\n"+err.Error())
 		return
 	}
 	if err != nil {

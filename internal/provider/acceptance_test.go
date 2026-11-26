@@ -65,7 +65,8 @@ func unhostableReason(err error) string {
 	for _, p := range blankLine.Split(err.Error(), -1) {
 		p = strings.Join(strings.Fields(p), " ")
 		if loc := unhostable.FindStringIndex(p); loc != nil {
-			return p[loc[0]:]
+			reason, _, _ := strings.Cut(p[loc[0]:], " request_id: ")
+			return reason
 		}
 	}
 	return ""

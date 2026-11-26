@@ -96,10 +96,11 @@ func New(baseURL, token string, insecure bool, version string) *Client {
 }
 
 type APIError struct {
-	Status  int
-	Code    string       `json:"code"`
-	Message string       `json:"message"`
-	Errors  []FieldError `json:"errors"`
+	Status    int
+	Code      string       `json:"code"`
+	Message   string       `json:"message"`
+	Errors    []FieldError `json:"errors"`
+	RequestID string       `json:"request_id"`
 }
 
 type FieldError struct {
@@ -113,6 +114,11 @@ func (e *APIError) Error() string {
 	fmt.Fprintf(&b, "uapi %d %s: %s", e.Status, e.Code, e.Message)
 	for _, fe := range e.Errors {
 		fmt.Fprintf(&b, "\n  - %s: %s (%s)", fe.Field, fe.Message, fe.Code)
+	}
+	// reload_error and restore_error stay out: they can quote the output of a
+	// daemon, and with it a write-only key, into a CI log.
+	if e.RequestID != "" {
+		fmt.Fprintf(&b, "\n  request_id: %s", e.RequestID)
 	}
 	return b.String()
 }
@@ -331,13 +337,16 @@ func retryWait(header string, attempt int) time.Duration {
 	return backoff + time.Duration(mrand.Int63n(int64(base)))
 }
 
+// A field of an unexpected type leaves only that field empty, so the code and
+// the message of the envelope survive it.
 func decodeError(status int, body []byte) error {
 	apiErr := &APIError{Status: status}
-	if len(body) > 0 && json.Unmarshal(body, apiErr) == nil && apiErr.Code != "" {
+	err := json.Unmarshal(body, apiErr)
+	var typeErr *json.UnmarshalTypeError
+	if apiErr.Code != "" && (err == nil || errors.As(err, &typeErr)) {
 		return apiErr
 	}
-	apiErr.Code = "unknown"
-	apiErr.Message = strings.TrimSpace(string(body))
+	apiErr = &APIError{Status: status, Code: "unknown", Message: strings.TrimSpace(string(body))}
 	if apiErr.Message == "" {
 		apiErr.Message = http.StatusText(status)
 	}

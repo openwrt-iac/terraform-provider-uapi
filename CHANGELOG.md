@@ -6,6 +6,13 @@ line). Format follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+- **A uapi error shows its request id.** The provider now prints the `request_id` of a
+  uapi error envelope under the message. `recent_errors` of `data.uapi_diagnostics` keeps
+  the last 20 errors of uapi with the same id. The provider does not print the
+  `reload_error` and `restore_error` of a failed reload: they can quote the output of a
+  daemon, and with it a write-only key. (#73)
+
 ## [4.0.0] - 2026-11-24
 
 Tracks uapi 4.0.0. A router serves one uapi major, so provider 4 talks only to uapi 4,

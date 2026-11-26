@@ -97,6 +97,38 @@ func TestValidationErrorEnvelope(t *testing.T) {
 	}
 }
 
+func TestErrorShowsRequestIDButNotCommandOutput(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"code":"reload_failed_unrecovered","message":"Service reload failed","request_id":"01JREQ","reload_error":"wg exited with code 1: Key is not the correct length or format: SECRET","restore_error":"network: SECRET"}`))
+	}))
+	defer srv.Close()
+
+	_, _, err := testClient(srv.URL).Post(context.Background(), "/network/interfaces", map[string]any{}, "")
+	want := "uapi 500 reload_failed_unrecovered: Service reload failed\n  request_id: 01JREQ"
+	if err == nil || err.Error() != want {
+		t.Errorf("error = %v\nwant  %s", err, want)
+	}
+}
+
+func TestErrorKeepsCodeWhenAFieldHasAnotherType(t *testing.T) {
+	cases := []struct {
+		body, want string
+	}{
+		{`{"code":"locked","message":"busy","request_id":"01JREQ","errors":"not a list"}`,
+			"uapi 500 locked: busy\n  request_id: 01JREQ"},
+		{`{"code":"locked","message":"busy","request_id":7}`, "uapi 500 locked: busy"},
+		{`{"code":7,"message":"busy","request_id":"01JREQ"}`,
+			`uapi 500 unknown: {"code":7,"message":"busy","request_id":"01JREQ"}`},
+		{"", "uapi 500 unknown: Internal Server Error"},
+	}
+	for _, c := range cases {
+		if got := decodeError(http.StatusInternalServerError, []byte(c.body)).Error(); got != c.want {
+			t.Errorf("decodeError(%s) = %q, want %q", c.body, got, c.want)
+		}
+	}
+}
+
 func TestIfMatchSentAndETagReturned(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// uapi reads If-Match from the header OR the ?if_match= query param; assert both carry it.
