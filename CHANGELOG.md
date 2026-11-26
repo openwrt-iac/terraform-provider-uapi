@@ -19,6 +19,8 @@ line). Format follows Keep a Changelog.
   interrupt still stops the next attempt and the retry waits, and a read still ends at
   once. The client timeout is 90 s, above uhttpd's default `script_timeout` of 60 s, so
   the client no longer closes a slow write at the same moment the server would answer.
+  A write whose answer does not come, such as one that cuts the link to the router, now
+  holds the first interrupt for up to 90 s. A second interrupt stops Terraform at once.
 
 ## [4.0.0] - 2026-11-24
 
