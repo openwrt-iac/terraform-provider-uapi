@@ -234,6 +234,8 @@ func TestUnhostableReason(t *testing.T) {
 			"uapi 503 config_missing: /etc/config/wireless not found: the package or hardware that creates it is missing on this router"},
 		{"uapi 503 init_script_missing: init script /etc/init.d/snmpd not found (is the\ndaemon installed?)",
 			"uapi 503 init_script_missing: init script /etc/init.d/snmpd not found (is the daemon installed?)"},
+		{"uapi 503 config_missing: /etc/config/wireless not found\n  request_id: 01JREQ",
+			"uapi 503 config_missing: /etc/config/wireless not found"},
 		{"uapi 503 service_unavailable: ubus is not reachable", ""},
 		{"uapi 422 validation_failed: Request body failed validation\n  - device: config_missing (conflict)", ""},
 	}
