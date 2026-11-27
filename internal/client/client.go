@@ -34,6 +34,13 @@ const (
 	maxAttempts = 50
 )
 
+// requestTimeout bounds one attempt. uhttpd SIGKILLs the request process when
+// the client closes the connection before the response, which after uapi's
+// commit leaves the write half done, so the client must not be the side that
+// gives up first: this stays above uhttpd's default script_timeout of 60 s,
+// whose own kill answers 502 and ends the attempt anyway.
+const requestTimeout = 90 * time.Second
+
 // maxPages bounds cursor-pagination so a misbehaving server cannot loop forever.
 const maxPages = 1000
 
@@ -91,7 +98,7 @@ func New(baseURL, token string, insecure bool, version string) *Client {
 		baseURL:   strings.TrimRight(baseURL, "/"),
 		token:     token,
 		userAgent: fmt.Sprintf("terraform-provider-uapi/%s (%s/%s)", version, runtime.GOOS, runtime.GOARCH),
-		http:      &http.Client{Timeout: 60 * time.Second, Transport: transport},
+		http:      &http.Client{Timeout: requestTimeout, Transport: transport},
 	}
 }
 
@@ -161,13 +168,25 @@ func (c *Client) do(ctx context.Context, method, path string, body any, ifMatch 
 	addQuery("if_match", ifMatch)
 	addQuery("idempotency_key", idemKey)
 
+	// A write that is on the wire runs to its answer: a cancelled context (a
+	// Terraform interrupt) would close the connection, and uhttpd then kills the
+	// request process, also between uapi's commit and its check or restore.
+	// The caller's context still stops the next attempt and the waits between.
+	sendCtx := ctx
+	if method != http.MethodGet {
+		sendCtx = context.WithoutCancel(ctx)
+	}
+
 	var retryDeadline time.Time // set on the first retryable failure; bounds retry wall-clock
 	for attempt := 0; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, nil, err
+		}
 		var reader io.Reader
 		if payload != nil {
 			reader = bytes.NewReader(payload)
 		}
-		req, err := http.NewRequestWithContext(ctx, method, target, reader)
+		req, err := http.NewRequestWithContext(sendCtx, method, target, reader)
 		if err != nil {
 			return nil, 0, nil, err
 		}
@@ -292,7 +311,7 @@ func warnCommitted(w Warner, h http.Header) {
 // when uapi committed before the answer was lost, the replay retrieves the
 // cached answer instead of double-applying. Other methods fail at once: a
 // committed PUT or PATCH moves the ETag, so its guarded replay would answer
-// 412. Returns false when the context ended (the caller gave up, or the 60 s
+// 412. Returns false when the context ended (the caller gave up, or the
 // client timeout hit) or the shared retry budget ran out; the caller then
 // reports the original failure.
 func replayPost(ctx context.Context, method string, err error, deadline *time.Time, attempt int) bool {
